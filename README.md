@@ -67,10 +67,6 @@ Un único marcador que te deja elegir entre Auto-Farm o Auto-Image en cada ejecu
 javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Launcher.js").then(r=>r.text()).then(eval)
 ```
 
-```javascript
-javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Launcher.js").then(r=>r.text()).then(eval)
-```
-
 — O usa los bots por separado —
 
 ### 🌾 Auto-Farm Bot
