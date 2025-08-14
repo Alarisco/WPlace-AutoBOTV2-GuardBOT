@@ -232,7 +232,7 @@
         try {
           const token = await window.turnstile.execute(CONFIG.SITEKEY, { action: 'paint' });
           if (token && token.length > 20) return token;
-        } catch (e) { /* fallback abajo */ }
+  } catch { /* fallback abajo */ }
       }
       // Fallback: render oculto
       return await new Promise((resolve) => {
@@ -327,7 +327,7 @@
 
     validateProgressData: (data) => {
       const requiredFields = ['version', 'imageData', 'position', 'progress', 'colors'];
-      const missingFields = requiredFields.filter(field => !data.hasOwnProperty(field));
+      const missingFields = requiredFields.filter(field => !(field in data));
       
       if (missingFields.length > 0) {
         throw new Error(`Archivo de progreso inválido. Faltan campos: ${missingFields.join(', ')}`);
@@ -554,7 +554,7 @@
           let json = null; 
           try { 
             json = await res.json(); 
-          } catch {}
+          } catch { /* ignore JSON parse */ }
           
           const painted = json?.painted || 0;
           totalPainted += painted;

@@ -60,7 +60,7 @@
       const res = await fetch('https://backend.wplace.live/me', { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       state.me = await res.json();
-    } catch (_) {
+    } catch {
       state.me = null;
     }
     setMeUI();
@@ -71,7 +71,7 @@
     try {
       const res = await fetch('https://backend.wplace.live/health', { method: 'GET', credentials: 'include' });
       let json = null;
-      try { json = await res.json(); } catch (_) { json = null; }
+      try { json = await res.json(); } catch { json = null; }
       if (res.ok && json) {
         // Intentar normalizar distintos formatos
         state.health = {
@@ -82,7 +82,7 @@
       } else {
         state.health = { up: false, database: false, uptime: undefined };
       }
-    } catch (_) {
+    } catch {
       state.health = { up: false, database: false, uptime: undefined };
     }
     setHealthUI();
@@ -201,7 +201,8 @@
         status.textContent = 'Ejecutando…';
         (0, eval)(code);
         cleanup();
-      } catch (e) {
+      } catch (err) {
+        console.error(err);
         alert('No se pudo cargar el bot seleccionado. Revisa tu conexión o inténtalo de nuevo.');
         btnLaunch.disabled = false;
         btnLaunch.textContent = 'Lanzar';

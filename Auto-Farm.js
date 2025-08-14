@@ -53,7 +53,8 @@
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const randInt = (n) => Math.floor(Math.random() * n);
   const log = (...a) => console.log('[WPA-UI]', ...a);
-  function saveCfg() { try { localStorage.setItem('WPA_UI_CFG', JSON.stringify(cfg)); } catch {} }
+  const noop = () => {};
+  function saveCfg() { try { localStorage.setItem('WPA_UI_CFG', JSON.stringify(cfg)); } catch { /* ignore save errors */ } }
   function loadCfg() {
     try {
       const s = localStorage.getItem('WPA_UI_CFG');
@@ -69,7 +70,7 @@
         
         return loaded;
       }
-    } catch {}
+  } catch { /* ignore load errors */ }
     return { ...DEFAULTS };
   }
   function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
@@ -79,7 +80,7 @@
     try {
       localStorage.removeItem('WPA_UI_CFG');
       log('Configuración reseteada a valores seguros');
-    } catch {}
+  } catch { /* ignore reset errors */ }
   }
   
   // Verificar si necesita calibración inicial
@@ -109,7 +110,7 @@
         cooldownMs: c.cooldownMs ?? 30000
       };
       return me;
-    } catch (e) { return null; }
+  } catch { return null; }
   }
 
   // ---------- Health Check ----------
@@ -173,7 +174,7 @@
       try {
         const token = await window.turnstile.execute(cfg.SITEKEY, { action: 'paint' });
         if (token && token.length > 20) return token;
-      } catch (e) { /* fallback abajo */ }
+  } catch { /* fallback abajo */ }
     }
     // Fallback: render oculto
     return await new Promise((resolve) => {
@@ -249,9 +250,7 @@
             });
             canvas.dispatchEvent(event);
           }
-        } catch (e) {
-          // Ignorar errores de canvas específicos
-        }
+  } catch { /* ignore canvas error */ }
       });
 
       // Intentar actualizar tiles específicos si existen elementos con data-tile
@@ -263,7 +262,7 @@
             tile.style.opacity = '0.8';
             setTimeout(() => { tile.style.opacity = '1'; }, 100);
           }
-        } catch (e) {}
+  } catch { /* ignore style update error */ }
       });
 
       // Buscar y actualizar elementos que contengan coordenadas
@@ -274,7 +273,7 @@
             el.style.filter = 'brightness(1.2)';
             setTimeout(() => { el.style.filter = ''; }, 200);
           }
-        } catch (e) {}
+  } catch { /* ignore coord highlight error */ }
       });
 
     } catch (error) {
@@ -475,7 +474,7 @@
         await checkBackendHealth();
         const healthStatus = state.health?.up ? '🟢 Online' : '🔴 Offline';
         setStatus(`❌ Error ${r.status}: ${r.json?.message || r.json?.error || 'Fallo al pintar'} (Backend: ${healthStatus})`, 'error');
-      } catch (healthError) {
+  } catch (healthError) {
         setStatus(`❌ Error ${r.status}: ${r.json?.message || r.json?.error || 'Fallo al pintar'} (Health check falló)`, 'error');
       }
     }
@@ -747,12 +746,12 @@
               setStatus(`✅ Tile capturado: (${px},${py}) área local segura: (${safeMinX}-${safeMaxX}, ${safeMinY}-${safeMaxY})`, 'success');
               log(`Tile capturado: (${px},${py}), área local segura: (${safeMinX},${safeMinY}) a (${safeMaxX},${safeMaxY})`);
             }
-          } catch {}
+          } catch { /* ignore parse error */ }
           // desactiva sniffer tras la primera coincidencia
           window.fetch = state.originalFetch;
           state.captureMode = false;
         }
-      } catch {}
+  } catch { /* ignore fetch wrapper errors */ }
       return state.originalFetch.apply(this, arguments);
     };
   }
@@ -1181,8 +1180,8 @@
           console.log(`Pixel en (${x},${y}):`, data);
           return data;
         }
-      } catch (e) {
-        console.error('Error verificando pixel:', e);
+      } catch (err) {
+        console.error('Error verificando pixel:', err);
       }
       return null;
     },
