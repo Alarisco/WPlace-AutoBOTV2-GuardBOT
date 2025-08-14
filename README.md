@@ -48,7 +48,7 @@
 2. **Crea un marcador en tu navegador:**
    - Botón derecho en la barra de marcadores → "Agregar página"
    - Nombre: `WPlace Bot`
-   - URL: Pega el código JavaScript
+  - URL: Pega el código JavaScript
 3. **Úsalo en WPlace:**
    - Ve a [wplace.live](https://wplace.live)
    - Inicia sesión
@@ -57,6 +57,15 @@
 ---
 
 ## 🔧 Bots Disponibles
+
+### 🧭 Launcher (recomendado)
+Un único marcador que te deja elegir entre Auto-Farm o Auto-Image en cada ejecución.
+
+```javascript
+javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Launcher.js").then(r=>r.text()).then(eval)
+```
+
+— O usa los bots por separado —
 
 ### 🌾 Auto-Farm Bot
 **Farmeo automático de experiencia y cargas**
