@@ -1,3 +1,5 @@
+# WPlace AutoBOT
+
 <!-- Badges centrados -->
 <p align="center">
   <img src="https://visitor-badge.laobi.icu/badge?page_id=Alarisco.WPlace-AutoBOTV2&left_color=black&right_color=blue&style=for-the-badge" alt="Visitas" />
@@ -14,7 +16,7 @@
        alt="Licence" />
 </p>
 
-# 🤖 WPlace AutoBOT
+## 🤖 WPlace AutoBOT
 
 <p align="center">
   <img src="https://img.shields.io/badge/WPlace-AutoBOT-blue?style=for-the-badge" alt="WPlace AutoBOT">
@@ -32,8 +34,8 @@
 
 - [🚀 Inicio Rápido](#-inicio-rápido)
 - [🔧 Bots Disponibles](#-bots-disponibles)
-  - [🌾 Auto-Farm Bot](#-auto-farm-bot)
-  - [🎨 Auto-Image Bot](#-auto-image-bot)
+- [🌾 Auto-Farm Bot](#-auto-farm-bot)
+- [🎨 Auto-Image Bot](#-auto-image-bot)
 - [📖 Guías Detalladas](#-guías-detalladas)
 - [⚠️ Importante](#️-importante)
 - [🆘 Soporte](#-soporte)
@@ -65,6 +67,10 @@ Un único marcador que te deja elegir entre Auto-Farm o Auto-Image en cada ejecu
 javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Launcher.js").then(r=>r.text()).then(eval)
 ```
 
+```javascript
+javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Launcher.js").then(r=>r.text()).then(eval)
+```
+
 — O usa los bots por separado —
 
 ### 🌾 Auto-Farm Bot
@@ -80,6 +86,9 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 - ✅ Calibración automática
 - ✅ Gestión inteligente de cargas
 - ✅ Configuración avanzada
+
+### 🎨 Auto-Image Bot
+**Creación automática de pixel art desde imágenes**
 
 ### 🎨 Auto-Image Bot
 **Creación automática de pixel art desde imágenes**
@@ -146,21 +155,21 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 ### 🚀 Uso Paso a Paso
 
 #### 1️⃣ **Inicialización**
-```
+```text
 1. Ejecuta el bookmarklet en WPlace
 2. Haz clic en "Iniciar Auto-BOT"
 3. Espera la verificación de colores disponibles
 ```
 
 #### 2️⃣ **Cargar Imagen**
-```
+```text
 1. Clic en "Subir Imagen"
 2. Selecciona tu archivo (PNG/JPEG)
 3. Espera a que se procese y analice
 ```
 
 #### 3️⃣ **Redimensionar (Opcional)**
-```
+```text
 1. Clic en "Redimensionar Imagen"
 2. Ajusta ancho/alto con los sliders
 3. Marca "Mantener proporción" si deseas
@@ -169,7 +178,7 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 ```
 
 #### 4️⃣ **Seleccionar Posición**
-```
+```text
 1. Clic en "Seleccionar Posición"
 2. Haz clic en el canvas donde quieres que inicie
 3. El punto seleccionado será la esquina superior izquierda
@@ -177,7 +186,7 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 ```
 
 #### 5️⃣ **Iniciar Pintado**
-```
+```text
 1. Clic en "Iniciar Pintura"
 2. El bot pintará automáticamente por lotes
 3. Observa el progreso en tiempo real
@@ -187,7 +196,7 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 ### 💾 Sistema de Guardar/Cargar Progreso
 
 #### 📁 **Guardar Progreso**
-```
+```text
 Opción 1: Al detener manualmente
 1. Clic en "Detener Pintura" 
 2. Aparece modal personalizado
@@ -201,7 +210,7 @@ Opción 2: Nombre automático
 ```
 
 #### 📂 **Cargar Progreso**
-```
+```text
 1. Clic en "Cargar Progreso"
 2. Selecciona archivo JSON guardado
 3. Validación automática de datos
