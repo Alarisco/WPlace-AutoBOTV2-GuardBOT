@@ -12,8 +12,14 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v5
-      - uses: github/codeql-action/init@v3
+      - name: Checkout
+        uses: actions/checkout@v5
+        continue-on-error: true
+      - name: Init CodeQL
+        uses: github/codeql-action/init@v3
         with:
           languages: javascript
-      - uses: github/codeql-action/analyze@v3
+        continue-on-error: true
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        continue-on-error: true

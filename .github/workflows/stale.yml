@@ -9,10 +9,10 @@ jobs:
     steps:
       - uses: actions/stale@v9
         with:
-          days-before-stale: 30
-          days-before-close: 7
+          days-before-stale: 45
+          days-before-close: -1
           stale-issue-label: "stale"
           stale-pr-label: "stale"
           exempt-issue-labels: "pinned,security"
-          stale-issue-message: "Este issue lleva 30 días sin actividad. Se cerrará si no hay novedades."
-          stale-pr-message: "Este PR lleva 30 días sin actividad. Se cerrará si no hay novedades."
+          stale-issue-message: "Este issue lleva tiempo sin actividad. Por favor, comenta si sigue vigente."
+          stale-pr-message: "Este PR lleva tiempo sin actividad. Por favor, comenta si sigue vigente."

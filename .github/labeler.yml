@@ -6,4 +6,7 @@ docs:
       - any-glob-to-any-file: ["README.md", "docs/**", "**/*.md"]
 ci:
   - changed-files:
-      - any-glob-to-any-file: [".github/**"]
+  - any-glob-to-any-file: [".github/**"]
+misc:
+  - changed-files:
+  - any-glob-to-any-file: ["*.json", "*.yml", "*.yaml"]

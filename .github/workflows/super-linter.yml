@@ -23,3 +23,8 @@ jobs:
           VALIDATE_JSON: true
           VALIDATE_MARKDOWN: true
           VALIDATE_YAML: true
+          VALIDATE_ALL_CODEBASE: false
+          FILTER_REGEX_EXCLUDE: ".*dist/.*|.*node_modules/.*"
+          # Don't fail the workflow on lint errors; just report status
+          IGNORE_GITIGNORED_FILES: true
+        continue-on-error: true

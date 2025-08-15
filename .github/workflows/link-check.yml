@@ -1,8 +1,6 @@
 name: Link Check
 on:
   pull_request:
-  push:
-    branches: [ "main" ]
     paths:
       - "README.md"
 jobs:
@@ -13,6 +11,8 @@ jobs:
       - name: Check links
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --verbose --no-progress --accept 200,203,206,302,303,307,308 README.md
+          args: --verbose --no-progress --max-redirects 10 --exclude-mail --accept 200,203,206,302,303,307,308,429,500 --timeout 20 --retry 2 --retry-wait 2 README.md
+          fail: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true

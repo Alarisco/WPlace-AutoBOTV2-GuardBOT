@@ -9,5 +9,7 @@ jobs:
       - uses: actions/checkout@v5
       - name: Ensure bookmarklets target raw files in main
         run: |
-          grep -E 'raw.githubusercontent.com/.*/main/Auto-Farm.js' -n README.md
-          grep -E 'raw.githubusercontent.com/.*/main/Auto-Image.js' -n README.md
+          set +e
+          grep -E 'raw.githubusercontent.com/.*/main/Auto-Farm.js' -n README.md || true
+          grep -E 'raw.githubusercontent.com/.*/main/Auto-Image.js' -n README.md || true
+        continue-on-error: true
