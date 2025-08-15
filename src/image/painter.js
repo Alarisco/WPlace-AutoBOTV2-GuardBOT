@@ -3,6 +3,7 @@ import { sleep } from "../core/timing.js";
 import { postPixelBatchImage } from "../core/wplace-api.js";
 import { getTurnstileToken } from "../core/turnstile.js";
 import { imageState, IMAGE_DEFAULTS } from "./config.js";
+import { t } from "../locales/index.js";
 
 export async function processImage(imageData, startPosition, onProgress, onComplete, onError) {
   const { width, height } = imageData;
@@ -82,10 +83,22 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
         // Calcular tiempo estimado
         const estimatedTime = calculateEstimatedTime();
         
-        // Actualizar progreso
+        // Mostrar mensaje de confirmación de pasada completada
+        const progressPercent = ((imageState.paintedPixels / imageState.totalPixels) * 100).toFixed(1);
+        const successMessage = t('image.passCompleted', {
+          painted: result.painted,
+          percent: progressPercent,
+          current: imageState.paintedPixels,
+          total: imageState.totalPixels
+        });
+        
+        // Actualizar progreso con mensaje de éxito
         if (onProgress) {
-          onProgress(imageState.paintedPixels, imageState.totalPixels, null, estimatedTime);
+          onProgress(imageState.paintedPixels, imageState.totalPixels, successMessage, estimatedTime);
         }
+        
+        // Pausa para que el usuario vea el mensaje de éxito antes del cooldown
+        await sleep(2000);
       } else {
         // En caso de fallo, devolver el lote a la cola
         imageState.remainingPixels.unshift(...batch);
@@ -183,7 +196,14 @@ async function waitForCooldown(chargesNeeded, onProgress) {
   imageState.nextBatchCooldown = Math.round(waitTime / 1000);
   
   if (onProgress) {
-    const message = `⏳ Esperando cargas: ${Math.floor(imageState.currentCharges)}/${chargesNeeded} (${Math.round(waitTime/1000)}s)`;
+    const minutes = Math.floor(waitTime / 60000);
+    const seconds = Math.floor((waitTime % 60000) / 1000);
+    const timeText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+    const message = t('image.waitingChargesRegen', {
+      current: Math.floor(imageState.currentCharges),
+      needed: chargesNeeded,
+      time: timeText
+    });
     onProgress(imageState.paintedPixels, imageState.totalPixels, message);
   }
   
@@ -193,8 +213,16 @@ async function waitForCooldown(chargesNeeded, onProgress) {
     
     imageState.nextBatchCooldown = i;
     
-    if (onProgress) {
-      const message = `⏳ Esperando cargas: ${Math.floor(imageState.currentCharges)}/${chargesNeeded} (${i}s)`;
+    // Solo actualizar el mensaje cada 5 segundos o en los últimos 10 segundos para reducir parpadeo
+    if (onProgress && (i % 5 === 0 || i <= 10 || i === Math.round(waitTime/1000))) {
+      const minutes = Math.floor(i / 60);
+      const seconds = i % 60;
+      const timeText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+      const message = t('image.waitingChargesCountdown', {
+        current: Math.floor(imageState.currentCharges),
+        needed: chargesNeeded,
+        time: timeText
+      });
       onProgress(imageState.paintedPixels, imageState.totalPixels, message);
     }
     

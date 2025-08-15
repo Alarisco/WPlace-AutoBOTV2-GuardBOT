@@ -912,6 +912,19 @@ export async function createImageUI({ texts, ...handlers }) {
     }
   }
   
+  // Nueva función para actualizar solo el mensaje de cooldown sin parpadeo
+  function updateCooldownMessage(message) {
+    if (message && message.includes('⏳')) {
+      // Es un mensaje de cooldown, actualizar solo el texto sin recargar todo
+      elements.status.textContent = message;
+      elements.status.className = 'status status-info';
+      // No hacer animación para evitar parpadeo
+    } else if (message) {
+      // Mensaje normal, usar setStatus completo
+      setStatus(message, 'info');
+    }
+  }
+  
   function destroy() {
     host.remove();
   }
@@ -922,6 +935,7 @@ export async function createImageUI({ texts, ...handlers }) {
     setStatus,
     updateProgress,
     updateCooldownDisplay,
+    updateCooldownMessage,
     showResizeDialog,
     closeResizeDialog,
     destroy

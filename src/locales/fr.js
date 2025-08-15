@@ -85,7 +85,10 @@ export const fr = {
     width: "Largeur",
     height: "Hauteur", 
     keepAspect: "Garder les proportions",
-    apply: "Appliquer"
+    apply: "Appliquer",
+    passCompleted: "✅ Passage terminé: {painted} pixels peints | Progrès: {percent}% ({current}/{total})",
+    waitingChargesRegen: "⏳ Attente de régénération des charges: {current}/{needed} - Temps: {time}",
+    waitingChargesCountdown: "⏳ Attente des charges: {current}/{needed} - Restant: {time}"
   },
 
   // Farm Module (to be implemented)

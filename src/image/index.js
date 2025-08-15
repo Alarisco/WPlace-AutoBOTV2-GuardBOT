@@ -330,7 +330,12 @@ export async function runImage() {
               }
               
               if (message) {
-                ui.setStatus(message, 'info');
+                // Usar función optimizada para mensajes de cooldown para evitar parpadeo
+                if (message.includes('⏳') && imageState.inCooldown) {
+                  ui.updateCooldownMessage(message);
+                } else {
+                  ui.setStatus(message, 'info');
+                }
               } else {
                 ui.setStatus(t('image.paintingProgress', { painted, total }), 'info');
               }

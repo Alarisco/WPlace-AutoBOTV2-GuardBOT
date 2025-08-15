@@ -85,7 +85,10 @@ export const en = {
     width: "Width",
     height: "Height", 
     keepAspect: "Keep aspect ratio",
-    apply: "Apply"
+    apply: "Apply",
+    passCompleted: "✅ Pass completed: {painted} pixels painted | Progress: {percent}% ({current}/{total})",
+    waitingChargesRegen: "⏳ Waiting for charge regeneration: {current}/{needed} - Time: {time}",
+    waitingChargesCountdown: "⏳ Waiting for charges: {current}/{needed} - Remaining: {time}"
   },
 
   // Farm Module (to be implemented)
