@@ -1,7 +1,8 @@
 import { log } from "../core/logger.js";
-import { farmState, FARM_DEFAULTS } from "./config.js";
+import { FARM_DEFAULTS } from "./config.js";
 import { saveFarmCfg, loadFarmCfg, resetFarmCfg } from "../core/storage.js";
 import { dragHeader, clamp } from "../core/utils.js";
+import { t } from "../locales/index.js";
 
 export function createFarmUI(config, onStart, onStop, onCalibrate) {
   const shadowHost = document.createElement('div');
@@ -296,7 +297,7 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
   container.innerHTML = `
     <div class="wplace-header">
       <div class="wplace-title">
-        🤖 WPlace Farm Bot
+        🤖 ${t('farm.title')}
       </div>
       <button class="wplace-minimize">−</button>
     </div>
@@ -304,73 +305,73 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     <div class="wplace-content">
       <!-- Estado y controles principales -->
       <div class="wplace-section">
-        <div class="wplace-status" id="status">💤 Bot detenido</div>
+        <div class="wplace-status" id="status">💤 ${t('farm.stopped')}</div>
         
         <div class="wplace-stats">
           <div class="wplace-stat">
             <div class="wplace-stat-value" id="painted-count">0</div>
-            <div class="wplace-stat-label">Pintados</div>
+            <div class="wplace-stat-label">${t('farm.painted')}</div>
           </div>
           <div class="wplace-stat">
             <div class="wplace-stat-value" id="charges-count">0</div>
-            <div class="wplace-stat-label">Cargas</div>
+            <div class="wplace-stat-label">${t('farm.charges')}</div>
           </div>
           <div class="wplace-stat">
             <div class="wplace-stat-value" id="retry-count">0</div>
-            <div class="wplace-stat-label">Fallos</div>
+            <div class="wplace-stat-label">${t('farm.retries')}</div>
           </div>
           <div class="wplace-stat">
             <div class="wplace-stat-value" id="tile-pos">0,0</div>
-            <div class="wplace-stat-label">Tile</div>
+            <div class="wplace-stat-label">${t('farm.tile')}</div>
           </div>
         </div>
         
         <div class="wplace-buttons">
-          <button class="wplace-button start" id="start-btn">▶️ Iniciar</button>
-          <button class="wplace-button stop" id="stop-btn" disabled>⏹️ Detener</button>
-          <button class="wplace-button calibrate" id="calibrate-btn">🎯 Calibrar</button>
-          <button class="wplace-button small" id="once-btn">🎨 Una vez</button>
+          <button class="wplace-button start" id="start-btn">▶️ ${t('farm.start')}</button>
+          <button class="wplace-button stop" id="stop-btn" disabled>⏹️ ${t('farm.stop')}</button>
+          <button class="wplace-button calibrate" id="calibrate-btn">🎯 ${t('farm.calibrate')}</button>
+          <button class="wplace-button small" id="once-btn">🎨 ${t('farm.paintOnce')}</button>
         </div>
         
-        <div class="wplace-health" id="health-status">🔍 Verificando estado...</div>
+        <div class="wplace-health" id="health-status">🔍 ${t('farm.checkingStatus')}</div>
       </div>
       
       <!-- Configuración básica -->
       <div class="wplace-section">
-        <div class="wplace-section-title">⚙️ Configuración</div>
+        <div class="wplace-section-title">⚙️ ${t('farm.configuration')}</div>
         
         <div class="wplace-row">
-          <span class="wplace-label">Delay (ms):</span>
+          <span class="wplace-label">${t('farm.delay')}:</span>
           <input type="number" class="wplace-input" id="delay-input" min="1000" max="300000" step="1000">
         </div>
         
         <div class="wplace-row">
-          <span class="wplace-label">Píxeles/lote:</span>
+          <span class="wplace-label">${t('farm.pixelsPerBatch')}:</span>
           <input type="number" class="wplace-input" id="pixels-input" min="1" max="50">
         </div>
         
         <div class="wplace-row">
-          <span class="wplace-label">Cargas mín:</span>
+          <span class="wplace-label">${t('farm.minCharges')}:</span>
           <input type="number" class="wplace-input" id="min-charges-input" min="0" max="50" step="0.1">
         </div>
         
         <div class="wplace-row">
-          <span class="wplace-label">Modo color:</span>
+          <span class="wplace-label">${t('farm.colorMode')}:</span>
           <select class="wplace-select" id="color-mode-select">
-            <option value="random">Aleatorio</option>
-            <option value="fixed">Fijo</option>
+            <option value="random">${t('farm.random')}</option>
+            <option value="fixed">${t('farm.fixed')}</option>
           </select>
         </div>
         
         <div class="wplace-row" id="color-range-row">
-          <span class="wplace-label">Rango:</span>
+          <span class="wplace-label">${t('farm.range')}:</span>
           <input type="number" class="wplace-input" id="color-min-input" min="1" max="32" style="width: 35px;">
           <span style="color: #cbd5e0;">-</span>
           <input type="number" class="wplace-input" id="color-max-input" min="1" max="32" style="width: 35px;">
         </div>
         
         <div class="wplace-row" id="color-fixed-row" style="display: none;">
-          <span class="wplace-label">Color fijo:</span>
+          <span class="wplace-label">${t('farm.fixedColor')}:</span>
           <input type="number" class="wplace-input" id="color-fixed-input" min="1" max="32">
         </div>
       </div>
@@ -378,33 +379,33 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
       <!-- Configuración avanzada (colapsable) -->
       <div class="wplace-section">
         <div class="wplace-section-title" id="advanced-toggle">
-          🔧 Avanzado <span id="advanced-arrow">▶</span>
+          🔧 ${t('farm.advanced')} <span id="advanced-arrow">▶</span>
         </div>
         
         <div class="wplace-advanced" id="advanced-section" style="display: none;">
           <div class="wplace-row">
-            <span class="wplace-label">Tile X:</span>
+            <span class="wplace-label">${t('farm.tileX')}:</span>
             <input type="number" class="wplace-input" id="tile-x-input">
           </div>
           
           <div class="wplace-row">
-            <span class="wplace-label">Tile Y:</span>
+            <span class="wplace-label">${t('farm.tileY')}:</span>
             <input type="number" class="wplace-input" id="tile-y-input">
           </div>
           
           <div class="wplace-row">
-            <span class="wplace-label">Paleta personalizada:</span>
+            <span class="wplace-label">${t('farm.customPalette')}:</span>
           </div>
           <div class="wplace-row">
             <input type="text" class="wplace-input wide" id="custom-palette-input" 
-                   placeholder="ej: #FF0000,#00FF00,#0000FF">
+                   placeholder="${t('farm.paletteExample')}">
           </div>
           
           <div class="wplace-buttons">
-            <button class="wplace-button small" id="save-btn">💾 Guardar</button>
-            <button class="wplace-button small" id="load-btn">📁 Cargar</button>
-            <button class="wplace-button small" id="reset-btn">🔄 Reset</button>
-            <button class="wplace-button small" id="capture-btn">📸 Capturar</button>
+            <button class="wplace-button small" id="save-btn">💾 ${t('common.save')}</button>
+            <button class="wplace-button small" id="load-btn">📁 ${t('common.load')}</button>
+            <button class="wplace-button small" id="reset-btn">🔄 ${t('common.reset')}</button>
+            <button class="wplace-button small" id="capture-btn">📸 ${t('farm.capture')}</button>
           </div>
         </div>
       </div>
@@ -562,26 +563,26 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
   elements.saveBtn?.addEventListener('click', () => {
     updateConfigFromInputs();
     saveFarmCfg(config);
-    setStatus('💾 Configuración guardada', 'success');
+    setStatus(`💾 ${t('farm.configSaved')}`, 'success');
   });
   
   elements.loadBtn?.addEventListener('click', () => {
     const loaded = loadFarmCfg(FARM_DEFAULTS);
     Object.assign(config, loaded);
     updateInputsFromConfig();
-    setStatus('📁 Configuración cargada', 'success');
+    setStatus(`📁 ${t('farm.configLoaded')}`, 'success');
   });
   
   elements.resetBtn?.addEventListener('click', () => {
     resetFarmCfg();
     Object.assign(config, FARM_DEFAULTS);
     updateInputsFromConfig();
-    setStatus('🔄 Configuración reiniciada', 'success');
+    setStatus(`🔄 ${t('farm.configReset')}`, 'success');
   });
   
   elements.captureBtn?.addEventListener('click', () => {
     // Función de captura - será implementada
-    setStatus('📸 Pinta un píxel manualmente para capturar coordenadas...', 'status');
+    setStatus(`📸 ${t('farm.captureInstructions')}`, 'status');
     // Aquí iría la lógica de captura
   });
   
@@ -612,7 +613,7 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
       elements.retryCount.textContent = retries || 0;
     }
     if (elements.healthStatus && health) {
-      elements.healthStatus.textContent = health.up ? '🟢 Backend Online' : '🔴 Backend Offline';
+      elements.healthStatus.textContent = health.up ? `🟢 ${t('farm.backendOnline')}` : `🔴 ${t('farm.backendOffline')}`;
       elements.healthStatus.className = `wplace-health ${health.up ? 'online' : 'offline'}`;
     }
   }
@@ -628,13 +629,90 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
   // Inicializar valores
   updateInputsFromConfig();
   
+  // Función para actualizar textos cuando cambie el idioma
+  function updateTexts() {
+    // Actualizar título
+    const title = shadow.querySelector('.wplace-title');
+    if (title) {
+      title.innerHTML = `🤖 ${t('farm.title')}`;
+    }
+    
+    // Actualizar botones
+    if (elements.startBtn) elements.startBtn.innerHTML = `▶️ ${t('farm.start')}`;
+    if (elements.stopBtn) elements.stopBtn.innerHTML = `⏹️ ${t('farm.stop')}`;
+    if (elements.calibrateBtn) elements.calibrateBtn.innerHTML = `🎯 ${t('farm.calibrate')}`;
+    if (elements.onceBtn) elements.onceBtn.innerHTML = `🎨 ${t('farm.paintOnce')}`;
+    
+    // Actualizar etiquetas de estadísticas
+    const paintedLabel = shadow.querySelector('#painted-count').parentElement.querySelector('.wplace-stat-label');
+    const chargesLabel = shadow.querySelector('#charges-count').parentElement.querySelector('.wplace-stat-label');
+    const retryLabel = shadow.querySelector('#retry-count').parentElement.querySelector('.wplace-stat-label');
+    const tileLabel = shadow.querySelector('#tile-pos').parentElement.querySelector('.wplace-stat-label');
+    
+    if (paintedLabel) paintedLabel.textContent = t('farm.painted');
+    if (chargesLabel) chargesLabel.textContent = t('farm.charges');
+    if (retryLabel) retryLabel.textContent = t('farm.retries');
+    if (tileLabel) tileLabel.textContent = t('farm.tile');
+    
+    // Actualizar secciones
+    const configTitle = shadow.querySelector('.wplace-section-title');
+    if (configTitle) configTitle.innerHTML = `⚙️ ${t('farm.configuration')}`;
+    
+    const advancedTitle = shadow.getElementById('advanced-toggle');
+    if (advancedTitle) {
+      const arrow = advancedTitle.querySelector('#advanced-arrow');
+      const arrowText = arrow ? arrow.textContent : '▶';
+      advancedTitle.innerHTML = `🔧 ${t('farm.advanced')} <span id="advanced-arrow">${arrowText}</span>`;
+    }
+    
+    // Actualizar etiquetas de configuración
+    // Las etiquetas se actualizan automáticamente desde el innerHTML inicial
+    
+    // Actualizar opciones del selector de modo de color
+    const colorModeSelect = elements.colorModeSelect;
+    if (colorModeSelect) {
+      const randomOption = colorModeSelect.querySelector('option[value="random"]');
+      const fixedOption = colorModeSelect.querySelector('option[value="fixed"]');
+      if (randomOption) randomOption.textContent = t('farm.random');
+      if (fixedOption) fixedOption.textContent = t('farm.fixed');
+    }
+    
+    // Actualizar placeholder
+    if (elements.customPaletteInput) {
+      elements.customPaletteInput.placeholder = t('farm.paletteExample');
+    }
+    
+    // Actualizar botones de configuración
+    if (elements.saveBtn) elements.saveBtn.innerHTML = `💾 ${t('common.save')}`;
+    if (elements.loadBtn) elements.loadBtn.innerHTML = `📁 ${t('common.load')}`;
+    if (elements.resetBtn) elements.resetBtn.innerHTML = `🔄 ${t('common.reset')}`;
+    if (elements.captureBtn) elements.captureBtn.innerHTML = `📸 ${t('farm.capture')}`;
+    
+    // Actualizar estado de salud si existe
+    const healthStatus = elements.healthStatus;
+    if (healthStatus && healthStatus.textContent.includes('🔍')) {
+      healthStatus.textContent = `🔍 ${t('farm.checkingStatus')}`;
+    }
+    
+    // Actualizar estado si está detenido
+    const status = elements.status;
+    if (status && status.textContent.includes('💤')) {
+      status.textContent = `💤 ${t('farm.stopped')}`;
+    }
+  }
+  
+  // Escuchar cambios de idioma
+  window.addEventListener('languageChanged', updateTexts);
+  
   // API pública de la UI
   return {
     setStatus,
     updateStats,
     flashEffect,
     updateButtonStates,
+    updateTexts,
     destroy: () => {
+      window.removeEventListener('languageChanged', updateTexts);
       document.body.removeChild(shadowHost);
     },
     updateConfig: updateInputsFromConfig,
@@ -727,9 +805,23 @@ export async function autoCalibrateTile(config) {
 export function mountFarmUI() {
   // Esta función será llamada desde farm/index.js
   log('📱 Montando UI del farm...');
+  
+  // Crear una UI básica para el farm
+  const ui = createFarmUI(
+    FARM_DEFAULTS,
+    () => log(t('farm.startingBot')),
+    () => log(t('farm.stoppingBot')),
+    () => log(t('farm.calibrating'))
+  );
+  
   return {
-    setStatus: (msg) => log(msg),
-    updateStats: () => {},
-    flashEffect: () => {}
+    setStatus: (msg) => {
+      log(msg);
+      ui.setStatus(msg);
+    },
+    updateStats: ui.updateStats,
+    flashEffect: ui.flashEffect,
+    updateTexts: ui.updateTexts,
+    destroy: ui.destroy
   };
 }

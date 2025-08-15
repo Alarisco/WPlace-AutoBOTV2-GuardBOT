@@ -41,7 +41,7 @@ export async function runImage() {
 
     // Crear interfaz de usuario
     const ui = await createImageUI({
-      texts: texts,
+      texts,
       onInitBot: async () => {
         log('🤖 Inicializando Auto-Image...');
         
@@ -341,10 +341,27 @@ export async function runImage() {
       }
     });
 
+    // Escuchar cambios de idioma desde el launcher
+    const handleLauncherLanguageChange = (event) => {
+      const { language } = event.detail;
+      log(`🌍 Imagen: Detectado cambio de idioma desde launcher: ${language}`);
+      
+      // Actualizar estado del idioma
+      imageState.language = language;
+      
+      // Aquí se podría añadir lógica adicional para actualizar la UI
+      // Por ejemplo, actualizar textos dinámicos, re-renderizar elementos, etc.
+    };
+    
+    window.addEventListener('launcherLanguageChanged', handleLauncherLanguageChange);
+    window.addEventListener('languageChanged', handleLauncherLanguageChange);
+
     // Cleanup al cerrar la página
     window.addEventListener('beforeunload', () => {
       stopPainting();
       ui.destroy();
+      window.removeEventListener('launcherLanguageChanged', handleLauncherLanguageChange);
+      window.removeEventListener('languageChanged', handleLauncherLanguageChange);
       if (window.__wplaceBot) {
         window.__wplaceBot.imageRunning = false;
       }

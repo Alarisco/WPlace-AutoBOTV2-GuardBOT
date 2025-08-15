@@ -1,6 +1,7 @@
 import { log } from "../core/logger.js";
 import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
 import { launcherState, LAUNCHER_CONFIG, getLauncherTexts } from "./config.js";
+import { getCurrentLanguage } from "../locales/index.js";
 
 export function createLauncherUI({ 
   onSelectBot, 
@@ -269,6 +270,7 @@ export function createLauncherUI({
   
   // Función de limpieza
   function cleanup() {
+    window.removeEventListener('languageChanged', handleLanguageChange);
     if (launcherState.refreshTimer) {
       window.clearInterval(launcherState.refreshTimer);
       launcherState.refreshTimer = null;
@@ -286,6 +288,13 @@ export function createLauncherUI({
       cleanup();
     }
   }, { once: true });
+  
+  // Escuchar cambios de idioma
+  const handleLanguageChange = () => {
+    updateTexts();
+  };
+  
+  window.addEventListener('languageChanged', handleLanguageChange);
   
   // Funciones de actualización de UI
   function setUserInfo(userInfo) {
@@ -325,6 +334,82 @@ export function createLauncherUI({
     elements.uptime.textContent = typeof uptime === 'number' ? `${uptime}s` : (uptime || '-');
   }
   
+  function updateTexts() {
+    // Obtener nuevas traducciones
+    const newTexts = getLauncherTexts();
+    
+    // Actualizar elementos principales
+    const titleElement = panel.querySelector('.header div:first-child');
+    if (titleElement) {
+      titleElement.textContent = newTexts.title;
+    }
+    
+    if (elements.farmBtn) {
+      elements.farmBtn.textContent = newTexts.autoFarm;
+    }
+    
+    if (elements.imageBtn) {
+      elements.imageBtn.textContent = newTexts.autoImage;
+    }
+    
+    if (elements.launchBtn) {
+      elements.launchBtn.textContent = newTexts.launch;
+    }
+    
+    if (elements.closeBtn) {
+      elements.closeBtn.textContent = newTexts.close;
+    }
+    
+    // Actualizar labels de estadísticas
+    const selectionSpan = panel.querySelector('.card:first-of-type .stat span:first-child');
+    if (selectionSpan) {
+      selectionSpan.textContent = newTexts.selection;
+    }
+    
+    const userSpan = panel.querySelector('.user-card .stat:first-child span:first-child');
+    if (userSpan) {
+      userSpan.textContent = newTexts.user;
+    }
+    
+    const chargesSpan = panel.querySelector('.user-card .stat:last-child span:first-child');
+    if (chargesSpan) {
+      chargesSpan.textContent = newTexts.charges;
+    }
+    
+    const backendSpan = panel.querySelector('.health-card .stat:first-child span:first-child');
+    if (backendSpan) {
+      backendSpan.textContent = newTexts.backend;
+    }
+    
+    const databaseSpan = panel.querySelector('.health-card .stat:nth-child(2) span:first-child');
+    if (databaseSpan) {
+      databaseSpan.textContent = newTexts.database;
+    }
+    
+    const uptimeSpan = panel.querySelector('.health-card .stat:last-child span:first-child');
+    if (uptimeSpan) {
+      uptimeSpan.textContent = newTexts.uptime;
+    }
+    
+    // Actualizar status si está en mensaje por defecto
+    if (elements.statusText) {
+      const currentStatus = elements.statusText.textContent;
+      if (currentStatus === texts.chooseBot) {
+        elements.statusText.textContent = newTexts.chooseBot;
+      }
+    }
+    
+    // Actualizar la selección actual si hay alguna
+    if (selectedBot && elements.choice) {
+      elements.choice.textContent = selectedBot === 'farm' ? newTexts.autoFarm : newTexts.autoImage;
+    }
+    
+    // Actualizar textos de referencia local
+    Object.assign(texts, newTexts);
+    
+    log(`🌍 Textos del launcher actualizados al idioma: ${getCurrentLanguage()}`);
+  }
+  
   log('✅ Launcher UI creado exitosamente');
   
   return {
@@ -332,6 +417,7 @@ export function createLauncherUI({
     setHealthInfo,
     cleanup,
     selectBot,
+    updateTexts,
     getSelectedBot: () => selectedBot
   };
 }

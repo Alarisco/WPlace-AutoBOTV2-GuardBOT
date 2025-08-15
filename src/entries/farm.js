@@ -6,19 +6,23 @@ import { createFarmUI, autoCalibrateTile } from "../farm/ui.js";
 import { loop, paintWithRetry } from "../farm/loop.js";
 import { coordinateCapture } from "../core/capture.js";
 import { clamp } from "../core/utils.js";
+import { initializeLanguage, t } from "../locales/index.js";
 
 (async function() {
   'use strict';
 
+  // Initialize internationalization first
+  await initializeLanguage();
+
   // Verificar si el bot de farm ya está ejecutándose
   if (window.__wplaceBot?.farmRunning) {
-    alert("Auto-Farm ya está corriendo.");
+    alert(t('farm.alreadyRunning', "Auto-Farm ya está corriendo."));
     return;
   }
   
   // Verificar si hay otros bots ejecutándose
   if (window.__wplaceBot?.imageRunning) {
-    alert("Auto-Image está ejecutándose. Ciérralo antes de iniciar Auto-Farm.");
+    alert(t('farm.imageRunningWarning', "Auto-Image está ejecutándose. Ciérralo antes de iniciar Auto-Farm."));
     return;
   }
 
@@ -29,6 +33,13 @@ import { clamp } from "../core/utils.js";
   
   // Marcar que el farm bot está ejecutándose
   window.__wplaceBot.farmRunning = true;
+
+  // Listen for language changes
+  window.addEventListener('languageChanged', () => {
+    if (window.__wplaceBot?.ui?.updateTexts) {
+      window.__wplaceBot.ui.updateTexts();
+    }
+  });
 
   log('🚀 Iniciando WPlace Farm Bot (versión modular)');
 
@@ -60,11 +71,11 @@ import { clamp } from "../core/utils.js";
         ui.setStatus(`🎯 Coordenadas capturadas: tile(${result.tileX},${result.tileY})`, 'success');
         log(`✅ Coordenadas capturadas automáticamente: tile(${result.tileX},${result.tileY})`);
       } else {
-        ui.setStatus('❌ No se pudieron capturar coordenadas', 'error');
+        ui.setStatus(`❌ ${t('common.error', 'No se pudieron capturar coordenadas')}`, 'error');
       }
     });
     
-    ui.setStatus('📸 Pinta un píxel manualmente para capturar coordenadas...', 'status');
+    ui.setStatus(`📸 ${t('farm.captureInstructions')}`, 'status');
   }
 
   // Inicializar configuración
