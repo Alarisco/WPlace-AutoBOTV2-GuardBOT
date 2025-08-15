@@ -21,30 +21,49 @@ El proyecto está modularizado para facilitar el mantenimiento y desarrollo:
 WPlace-AutoBOT/
 ├── src/                    # Código fuente modular
 │   ├── core/              # Módulos base reutilizables
+│   │   ├── capture.js     # Sistema de captura de canvas
 │   │   ├── dom.js         # Utilidades DOM y Shadow DOM
 │   │   ├── http.js        # fetchWithTimeout y utilidades HTTP
+│   │   ├── language-selector.js # Componente selector de idiomas
 │   │   ├── loader.js      # loadAndEvalUrlWithFallback
 │   │   ├── logger.js      # Sistema de logging
 │   │   ├── storage.js     # LocalStorage wrapper
 │   │   ├── timing.js      # sleep() y retry()
 │   │   ├── turnstile.js   # Carga y ejecución de Turnstile
+│   │   ├── ui-utils.js    # Utilidades de interfaz
+│   │   ├── utils.js       # Utilidades generales
 │   │   └── wplace-api.js  # API unificada de WPlace
+│   ├── locales/           # 🌍 Sistema de internacionalización
+│   │   ├── index.js       # Motor i18n: traducción, detección, persistencia
+│   │   ├── es.js          # Traducciones en español (por defecto)
+│   │   ├── en.js          # Traducciones en inglés
+│   │   └── fr.js          # Traducciones en francés
 │   ├── ui/                # Componentes de interfaz
-│   │   ├── drag.js        # makeDraggable
+│   │   ├── drag.js        # makeDraggable - Sistema de arrastre
 │   │   └── overlay.js     # createOverlay con Shadow DOM
-│   ├── farm/              # Lógica del Auto-Farm
+│   ├── launcher/          # 🧭 Lógica del Auto-Launcher
+│   │   ├── api.js         # API del launcher
+│   │   ├── config.js      # Configuración del launcher
+│   │   ├── index.js       # runLauncher principal
+│   │   └── ui.js          # UI específica del launcher
+│   ├── farm/              # 🌾 Lógica del Auto-Farm
 │   │   ├── calibrate.js   # Calibración por fetch sniffing
+│   │   ├── config.js      # Configuración del farm
 │   │   ├── coords.js      # Coordenadas aleatorias y colores
 │   │   ├── index.js       # runFarm principal
 │   │   ├── loop.js        # Loop de pintado y retry
 │   │   └── ui.js          # UI específica del farm
-│   ├── image/             # Lógica del Auto-Image
+│   ├── image/             # 🎨 Lógica del Auto-Image
 │   │   ├── batcher.js     # Agrupación por tiles
+│   │   ├── config.js      # Configuración de imagen
 │   │   ├── image-processor.js # Procesamiento de imágenes
 │   │   ├── index.js       # runImage principal
 │   │   ├── loop.js        # Loop de pintado por lotes
+│   │   ├── painter.js     # Sistema de pintado
 │   │   ├── palette.js     # Coincidencia de colores
+│   │   ├── processor.js   # Procesador de imágenes
 │   │   ├── progress.js    # Persistencia de progreso
+│   │   ├── save-load.js   # Sistema guardar/cargar
 │   │   └── ui.js          # UI específica de imagen
 │   └── entries/           # Puntos de entrada (bookmarklets)
 │       ├── farm.js        # Entry point para Auto-Farm.js
@@ -57,13 +76,185 @@ WPlace-AutoBOT/
 ├── package.json           # Dependencias y scripts
 ├── eslint.config.js       # Configuración de ESLint v9
 ├── .prettierrc            # Configuración de Prettier
-└── docs/
-    ├── CONTRIBUTING.md    # Esta guía
+├── README.md              # 🇪🇸 Documentación principal en español
+└── docs/                  # 📚 Documentación multiidioma
+    ├── README.md          # Índice de navegación multiidioma
+    ├── README-es.md       # 🇪🇸 Documentación completa en español
+    ├── README-en.md       # 🇺🇸 Complete English documentation
+    ├── README-fr.md       # 🇫🇷 Documentation complète en français
+    ├── CONTRIBUTING.md    # Esta guía de contribución
+    ├── I18N_GUIDE.md      # Guía del sistema de internacionalización
     ├── SECURITY.md        # Política de seguridad
     └── SUPPORT.md         # Guía de soporte
 ```
 
-## 🔧 Scripts Disponibles
+## 🌍 Sistema de Internacionalización (i18n)
+
+### Arquitectura del Sistema i18n
+
+El proyecto incluye un sistema completo de internacionalización que permite soporte para múltiples idiomas:
+
+#### `src/locales/index.js` - Motor Principal
+- **🔧 Funciones principales:**
+  - `initializeLanguage()` - Inicialización automática
+  - `t(key, params)` - Función de traducción con interpolación
+  - `setLanguage(lang)` - Cambio de idioma con persistencia
+  - `getCurrentLanguage()` - Obtener idioma actual
+
+#### Archivos de Traducción
+```javascript
+// src/locales/es.js - Español (por defecto)
+export default {
+  launcher: { title: "WPlace AutoBOT", /* ... */ },
+  image: { title: "WPlace Auto-Image", /* ... */ },
+  farm: { title: "WPlace Farm Bot", /* ... */ },
+  common: { yes: "Sí", no: "No", /* ... */ }
+};
+```
+
+#### `src/core/language-selector.js` - Componente UI
+- **🎨 Selector visual** con banderas de países
+- **📱 Responsive** y posicionamiento configurable
+- **🔄 Auto-actualización** cuando cambia el idioma
+- **🎛️ Callbacks** para eventos de cambio
+
+### Idiomas Soportados
+- **🇪🇸 Español (es)** - Idioma por defecto
+- **🇺🇸 English (en)** - Soporte completo
+- **🇫🇷 Français (fr)** - Soporte completo
+
+### Agregar un Nuevo Idioma
+
+1. **Crear archivo de traducciones:**
+```bash
+# Ejemplo para alemán
+cp src/locales/es.js src/locales/de.js
+```
+
+2. **Traducir todas las claves:**
+```javascript
+// src/locales/de.js
+export default {
+  launcher: {
+    title: "WPlace AutoBOT",
+    autoFarm: "🌾 Auto-Farm",
+    // ... todas las traducciones
+  }
+};
+```
+
+3. **Registrar en el motor i18n:**
+```javascript
+// src/locales/index.js
+import de from './de.js';
+
+const translations = {
+  es: { name: "Español", flag: "🇪🇸", code: "es" },
+  en: { name: "English", flag: "🇺🇸", code: "en" }, 
+  fr: { name: "Français", flag: "🇫🇷", code: "fr" },
+  de: { name: "Deutsch", flag: "🇩🇪", code: "de" }  // ← Nuevo
+};
+
+const translationsData = { es, en, fr, de }; // ← Agregar
+```
+
+4. **Crear documentación:**
+```bash
+# Traducir README
+cp docs/README-en.md docs/README-de.md
+# Traducir contenido...
+```
+
+### Uso en el Código
+
+#### Traducción Básica
+```javascript
+import { t } from '../locales/index.js';
+
+// Texto simple
+const title = t('launcher.title'); // → "WPlace AutoBOT"
+
+// Con interpolación
+const progress = t('image.paintingProgress', { 
+  painted: 150, 
+  total: 500 
+}); // → "🧱 Progreso: 150/500 píxeles..."
+```
+
+#### Integración en UI
+```javascript
+import { initializeLanguage, t, getCurrentLanguage } from '../locales/index.js';
+import { createLanguageSelector } from '../core/language-selector.js';
+
+// Inicializar sistema
+initializeLanguage();
+
+// Crear selector de idiomas
+const languageSelector = createLanguageSelector({
+  position: 'top-left',
+  showFlags: true,
+  onLanguageChange: (newLang) => {
+    console.log(`Idioma cambiado a: ${newLang}`);
+    updateTexts(); // Actualizar toda la UI
+  }
+});
+
+// Montar componente
+languageSelector.mount();
+
+// Función para actualizar textos
+function updateTexts() {
+  document.querySelector('.title').textContent = t('launcher.title');
+  document.querySelector('.start-btn').textContent = t('common.start');
+  // ... actualizar todos los elementos
+}
+
+// Escuchar cambios globales de idioma
+window.addEventListener('languageChanged', (event) => {
+  const { language } = event.detail;
+  updateTexts();
+});
+```
+
+### Convenciones de Claves
+
+#### Estructura Jerárquica
+```javascript
+{
+  module: {           // launcher, image, farm, common
+    section: {        // ui, actions, status, etc.
+      key: "value"    // title, start, stop, etc.
+    }
+  }
+}
+```
+
+#### Ejemplos de Claves
+```javascript
+// ✅ Buenas prácticas
+"launcher.title"           // Título del launcher
+"image.uploadImage"        // Botón subir imagen
+"farm.configuration"       // Sección configuración
+"common.save"             // Botón guardar (reutilizable)
+
+// ❌ Evitar
+"launcherTitle"           // Sin jerarquía
+"upload_image_button"     // Muy específico
+"save_farm_config"        // No reutilizable
+```
+
+### Testing de Traducciones
+
+```bash
+# Verificar que todas las claves están traducidas
+npm run lint:i18n  # (script futuro)
+
+# Probar cambio de idioma en desarrollo
+npm run watch
+# Abrir navegador y probar selector de idiomas
+```
+
+---
 
 ### Instalación de Dependencias
 
@@ -249,6 +440,8 @@ Usa este formato para tus commits:
 
 - `core`: Módulos base (`src/core/`)
 - `ui`: Componentes de interfaz (`src/ui/`)
+- `i18n`: Sistema de internacionalización (`src/locales/`)
+- `launcher`: Auto-Launcher (`src/launcher/`)
 - `farm`: Auto-Farm (`src/farm/`)
 - `image`: Auto-Image (`src/image/`)
 - `build`: Sistema de build
@@ -261,7 +454,10 @@ feat(core): añadir módulo de retry con backoff exponencial
 fix(farm): corregir calibración en tiles negativos
 docs(readme): actualizar guía de instalación
 refactor(ui): migrar overlay a shadow DOM
+feat(i18n): agregar soporte para idioma alemán
+feat(launcher): añadir selector de idiomas
 chore(build): actualizar esbuild a v0.21.5
+docs(i18n): crear guía de traducción
 ```
 
 ## 🧪 Testing y Calidad
@@ -311,6 +507,12 @@ API unificada para WPlace:
 - `checkHealth()` - Estado del servidor
 - `postPixelBatch()` - Envío de píxeles por lotes
 
+#### `src/core/language-selector.js`
+Componente de selector de idiomas:
+- `createLanguageSelector()` - Crear componente con opciones
+- Posicionamiento configurable y callbacks
+- Auto-actualización y cleanup automático
+
 #### `src/core/turnstile.js`
 Gestión de Cloudflare Turnstile:
 - `loadTurnstile()` - Carga el script
@@ -319,6 +521,20 @@ Gestión de Cloudflare Turnstile:
 #### `src/core/http.js`
 Utilidades HTTP:
 - `fetchWithTimeout()` - Fetch con timeout
+
+### Módulos de Funcionalidad
+
+#### `src/launcher/index.js`
+Launcher principal que permite elegir entre bots:
+- Interfaz unificada para selección de bot
+- Gestión de estado del servidor y usuario
+- Integración completa con sistema i18n
+
+#### `src/locales/index.js`
+Motor de internacionalización:
+- Detección automática de idioma del navegador
+- Persistencia de preferencias en localStorage
+- Sistema de eventos para sincronización global
 
 ### Entry Points
 
@@ -406,21 +622,48 @@ npm run build:dev
 - 📊 **Analytics:** Estadísticas de pintado
 - 🔄 **Sync:** Sincronización entre dispositivos
 - 🎮 **Templates:** Plantillas predefinidas
+- 🌍 **Nuevos idiomas:** Alemán, italiano, portugués, etc.
+- 🎛️ **Configuración avanzada i18n:** Formatos de fecha/hora regionales
 
 ### Mejoras Técnicas
 
 - ⚡ **Performance:** Optimización de algoritmos
 - 🛡️ **Security:** Validación adicional
-- 🌐 **I18n:** Internacionalización
+- 🌐 **I18n avanzado:** Pluralización, contexto, RTL
 - 📱 **Mobile:** Mejoras para móviles
 - 🧪 **Tests:** Testing automatizado
+- 🔧 **i18n tooling:** Scripts de validación de traducciones
 
 ### Documentación
 
 - 📖 **Wiki:** Guías avanzadas
-- 🎥 **Videos:** Tutoriales
-- 🌍 **Traducciones:** Otros idiomas
+- 🎥 **Videos:** Tutoriales multiidioma
+- 🌍 **Traducciones:** Más idiomas para README
 - 📊 **Examples:** Casos de uso
+- 🛠️ **i18n Guide:** Guía detallada de internacionalización
+
+### Contribuciones de Traducción
+
+#### Idiomas Prioritarios
+- 🇩🇪 **Alemán** - Gran comunidad europea
+- 🇮🇹 **Italiano** - Comunidad activa en pixel art
+- 🇵🇹 **Portugués** - Brasil y Portugal
+- 🇯🇵 **Japonés** - Cultura tech avanzada
+- 🇷🇺 **Ruso** - Gran base de usuarios
+
+#### Proceso de Traducción
+1. **Fork del repositorio**
+2. **Copiar archivo base:** `cp src/locales/es.js src/locales/XX.js`
+3. **Traducir todas las claves** manteniendo la estructura
+4. **Registrar en motor i18n**
+5. **Crear README-XX.md** traducido
+6. **Pull Request** con las traducciones
+
+#### Calidad de Traducciones
+- ✅ **Contexto técnico:** Usar terminología correcta
+- ✅ **Consistencia:** Mantener términos unificados
+- ✅ **Longitud apropiada:** Considerar espacio en UI
+- ✅ **Culturalmente apropiado:** Adaptar expresiones locales
 
 ## 🆘 Ayuda
 

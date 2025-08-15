@@ -3,9 +3,9 @@
 <!-- Selector de idiomas -->
 <p align="center">
   <strong>🌍 Idiomas disponibles / Available Languages / Langues disponibles:</strong><br>
-  <a href="README.md">🇪🇸 Español</a> |
-  <a href="docs/README-en.md">🇺🇸 English</a> |
-  <a href="docs/README-fr.md">🇫🇷 Français</a>
+  <a href="README-es.md">🇪🇸 Español</a> |
+  <a href="README-en.md">🇺🇸 English</a> |
+  <a href="README-fr.md">🇫🇷 Français</a>
 </p>
 
 <!-- Badges centrados -->
@@ -69,8 +69,7 @@
 
 ### 📖 Documentación por Idioma
 - **[🇪🇸 Documentación en Español](README.md)** (este archivo)
-- **[�🇸 Documentación en Español (docs)](docs/README-es.md)**
-- **[�🇺🇸 English Documentation](docs/README-en.md)**
+- **[🇺🇸 English Documentation](docs/README-en.md)**
 - **[🇫🇷 Documentation Française](docs/README-fr.md)**
 
 ### 🎮 Cómo Cambiar Idioma
