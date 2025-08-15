@@ -100,7 +100,7 @@ function logLanguageInfo() {
   const currentLang = getCurrentLanguage();
   console.group('🌍 Sistema de Internacionalización');
   console.log(`📍 Idioma actual: ${currentLang}`);
-  console.log(`💾 Guardado en localStorage: ${localStorage.getItem('wplace-autobot-language')}`);
+  console.log(`💾 LocalStorage deshabilitado en este bot`);
   console.log(`🌐 Idioma del navegador: ${window.navigator.language}`);
   console.log(`✅ Sistema i18n inicializado correctamente`);
   console.groupEnd();

@@ -60,9 +60,17 @@ export async function runFarm() {
           return false;
         }
 
-        // Verificar que se haya seleccionado una zona
+        // Si no se ha seleccionado una zona, activar automáticamente la selección
         if (!config.POSITION_SELECTED || config.BASE_X === null || config.BASE_Y === null) {
-          ui.setStatus(t('farm.missingPosition'), 'error');
+          ui.setStatus(t('farm.autoSelectPosition'), 'info');
+          
+          // Activar selección de zona automáticamente
+          const selectButton = ui.getElement().shadowRoot.getElementById('select-position-btn');
+          if (selectButton) {
+            selectButton.click();
+          }
+          
+          // Retornar false para no iniciar el bot todavía
           return false;
         }
 

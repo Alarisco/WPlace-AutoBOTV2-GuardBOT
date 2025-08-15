@@ -130,7 +130,8 @@ export const es = {
     farmingInRadius: "🌾 Farming en radio {radius}px desde ({x},{y})",
     selectEmptyArea: "⚠️ IMPORTANTE: Selecciona una zona DESPOBLADA para evitar conflictos",
     noPosition: "Sin zona",
-    currentZone: "Zona: ({x},{y})"
+    currentZone: "Zona: ({x},{y})",
+    autoSelectPosition: "🎯 Selecciona una zona primero. Pinta un píxel en el mapa para establecer la zona de farming"
   },
 
   // Common/Shared

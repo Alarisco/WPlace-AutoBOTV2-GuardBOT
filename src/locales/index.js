@@ -40,28 +40,21 @@ export function detectBrowserLanguage() {
 }
 
 /**
- * Obtiene el idioma guardado en localStorage
- * @returns {string} Código del idioma guardado o null
+ * Obtiene el idioma guardado (deshabilitado - no usar localStorage)
+ * @returns {string} Siempre retorna null
  */
 export function getSavedLanguage() {
-  try {
-    return localStorage.getItem('wplace-autobot-language');
-  } catch (error) {
-    console.warn('No se pudo acceder a localStorage:', error);
-    return null;
-  }
+  // No usar localStorage - siempre retornar null
+  return null;
 }
 
 /**
- * Guarda el idioma en localStorage
+ * Guarda el idioma (deshabilitado - no usar localStorage)
  * @param {string} langCode - Código del idioma
  */
 export function saveLanguage(langCode) {
-  try {
-    localStorage.setItem('wplace-autobot-language', langCode);
-  } catch (error) {
-    console.warn('No se pudo guardar el idioma en localStorage:', error);
-  }
+  // No guardar en localStorage - función deshabilitada
+  return;
 }
 
 /**

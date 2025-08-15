@@ -130,7 +130,8 @@ export const fr = {
     farmingInRadius: "🌾 Farming dans un rayon de {radius}px depuis ({x},{y})",
     selectEmptyArea: "⚠️ IMPORTANT: Sélectionnez une zone VIDE pour éviter les conflits",
     noPosition: "Aucune zone",
-    currentZone: "Zone: ({x},{y})"
+    currentZone: "Zone: ({x},{y})",
+    autoSelectPosition: "🎯 Sélectionnez une zone d'abord. Peignez un pixel sur la carte pour définir la zone de farming"
   },
 
     // Common/Shared

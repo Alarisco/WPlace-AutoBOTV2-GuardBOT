@@ -47,8 +47,8 @@ import { initializeLanguage, t } from "../locales/index.js";
   function needsCalibrationCheck(cfg) {
     // Verificar si las coordenadas son las por defecto
     const hasDefaultCoords = cfg.TILE_X === FARM_DEFAULTS.TILE_X && cfg.TILE_Y === FARM_DEFAULTS.TILE_Y;
-    // También verificar si no hay configuración guardada
-    const hasNoSavedConfig = !localStorage.getItem('WPA_UI_CFG');
+    // Sin localStorage, siempre consideramos que no hay configuración guardada
+    const hasNoSavedConfig = true;
     // Verificar que las coordenadas sean números válidos
     const hasInvalidCoords = !Number.isFinite(cfg.TILE_X) || !Number.isFinite(cfg.TILE_Y);
     
@@ -142,6 +142,20 @@ import { initializeLanguage, t } from "../locales/index.js";
     async () => {
       if (farmState.running) {
         ui.setStatus('⚠️ El bot ya está ejecutándose', 'error');
+        return;
+      }
+      
+      // Si no se ha seleccionado una zona, activar automáticamente la selección
+      if (!cfg.POSITION_SELECTED || cfg.BASE_X === null || cfg.BASE_Y === null) {
+        ui.setStatus(t('farm.autoSelectPosition'), 'info');
+        
+        // Activar selección de zona automáticamente
+        const selectButton = ui.getElement().shadowRoot.getElementById('select-position-btn');
+        if (selectButton) {
+          selectButton.click();
+        }
+        
+        // Retornar para no iniciar el bot todavía
         return;
       }
       
