@@ -1,6 +1,6 @@
 import { log } from "../core/logger.js";
 import { sleep } from "../core/timing.js";
-import { postPixel } from "../core/wplace-api.js";
+import { postPixelBatchImage } from "../core/wplace-api.js";
 import { getTurnstileToken } from "../core/turnstile.js";
 import { imageState, IMAGE_DEFAULTS } from "./config.js";
 
@@ -103,23 +103,30 @@ export async function paintPixelBatch(batch) {
     // Convertir el lote al formato esperado por la API
     const coords = [];
     const colors = [];
+    let tileX = null;
+    let tileY = null;
     
     for (const pixel of batch) {
       coords.push(pixel.localX, pixel.localY);
       colors.push(pixel.color.id || pixel.color.value || 1);
+      
+      // Tomar tileX/tileY del primer píxel (todos deberían tener el mismo tile)
+      if (tileX === null) {
+        tileX = pixel.tileX;
+        tileY = pixel.tileY;
+      }
     }
     
     // Obtener token de Turnstile
     const token = await getTurnstileToken(IMAGE_DEFAULTS.SITEKEY);
     
-    // Enviar píxeles
-    const response = await postPixel(coords, colors, token);
+    // Enviar píxeles usando el formato correcto
+    const response = await postPixelBatchImage(tileX, tileY, coords, colors, token);
     
-    if (response.status === 200 && response.json) {
-      const painted = response.json.painted || batch.length;
+    if (response.status === 200) {
       return {
         success: true,
-        painted,
+        painted: response.painted,
         response: response.json
       };
     } else {

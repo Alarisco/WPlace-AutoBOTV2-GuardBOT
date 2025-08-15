@@ -4,6 +4,7 @@ import { ImageProcessor, detectAvailableColors } from "./processor.js";
 import { processImage, stopPainting } from "./painter.js";
 import { saveProgress, loadProgress, clearProgress, getProgressInfo } from "./save-load.js";
 import { createImageUI, showConfirmDialog } from "./ui.js";
+import { getSession } from "../core/wplace-api.js";
 
 export async function runImage() {
   log('🚀 Iniciando WPlace Auto-Image (versión modular)');
@@ -15,6 +16,8 @@ export async function runImage() {
   }
   
   window.__wplaceBot = { ...window.__wplaceBot, imageRunning: true };
+
+  let currentUserInfo = null; // Variable global para información del usuario
 
   try {
     // Inicializar configuración
@@ -50,10 +53,28 @@ export async function runImage() {
           return false;
         }
         
+        // Obtener información del usuario
+        const sessionInfo = await getSession();
+        let userInfo = null;
+        if (sessionInfo.success && sessionInfo.data.user) {
+          userInfo = {
+            username: sessionInfo.data.user.name || 'Anónimo',
+            charges: sessionInfo.data.charges,
+            maxCharges: sessionInfo.data.maxCharges,
+            pixels: sessionInfo.data.user.pixelsPainted || 0  // Usar pixelsPainted en lugar de pixels
+          };
+          currentUserInfo = userInfo; // Actualizar variable global
+          imageState.currentCharges = sessionInfo.data.charges;
+          log(`👤 Usuario conectado: ${sessionInfo.data.user.name || 'Anónimo'} - Cargas: ${userInfo.charges}/${userInfo.maxCharges} - Píxeles: ${userInfo.pixels}`);
+        } else {
+          log('⚠️ No se pudo obtener información del usuario');
+        }
+        
         imageState.availableColors = colors;
         imageState.colorsChecked = true;
         
         ui.setStatus(TEXTS[language].colorsFound.replace('{count}', colors.length), 'success');
+        ui.updateProgress(0, 0, userInfo);
         log(`✅ ${colors.length} colores disponibles detectados`);
         
         return true;
@@ -79,7 +100,7 @@ export async function runImage() {
           imageState.imageLoaded = true;
           
           ui.setStatus(TEXTS[language].imageLoaded.replace('{count}', processedData.validPixelCount), 'success');
-          ui.updateProgress(0, processedData.validPixelCount);
+          ui.updateProgress(0, processedData.validPixelCount, currentUserInfo);
           
           log(`✅ Imagen cargada: ${processedData.width}x${processedData.height}, ${processedData.validPixelCount} píxeles válidos`);
           
@@ -155,8 +176,19 @@ export async function runImage() {
       },
       
       onStartPainting: async () => {
+        // Debug: verificar estado antes de validar
+        log(`🔍 Estado para iniciar pintura:`, {
+          imageLoaded: imageState.imageLoaded,
+          startPosition: imageState.startPosition,
+          tileX: imageState.tileX,
+          tileY: imageState.tileY,
+          totalPixels: imageState.totalPixels,
+          remainingPixels: imageState.remainingPixels?.length || 0
+        });
+        
         if (!imageState.imageLoaded || !imageState.startPosition) {
           ui.setStatus(TEXTS[language].missingRequirements, 'error');
+          log(`❌ Validación fallida: imageLoaded=${imageState.imageLoaded}, startPosition=${!!imageState.startPosition}`);
           return false;
         }
         
@@ -171,7 +203,11 @@ export async function runImage() {
             imageState.startPosition,
             // onProgress
             (painted, total, message) => {
-              ui.updateProgress(painted, total);
+              // Actualizar cargas en userInfo si existe
+              if (currentUserInfo) {
+                currentUserInfo.charges = Math.floor(imageState.currentCharges);
+              }
+              ui.updateProgress(painted, total, currentUserInfo);
               if (message) {
                 ui.setStatus(message, 'info');
               } else {
@@ -251,7 +287,12 @@ export async function runImage() {
           const result = await loadProgress(file);
           if (result.success) {
             ui.setStatus(TEXTS[language].progressLoaded.replace('{painted}', result.painted).replace('{total}', result.total), 'success');
-            ui.updateProgress(result.painted, result.total);
+            ui.updateProgress(result.painted, result.total, currentUserInfo);
+            
+            // Habilitar botones después de cargar progreso exitosamente
+            // No es necesario subir imagen ni seleccionar posición de nuevo
+            log('✅ Progreso cargado - habilitando botones de inicio');
+            
             return true;
           } else {
             ui.setStatus(TEXTS[language].progressLoadError.replace('{error}', result.error), 'error');
@@ -281,6 +322,6 @@ export async function runImage() {
 }
 
 function detectLanguage() {
-  const lang = navigator.language || navigator.userLanguage || 'es';
+  const lang = window.navigator.language || window.navigator.userLanguage || 'es';
   return lang.startsWith('es') ? 'es' : 'es'; // Por ahora solo español
 }

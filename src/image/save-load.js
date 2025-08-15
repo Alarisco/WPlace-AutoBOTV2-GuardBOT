@@ -28,7 +28,13 @@ export function saveProgress(filename = null) {
       config: {
         pixelsPerBatch: imageState.pixelsPerBatch
       },
-      colors: imageState.availableColors,
+      // Filtrar solo los datos serializables de los colores (sin elementos DOM)
+      colors: imageState.availableColors.map(color => ({
+        id: color.id,
+        r: color.r,
+        g: color.g,
+        b: color.b
+      })),
       remainingPixels: imageState.remainingPixels || []
     };
     
@@ -92,12 +98,31 @@ export async function loadProgress(file) {
           
           imageState.paintedPixels = progressData.progress.paintedPixels;
           imageState.totalPixels = progressData.progress.totalPixels;
-          imageState.lastPosition = progressData.progress.lastPosition;
-          imageState.startPosition = progressData.position.startPosition;
+          
+          // Manejar tanto formato original como modular para posiciones
+          if (progressData.progress.lastPosition) {
+            // Formato modular
+            imageState.lastPosition = progressData.progress.lastPosition;
+          } else if (progressData.position.lastX !== undefined && progressData.position.lastY !== undefined) {
+            // Formato original
+            imageState.lastPosition = { x: progressData.position.lastX, y: progressData.position.lastY };
+          }
+          
+          // Manejar tanto formato original como modular para startPosition
+          if (progressData.position.startPosition) {
+            // Formato modular
+            imageState.startPosition = progressData.position.startPosition;
+          } else if (progressData.position.startX !== undefined && progressData.position.startY !== undefined) {
+            // Formato original
+            imageState.startPosition = { x: progressData.position.startX, y: progressData.position.startY };
+          }
+          
           imageState.tileX = progressData.position.tileX;
           imageState.tileY = progressData.position.tileY;
           imageState.originalImageName = progressData.imageData.originalName;
-          imageState.remainingPixels = progressData.remainingPixels || [];
+          
+          // Manejar remainingPixels tanto en progress como en raíz
+          imageState.remainingPixels = progressData.remainingPixels || progressData.progress.remainingPixels || [];
           
           if (progressData.config) {
             imageState.pixelsPerBatch = progressData.config.pixelsPerBatch || imageState.pixelsPerBatch;

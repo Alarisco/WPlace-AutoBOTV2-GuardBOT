@@ -123,3 +123,42 @@ export async function postPixel(coords, colors, turnstileToken) {
     };
   }
 }
+
+// Post píxel para Auto-Image (formato original correcto)
+export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstileToken) {
+  try {
+    const body = JSON.stringify({ 
+      colors: colors, 
+      coords: coords, 
+      t: turnstileToken 
+    });
+    
+    const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: body
+    });
+
+    let responseData = null;
+    try {
+      responseData = await response.json();
+    } catch {
+      responseData = {}; // Ignorar errores de JSON parse
+    }
+
+    return {
+      status: response.status,
+      json: responseData,
+      success: response.ok,
+      painted: responseData?.painted || 0
+    };
+  } catch (error) {
+    return {
+      status: 0,
+      json: { error: error.message },
+      success: false,
+      painted: 0
+    };
+  }
+}

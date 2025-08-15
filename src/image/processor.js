@@ -193,53 +193,48 @@ export function generatePixelQueue(imageData, startPosition, tileX, tileY) {
 }
 
 export function detectAvailableColors() {
+  log('🎨 Detectando colores disponibles...');
+  
+  // Buscar elementos de color usando el selector del original
+  const colorElements = document.querySelectorAll('[id^="color-"]');
   const colors = [];
   
-  // Buscar elementos de color en la paleta
-  const colorElements = document.querySelectorAll('.color-option, .palette-color, [data-color]');
-  
   for (const element of colorElements) {
-    const colorValue = element.getAttribute('data-color') || 
-                      element.style.backgroundColor ||
-                      window.getComputedStyle(element).backgroundColor;
+    // Filtrar elementos que tienen SVG (probablemente iconos de bloqueo)
+    if (element.querySelector('svg')) {
+      continue;
+    }
     
-    if (colorValue) {
-      const rgb = parseColor(colorValue);
-      if (rgb) {
+    const idStr = element.id.replace('color-', '');
+    const id = parseInt(idStr);
+    
+    // Filtrar colores específicos (0 y 5 según el original)
+    if (id === 0 || id === 5) {
+      continue;
+    }
+    
+    // Obtener color RGB del style
+    const backgroundStyle = element.style.backgroundColor;
+    if (backgroundStyle) {
+      const rgbMatch = backgroundStyle.match(/\d+/g);
+      if (rgbMatch && rgbMatch.length >= 3) {
+        const rgb = {
+          r: parseInt(rgbMatch[0]),
+          g: parseInt(rgbMatch[1]),
+          b: parseInt(rgbMatch[2])
+        };
+        
         colors.push({
-          id: element.getAttribute('data-id') || colors.length,
+          id,
           element,
           ...rgb
         });
+        
+        log(`Color detectado: id=${id}, rgb(${rgb.r},${rgb.g},${rgb.b})`);
       }
     }
   }
   
+  log(`✅ ${colors.length} colores disponibles detectados`);
   return colors;
-}
-
-function parseColor(colorStr) {
-  if (colorStr.startsWith('#')) {
-    const hex = colorStr.slice(1);
-    if (hex.length === 6) {
-      return {
-        r: parseInt(hex.slice(0, 2), 16),
-        g: parseInt(hex.slice(2, 4), 16),
-        b: parseInt(hex.slice(4, 6), 16)
-      };
-    }
-  }
-  
-  if (colorStr.startsWith('rgb')) {
-    const match = colorStr.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-    if (match) {
-      return {
-        r: parseInt(match[1]),
-        g: parseInt(match[2]),
-        b: parseInt(match[3])
-      };
-    }
-  }
-  
-  return null;
 }

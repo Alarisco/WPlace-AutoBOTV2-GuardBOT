@@ -4,14 +4,17 @@ import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
 export async function createImageUI({ texts, ...handlers }) {
   log('🎨 Creando interfaz de Auto-Image');
   
+  // Agregar FontAwesome al document.head si no existe
+  if (!document.querySelector('link[href*="font-awesome"]')) {
+    const fontAwesome = document.createElement('link');
+    fontAwesome.rel = 'stylesheet';
+    fontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
+    document.head.appendChild(fontAwesome);
+    log('📦 FontAwesome añadido al document.head');
+  }
+  
   // Crear shadow root para aislamiento de estilos
   const { host, root } = createShadowRoot();
-  
-  // Agregar FontAwesome
-  const fontAwesome = document.createElement('link');
-  fontAwesome.rel = 'stylesheet';
-  fontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
-  root.appendChild(fontAwesome);
   
   // Crear estilos
   const style = document.createElement('style');
@@ -542,17 +545,52 @@ export async function createImageUI({ texts, ...handlers }) {
     elements.status.style.animation = 'slideIn 0.3s ease-out';
   }
   
-  function updateProgress(current, total) {
+  function updateProgress(current, total, userInfo = null) {
     const percentage = total > 0 ? (current / total) * 100 : 0;
     elements.progressBar.style.width = `${percentage}%`;
     
     // Actualizar stats
-    elements.statsArea.innerHTML = `
+    let statsHTML = `
       <div class="stat-item">
         <div class="stat-label"><i class="fas fa-palette"></i> ${texts.progress}</div>
         <div>${current}/${total} (${percentage.toFixed(1)}%)</div>
       </div>
     `;
+    
+    // Agregar información del usuario si está disponible
+    if (userInfo) {
+      // Mostrar nombre de usuario
+      if (userInfo.username) {
+        statsHTML += `
+          <div class="stat-item">
+            <div class="stat-label"><i class="fas fa-user"></i> Usuario</div>
+            <div>${userInfo.username}</div>
+          </div>
+        `;
+      }
+      
+      // Mostrar cargas (número entero)
+      if (userInfo.charges !== undefined) {
+        statsHTML += `
+          <div class="stat-item">
+            <div class="stat-label"><i class="fas fa-bolt"></i> ${texts.charges}</div>
+            <div>${Math.floor(userInfo.charges)}</div>
+          </div>
+        `;
+      }
+      
+      // Mostrar píxeles pintados del usuario
+      if (userInfo.pixels !== undefined) {
+        statsHTML += `
+          <div class="stat-item">
+            <div class="stat-label"><i class="fas fa-cube"></i> ${texts.pixels}</div>
+            <div>${userInfo.pixels.toLocaleString()}</div>
+          </div>
+        `;
+      }
+    }
+    
+    elements.statsArea.innerHTML = statsHTML;
   }
   
   function destroy() {
