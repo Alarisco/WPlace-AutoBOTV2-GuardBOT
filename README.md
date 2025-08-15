@@ -352,6 +352,65 @@ Los bots se actualizan automáticamente al ejecutar el bookmarklet. Siempre obti
 
 ---
 
+## 🔧 Desarrollo
+
+### Estructura del Proyecto
+
+El proyecto está modularizado para facilitar el mantenimiento:
+
+```
+src/
+├── core/          # Módulos base reutilizables
+│   ├── api.js     # API de WPlace
+│   ├── http.js    # Utilidades HTTP
+│   ├── storage.js # Almacenamiento local
+│   └── ...
+├── ui/            # Componentes de interfaz
+├── farm/          # Lógica del Auto-Farm
+├── image/         # Lógica del Auto-Image
+└── entries/       # Puntos de entrada (farm.js, image.js, launcher.js)
+```
+
+### Scripts Disponibles
+
+```bash
+# Instalar dependencias
+npm install
+
+# Build de producción (minificado)
+npm run build
+
+# Build de desarrollo (con sourcemaps)
+npm run build:dev
+
+# Modo watch (reconstruye automáticamente)
+npm run watch
+
+# Linter
+npm run lint
+```
+
+### Proceso de Build
+
+El sistema usa **esbuild** para generar los 3 archivos finales en la raíz:
+- `Auto-Farm.js`
+- `Auto-Image.js` 
+- `Auto-Launcher.js`
+
+Estos archivos mantienen la compatibilidad con los bookmarklets existentes.
+
+### Contribuir
+
+1. Fork del repositorio
+2. Crea una rama: `git checkout -b feature/nueva-funcionalidad`
+3. Desarrolla en `src/`
+4. Ejecuta `npm run build` para generar los archivos
+5. Asegúrate de que `npm run lint` pase sin errores
+6. Commit y push
+7. Abre un Pull Request
+
+---
+
 <p align="center">
   <strong>🎨 Hecho con ❤️ para la comunidad de WPlace</strong><br>
   <em>Usa responsablemente y disfruta creando arte píxel a píxel</em>
