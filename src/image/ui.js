@@ -398,15 +398,15 @@ export async function createImageUI({ texts, ...handlers }) {
   container.innerHTML = `
     <div class="header">
       <div class="header-title">
-        <i class="fas fa-image"></i>
+        🖼️
         <span>${texts.title}</span>
       </div>
       <div class="header-controls">
         <button class="header-btn config-btn" title="Configuración">
-          <i class="fas fa-cog"></i>
+          ⚙️
         </button>
         <button class="header-btn minimize-btn" title="${texts.minimize}">
-          <i class="fas fa-minus"></i>
+          ➖
         </button>
       </div>
     </div>
@@ -420,31 +420,31 @@ export async function createImageUI({ texts, ...handlers }) {
       
       <div class="controls">
         <button class="btn btn-primary init-btn">
-          <i class="fas fa-robot"></i>
+          🤖
           <span>${texts.initBot}</span>
         </button>
         <button class="btn btn-upload upload-btn" disabled>
-          <i class="fas fa-upload"></i>
+          📤
           <span>${texts.uploadImage}</span>
         </button>
         <button class="btn btn-load load-progress-btn" disabled>
-          <i class="fas fa-file-import"></i>
+          📁
           <span>${texts.loadProgress}</span>
         </button>
         <button class="btn btn-primary resize-btn" disabled>
-          <i class="fas fa-expand"></i>
+          🔄
           <span>${texts.resizeImage}</span>
         </button>
         <button class="btn btn-select select-pos-btn" disabled>
-          <i class="fas fa-crosshairs"></i>
+          🎯
           <span>${texts.selectPosition}</span>
         </button>
         <button class="btn btn-start start-btn" disabled>
-          <i class="fas fa-play"></i>
+          ▶️
           <span>${texts.startPainting}</span>
         </button>
         <button class="btn btn-stop stop-btn" disabled>
-          <i class="fas fa-stop"></i>
+          ⏹️
           <span>${texts.stopPainting}</span>
         </button>
       </div>
@@ -456,7 +456,7 @@ export async function createImageUI({ texts, ...handlers }) {
       <div class="stats">
         <div class="stats-area">
           <div class="stat-item">
-            <div class="stat-label"><i class="fas fa-info-circle"></i> ${texts.initMessage}</div>
+            <div class="stat-label">ℹ️ ${texts.initMessage}</div>
           </div>
         </div>
       </div>
@@ -507,11 +507,11 @@ export async function createImageUI({ texts, ...handlers }) {
       <img class="resize-preview" src="" alt="Preview">
       <div class="resize-buttons">
         <button class="btn btn-primary confirm-resize">
-          <i class="fas fa-check"></i>
+          ✅
           <span>${texts.apply}</span>
         </button>
         <button class="btn btn-stop cancel-resize">
-          <i class="fas fa-times"></i>
+          ❌
           <span>${texts.cancel}</span>
         </button>
       </div>
@@ -567,10 +567,10 @@ export async function createImageUI({ texts, ...handlers }) {
     state.minimized = !state.minimized;
     if (state.minimized) {
       container.classList.add('minimized');
-      elements.minimizeBtn.innerHTML = '<i class="fas fa-expand"></i>';
+      elements.minimizeBtn.innerHTML = '🔼';
     } else {
       container.classList.remove('minimized');
-      elements.minimizeBtn.innerHTML = '<i class="fas fa-minus"></i>';
+      elements.minimizeBtn.innerHTML = '🔽';
     }
   });
   
@@ -578,10 +578,10 @@ export async function createImageUI({ texts, ...handlers }) {
     state.configVisible = !state.configVisible;
     if (state.configVisible) {
       elements.configPanel.classList.add('visible');
-      elements.configBtn.innerHTML = '<i class="fas fa-times"></i>';
+      elements.configBtn.innerHTML = '❌';
     } else {
       elements.configPanel.classList.remove('visible');
-      elements.configBtn.innerHTML = '<i class="fas fa-cog"></i>';
+      elements.configBtn.innerHTML = '⚙️';
     }
   });
   
@@ -774,7 +774,7 @@ export async function createImageUI({ texts, ...handlers }) {
     // Actualizar stats
     let statsHTML = `
       <div class="stat-item">
-        <div class="stat-label"><i class="fas fa-palette"></i> ${texts.progress}</div>
+        <div class="stat-label">🎨 ${texts.progress}</div>
         <div>${current}/${total} (${percentage.toFixed(1)}%)</div>
       </div>
     `;
@@ -785,7 +785,7 @@ export async function createImageUI({ texts, ...handlers }) {
       if (userInfo.username) {
         statsHTML += `
           <div class="stat-item">
-            <div class="stat-label"><i class="fas fa-user"></i> Usuario</div>
+            <div class="stat-label">👤 Usuario</div>
             <div>${userInfo.username}</div>
           </div>
         `;
@@ -795,7 +795,7 @@ export async function createImageUI({ texts, ...handlers }) {
       if (userInfo.charges !== undefined) {
         statsHTML += `
           <div class="stat-item">
-            <div class="stat-label"><i class="fas fa-bolt"></i> ${texts.charges}</div>
+            <div class="stat-label">⚡ ${texts.charges}</div>
             <div>${Math.floor(userInfo.charges)}</div>
           </div>
         `;
@@ -805,7 +805,7 @@ export async function createImageUI({ texts, ...handlers }) {
       if (userInfo.pixels !== undefined) {
         statsHTML += `
           <div class="stat-item">
-            <div class="stat-label"><i class="fas fa-cube"></i> ${texts.pixels}</div>
+            <div class="stat-label">🔳 ${texts.pixels}</div>
             <div>${userInfo.pixels.toLocaleString()}</div>
           </div>
         `;
