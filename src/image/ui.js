@@ -657,13 +657,18 @@ export async function createImageUI({ texts, ...handlers }) {
     }
   });
   
+  // Función para habilitar botones después de inicialización exitosa
+  function enableButtonsAfterInit() {
+    elements.uploadBtn.disabled = false;
+    elements.loadProgressBtn.disabled = false;
+  }
+  
   elements.initBtn.addEventListener('click', async () => {
     elements.initBtn.disabled = true;
     if (handlers.onInitBot) {
       const success = await handlers.onInitBot();
       if (success) {
-        elements.uploadBtn.disabled = false;
-        elements.loadProgressBtn.disabled = false;
+        enableButtonsAfterInit();
       }
     }
     elements.initBtn.disabled = false;
@@ -925,6 +930,24 @@ export async function createImageUI({ texts, ...handlers }) {
     }
   }
   
+  // Función para controlar el estado del botón de inicialización
+  function setInitialized(isInitialized) {
+    if (isInitialized) {
+      elements.initBtn.disabled = true;
+      elements.initBtn.style.opacity = '0.6';
+      elements.initBtn.innerHTML = `✅ <span>${texts.initBot} - Completado</span>`;
+    } else {
+      elements.initBtn.disabled = false;
+      elements.initBtn.style.opacity = '1';
+      elements.initBtn.innerHTML = `🤖 <span>${texts.initBot}</span>`;
+    }
+  }
+  
+  // Función para ocultar/mostrar el botón de inicialización
+  function setInitButtonVisible(visible) {
+    elements.initBtn.style.display = visible ? 'flex' : 'none';
+  }
+  
   function destroy() {
     host.remove();
   }
@@ -936,6 +959,9 @@ export async function createImageUI({ texts, ...handlers }) {
     updateProgress,
     updateCooldownDisplay,
     updateCooldownMessage,
+    setInitialized,
+    setInitButtonVisible,
+    enableButtonsAfterInit,
     showResizeDialog,
     closeResizeDialog,
     destroy

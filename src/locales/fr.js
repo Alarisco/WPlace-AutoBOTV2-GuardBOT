@@ -88,7 +88,15 @@ export const fr = {
     apply: "Appliquer",
     passCompleted: "✅ Passage terminé: {painted} pixels peints | Progrès: {percent}% ({current}/{total})",
     waitingChargesRegen: "⏳ Attente de régénération des charges: {current}/{needed} - Temps: {time}",
-    waitingChargesCountdown: "⏳ Attente des charges: {current}/{needed} - Restant: {time}"
+    waitingChargesCountdown: "⏳ Attente des charges: {current}/{needed} - Restant: {time}",
+    autoInitializing: "🤖 Initialisation automatique...",
+    autoInitSuccess: "✅ Bot démarré automatiquement",
+    autoInitFailed: "⚠️ Impossible de démarrer automatiquement. Utilisez le bouton manuel.",
+    paletteDetected: "🎨 Palette de couleurs détectée",
+    paletteNotFound: "🔍 Recherche de la palette de couleurs...",
+    clickingPaintButton: "👆 Clic sur le bouton Paint...",
+    paintButtonNotFound: "❌ Bouton Paint introuvable",
+    manualInitRequired: "🔧 Initialisation manuelle requise"
   },
 
   // Farm Module (to be implemented)

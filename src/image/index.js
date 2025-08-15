@@ -6,6 +6,8 @@ import { saveProgress, loadProgress, clearProgress, getProgressInfo } from "./sa
 import { createImageUI, showConfirmDialog } from "./ui.js";
 import { getSession } from "../core/wplace-api.js";
 import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
+import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
+import { sleep } from "../core/timing.js";
 
 export async function runImage() {
   log('🚀 Iniciando WPlace Auto-Image (versión modular)');
@@ -57,6 +59,90 @@ export async function runImage() {
       }
     }
 
+    // Función para auto-inicio del bot
+    async function tryAutoInit() {
+      log('🤖 Intentando auto-inicio...');
+      
+      // Verificar si la paleta ya está abierta
+      if (isPaletteOpen()) {
+        log('🎨 Paleta de colores ya está abierta');
+        return true;
+      }
+      
+      log('🔍 Paleta no encontrada, buscando botón Paint...');
+      
+      // Intentar hacer clic en el botón Paint
+      if (findAndClickPaintButton()) {
+        log('👆 Botón Paint encontrado y presionado');
+        
+        // Esperar un momento para que la paleta se abra
+        await sleep(2000);
+        
+        // Verificar si la paleta se abrió
+        if (isPaletteOpen()) {
+          log('✅ Paleta abierta exitosamente');
+          return true;
+        } else {
+          log('❌ La paleta no se abrió después de hacer clic');
+          return false;
+        }
+      } else {
+        log('❌ Botón Paint no encontrado');
+        return false;
+      }
+    }
+
+    // Función para inicializar el bot (usada tanto para auto-inicio como inicio manual)
+    async function initializeBot(isAutoInit = false) {
+      log('🤖 Inicializando Auto-Image...');
+      
+      // Verificar colores disponibles
+      ui.setStatus(t('image.checkingColors'), 'info');
+      const colors = detectAvailableColors();
+      
+      if (colors.length === 0) {
+        ui.setStatus(t('image.noColorsFound'), 'error');
+        return false;
+      }
+      
+      // Obtener información del usuario
+      const sessionInfo = await getSession();
+      let userInfo = null;
+      if (sessionInfo.success && sessionInfo.data.user) {
+        userInfo = {
+          username: sessionInfo.data.user.name || 'Anónimo',
+          charges: sessionInfo.data.charges,
+          maxCharges: sessionInfo.data.maxCharges,
+          pixels: sessionInfo.data.user.pixelsPainted || 0  // Usar pixelsPainted en lugar de pixels
+        };
+        currentUserInfo = userInfo; // Actualizar variable global
+        imageState.currentCharges = sessionInfo.data.charges;
+        imageState.maxCharges = sessionInfo.data.maxCharges || 50; // Guardar maxCharges en state
+        log(`👤 Usuario conectado: ${sessionInfo.data.user.name || 'Anónimo'} - Cargas: ${userInfo.charges}/${userInfo.maxCharges} - Píxeles: ${userInfo.pixels}`);
+      } else {
+        log('⚠️ No se pudo obtener información del usuario');
+      }
+      
+      imageState.availableColors = colors;
+      imageState.colorsChecked = true;
+      
+      ui.setStatus(t('image.colorsFound', { count: colors.length }), 'success');
+      ui.updateProgress(0, 0, userInfo);
+      
+      // Solo mostrar log una vez (evitar duplicado en auto-inicio)
+      if (!isAutoInit) {
+        log(`✅ ${colors.length} colores disponibles detectados`);
+      }
+      
+      // Marcar como inicializado exitosamente para deshabilitar el botón
+      ui.setInitialized(true);
+      
+      // Habilitar botones de upload y load progress
+      ui.enableButtonsAfterInit();
+      
+      return true;
+    }
+
     // Crear interfaz de usuario
     const ui = await createImageUI({
       texts,
@@ -72,45 +158,7 @@ export async function runImage() {
         log(`Configuración actualizada:`, config);
       },
       
-      onInitBot: async () => {
-        log('🤖 Inicializando Auto-Image...');
-        
-        // Verificar colores disponibles
-        ui.setStatus(t('image.checkingColors'), 'info');
-        const colors = detectAvailableColors();
-        
-        if (colors.length === 0) {
-          ui.setStatus(t('image.noColorsFound'), 'error');
-          return false;
-        }
-        
-        // Obtener información del usuario
-        const sessionInfo = await getSession();
-        let userInfo = null;
-        if (sessionInfo.success && sessionInfo.data.user) {
-          userInfo = {
-            username: sessionInfo.data.user.name || 'Anónimo',
-            charges: sessionInfo.data.charges,
-            maxCharges: sessionInfo.data.maxCharges,
-            pixels: sessionInfo.data.user.pixelsPainted || 0  // Usar pixelsPainted en lugar de pixels
-          };
-          currentUserInfo = userInfo; // Actualizar variable global
-          imageState.currentCharges = sessionInfo.data.charges;
-          imageState.maxCharges = sessionInfo.data.maxCharges || 50; // Guardar maxCharges en state
-          log(`👤 Usuario conectado: ${sessionInfo.data.user.name || 'Anónimo'} - Cargas: ${userInfo.charges}/${userInfo.maxCharges} - Píxeles: ${userInfo.pixels}`);
-        } else {
-          log('⚠️ No se pudo obtener información del usuario');
-        }
-        
-        imageState.availableColors = colors;
-        imageState.colorsChecked = true;
-        
-        ui.setStatus(t('image.colorsFound', { count: colors.length }), 'success');
-        ui.updateProgress(0, 0, userInfo);
-        log(`✅ ${colors.length} colores disponibles detectados`);
-        
-        return true;
-      },
+      onInitBot: initializeBot,
       
       onUploadImage: async (file) => {
         try {
@@ -495,6 +543,37 @@ export async function runImage() {
     });
 
     log('✅ Auto-Image inicializado correctamente');
+    
+    // Intentar auto-inicio después de que la UI esté lista
+    setTimeout(async () => {
+      try {
+        ui.setStatus(t('image.autoInitializing'), 'info');
+        log('🤖 Intentando auto-inicio...');
+        
+        const autoInitSuccess = await tryAutoInit();
+        
+        if (autoInitSuccess) {
+          ui.setStatus(t('image.autoInitSuccess'), 'success');
+          log('✅ Auto-inicio exitoso');
+          
+          // Ocultar el botón de inicialización manual
+          ui.setInitButtonVisible(false);
+          
+          // Ejecutar la lógica de inicialización del bot
+          const initResult = await initializeBot(true); // true = es auto-inicio
+          if (initResult) {
+            log('🚀 Bot auto-iniciado completamente');
+          }
+        } else {
+          ui.setStatus(t('image.autoInitFailed'), 'warning');
+          log('⚠️ Auto-inicio falló, se requiere inicio manual');
+          // El botón de inicio manual permanece visible
+        }
+      } catch (error) {
+        log('❌ Error en auto-inicio:', error);
+        ui.setStatus(t('image.manualInitRequired'), 'warning');
+      }
+    }, 1000); // Esperar 1 segundo para que la UI esté completamente cargada
     
   } catch (error) {
     log('❌ Error inicializando Auto-Image:', error);

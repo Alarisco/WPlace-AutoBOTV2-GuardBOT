@@ -88,7 +88,15 @@ export const en = {
     apply: "Apply",
     passCompleted: "✅ Pass completed: {painted} pixels painted | Progress: {percent}% ({current}/{total})",
     waitingChargesRegen: "⏳ Waiting for charge regeneration: {current}/{needed} - Time: {time}",
-    waitingChargesCountdown: "⏳ Waiting for charges: {current}/{needed} - Remaining: {time}"
+    waitingChargesCountdown: "⏳ Waiting for charges: {current}/{needed} - Remaining: {time}",
+    autoInitializing: "🤖 Auto-initializing...",
+    autoInitSuccess: "✅ Bot auto-started successfully",
+    autoInitFailed: "⚠️ Could not auto-start. Use manual button.",
+    paletteDetected: "🎨 Color palette detected",
+    paletteNotFound: "🔍 Searching for color palette...",
+    clickingPaintButton: "👆 Clicking Paint button...",
+    paintButtonNotFound: "❌ Paint button not found",
+    manualInitRequired: "🔧 Manual initialization required"
   },
 
   // Farm Module (to be implemented)
