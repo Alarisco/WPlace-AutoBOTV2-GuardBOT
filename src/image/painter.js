@@ -62,8 +62,8 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
       
       log(`Pintando lote de ${batch.length} píxeles...`);
       
-      // Pintar el lote
-      const result = await paintPixelBatch(batch);
+      // Pintar el lote con sistema de reintentos
+      const result = await paintPixelBatchWithRetry(batch, onProgress);
       
       if (result.success && result.painted > 0) {
         imageState.paintedPixels += result.painted;
@@ -99,6 +99,9 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
         
         // Pausa para que el usuario vea el mensaje de éxito antes del cooldown
         await sleep(2000);
+      } else if (result.shouldContinue) {
+        // Si el sistema de reintentos falló pero debe continuar
+        log(`Lote falló después de todos los reintentos, continuando con siguiente lote...`);
       } else {
         // En caso de fallo, devolver el lote a la cola
         imageState.remainingPixels.unshift(...batch);
@@ -132,6 +135,144 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
 }
 
 export async function paintPixelBatch(batch) {
+  try {
+    if (!batch || batch.length === 0) {
+      return { success: false, painted: 0, error: 'Lote vacío' };
+    }
+    
+    // Convertir el lote al formato esperado por la API
+    const coords = [];
+    const colors = [];
+    let tileX = null;
+    let tileY = null;
+    
+    for (const pixel of batch) {
+      coords.push(pixel.localX, pixel.localY);
+      colors.push(pixel.color.id || pixel.color.value || 1);
+      
+      // Tomar tileX/tileY del primer píxel (todos deberían tener el mismo tile)
+      if (tileX === null) {
+        tileX = pixel.tileX;
+        tileY = pixel.tileY;
+      }
+    }
+    
+    // Obtener token de Turnstile
+    const token = await getTurnstileToken(IMAGE_DEFAULTS.SITEKEY);
+    
+    // Enviar píxeles usando el formato correcto
+    const response = await postPixelBatchImage(tileX, tileY, coords, colors, token);
+    
+    if (response.status === 200) {
+      return {
+        success: true,
+        painted: response.painted,
+        response: response.json
+      };
+    } else {
+      return {
+        success: false,
+        painted: 0,
+        error: response.json?.message || `HTTP ${response.status}`,
+        status: response.status
+      };
+    }
+  } catch (error) {
+    log('Error en paintPixelBatch:', error);
+    return {
+      success: false,
+      painted: 0,
+      error: error.message
+    };
+  }
+}
+
+// Función de pintado con sistema de reintentos (adaptado del Auto-Farm)
+export async function paintPixelBatchWithRetry(batch, onProgress) {
+  const maxAttempts = 5; // 5 intentos como en el Farm
+  const baseDelay = 3000; // Delay base de 3 segundos
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await paintPixelBatch(batch);
+      
+      if (result.success) {
+        imageState.retryCount = 0; // Reset en éxito
+        return result;
+      }
+      
+      imageState.retryCount = attempt;
+      
+      if (attempt < maxAttempts) {
+        const delay = baseDelay * Math.pow(2, attempt - 1); // Backoff exponencial
+        const delaySeconds = Math.round(delay / 1000);
+        
+        // Determinar tipo de error para mensaje específico
+        let errorMessage;
+        if (result.status === 0 || result.status === 'NetworkError') {
+          errorMessage = t('image.networkError');
+        } else if (result.status >= 500) {
+          errorMessage = t('image.serverError');
+        } else if (result.status === 408) {
+          errorMessage = t('image.timeoutError');
+        } else {
+          errorMessage = t('image.retryAttempt', { 
+            attempt, 
+            maxAttempts, 
+            delay: delaySeconds 
+          });
+        }
+        
+        if (onProgress) {
+          onProgress(imageState.paintedPixels, imageState.totalPixels, errorMessage);
+        }
+        
+        log(`Reintento ${attempt}/${maxAttempts} después de ${delaySeconds}s. Error: ${result.error}`);
+        await sleep(delay);
+      }
+      
+    } catch (error) {
+      log(`Error en intento ${attempt}:`, error);
+      imageState.retryCount = attempt;
+      
+      if (attempt < maxAttempts) {
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        const delaySeconds = Math.round(delay / 1000);
+        
+        const errorMessage = t('image.retryError', { 
+          attempt, 
+          maxAttempts, 
+          delay: delaySeconds 
+        });
+        
+        if (onProgress) {
+          onProgress(imageState.paintedPixels, imageState.totalPixels, errorMessage);
+        }
+        
+        await sleep(delay);
+      }
+    }
+  }
+  
+  imageState.retryCount = maxAttempts;
+  const failMessage = t('image.retryFailed', { maxAttempts });
+  
+  if (onProgress) {
+    onProgress(imageState.paintedPixels, imageState.totalPixels, failMessage);
+  }
+  
+  log(`Falló después de ${maxAttempts} intentos, continuando con siguiente lote`);
+  
+  // Retornar un resultado de fallo que permita continuar
+  return {
+    success: false,
+    painted: 0,
+    error: `Falló después de ${maxAttempts} intentos`,
+    shouldContinue: true // Indica que debe continuar con el siguiente lote
+  };
+}
+
+export async function paintPixelBatch_ORIGINAL(batch) {
   try {
     if (!batch || batch.length === 0) {
       return { success: false, painted: 0, error: 'Lote vacío' };

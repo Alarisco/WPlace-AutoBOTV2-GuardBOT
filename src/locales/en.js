@@ -96,7 +96,13 @@ export const en = {
     paletteNotFound: "🔍 Searching for color palette...",
     clickingPaintButton: "👆 Clicking Paint button...",
     paintButtonNotFound: "❌ Paint button not found",
-    manualInitRequired: "🔧 Manual initialization required"
+    manualInitRequired: "🔧 Manual initialization required",
+    retryAttempt: "🔄 Retry {attempt}/{maxAttempts} in {delay}s...",
+    retryError: "💥 Error in attempt {attempt}/{maxAttempts}, retrying in {delay}s...",
+    retryFailed: "❌ Failed after {maxAttempts} attempts. Continuing with next batch...",
+    networkError: "🌐 Network error. Retrying...",
+    serverError: "🔥 Server error. Retrying...",
+    timeoutError: "⏰ Server timeout. Retrying..."
   },
 
   // Farm Module (to be implemented)

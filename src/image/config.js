@@ -82,5 +82,6 @@ export const imageState = {
   remainingPixels: [],
   lastChargeUpdate: 0,
   chargeDecimalPart: 0,
-  originalImageName: null
+  originalImageName: null,
+  retryCount: 0 // Contador de reintentos para estadísticas
 };

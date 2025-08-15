@@ -96,7 +96,13 @@ export const fr = {
     paletteNotFound: "🔍 Recherche de la palette de couleurs...",
     clickingPaintButton: "👆 Clic sur le bouton Paint...",
     paintButtonNotFound: "❌ Bouton Paint introuvable",
-    manualInitRequired: "🔧 Initialisation manuelle requise"
+    manualInitRequired: "🔧 Initialisation manuelle requise",
+    retryAttempt: "🔄 Tentative {attempt}/{maxAttempts} dans {delay}s...",
+    retryError: "💥 Erreur dans tentative {attempt}/{maxAttempts}, nouvel essai dans {delay}s...",
+    retryFailed: "❌ Échec après {maxAttempts} tentatives. Continuant avec le lot suivant...",
+    networkError: "🌐 Erreur réseau. Nouvel essai...",
+    serverError: "🔥 Erreur serveur. Nouvel essai...",
+    timeoutError: "⏰ Timeout serveur. Nouvel essai..."
   },
 
   // Farm Module (to be implemented)
