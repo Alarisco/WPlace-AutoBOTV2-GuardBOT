@@ -1,7 +1,7 @@
 import { log } from "../core/logger.js";
 import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
 import { launcherState, LAUNCHER_CONFIG, getLauncherTexts } from "./config.js";
-import { getCurrentLanguage } from "../locales/index.js";
+import { getCurrentLanguage, t } from "../locales/index.js";
 
 export function createLauncherUI({ 
   onSelectBot, 
@@ -219,7 +219,7 @@ export function createLauncherUI({
     selectedBot = botType;
     launcherState.selectedBot = botType;
     
-    elements.choice.textContent = botType === 'farm' ? texts.autoFarm : texts.autoImage;
+    elements.choice.textContent = botType === 'farm' ? t('launcher.autoFarm') : t('launcher.autoImage');
     elements.launchBtn.disabled = false;
     
     // Actualizar estilos de botones
@@ -235,7 +235,7 @@ export function createLauncherUI({
       elements.farmBtn.classList.remove('primary');
     }
     
-    elements.statusText.textContent = texts.readyToLaunch;
+    elements.statusText.textContent = t('launcher.readyToLaunch');
     
     if (onSelectBot) {
       onSelectBot(botType);
@@ -250,8 +250,8 @@ export function createLauncherUI({
     if (!selectedBot) return;
     
     elements.launchBtn.disabled = true;
-    elements.launchBtn.textContent = texts.loading;
-    elements.statusText.textContent = texts.downloading;
+    elements.launchBtn.textContent = t('launcher.loading');
+    elements.statusText.textContent = t('launcher.downloading');
     
     try {
       if (onLaunch) {
@@ -261,10 +261,10 @@ export function createLauncherUI({
       }
     } catch (error) {
       log('❌ Error en launch:', error);
-      alert(texts.loadErrorMsg);
+      alert(t('launcher.loadErrorMsg'));
       elements.launchBtn.disabled = false;
-      elements.launchBtn.textContent = texts.launch;
-      elements.statusText.textContent = texts.loadError;
+      elements.launchBtn.textContent = t('launcher.launch');
+      elements.statusText.textContent = t('launcher.loadError');
     }
   });
   
@@ -313,7 +313,7 @@ export function createLauncherUI({
   
   function setHealthInfo(healthInfo) {
     if (!healthInfo) {
-      elements.backendStatus.textContent = texts.offline;
+      elements.backendStatus.textContent = t('launcher.offline');
       elements.databaseStatus.textContent = '-';
       elements.uptime.textContent = '-';
       return;
@@ -323,12 +323,12 @@ export function createLauncherUI({
     const db = healthInfo.database;
     const uptime = healthInfo.uptime || '-';
     
-    elements.backendStatus.textContent = up ? texts.online : texts.offline;
+    elements.backendStatus.textContent = up ? t('launcher.online') : t('launcher.offline');
     
     if (db === undefined || db === null) {
       elements.databaseStatus.textContent = '-';
     } else {
-      elements.databaseStatus.textContent = db ? texts.ok : texts.error;
+      elements.databaseStatus.textContent = db ? t('launcher.ok') : t('launcher.error');
     }
     
     elements.uptime.textContent = typeof uptime === 'number' ? `${uptime}s` : (uptime || '-');
@@ -394,8 +394,38 @@ export function createLauncherUI({
     // Actualizar status si está en mensaje por defecto
     if (elements.statusText) {
       const currentStatus = elements.statusText.textContent;
-      if (currentStatus === texts.chooseBot) {
+      if (currentStatus === texts.chooseBot || currentStatus === newTexts.chooseBot) {
         elements.statusText.textContent = newTexts.chooseBot;
+      } else if (currentStatus === texts.loading || currentStatus === newTexts.loading) {
+        elements.statusText.textContent = newTexts.loading;
+      } else if (currentStatus === texts.downloading || currentStatus === newTexts.downloading) {
+        elements.statusText.textContent = newTexts.downloading;
+      } else if (currentStatus === texts.readyToLaunch || currentStatus === newTexts.readyToLaunch) {
+        elements.statusText.textContent = newTexts.readyToLaunch;
+      } else if (currentStatus === texts.loadError || currentStatus === newTexts.loadError) {
+        elements.statusText.textContent = newTexts.loadError;
+      }
+    }
+    
+    // Actualizar estados dinámicos de salud del backend
+    if (elements.backendStatus) {
+      const currentBackend = elements.backendStatus.textContent;
+      if (currentBackend === texts.online || currentBackend === newTexts.online) {
+        elements.backendStatus.textContent = newTexts.online;
+      } else if (currentBackend === texts.offline || currentBackend === newTexts.offline) {
+        elements.backendStatus.textContent = newTexts.offline;
+      } else if (currentBackend === texts.checking || currentBackend === newTexts.checking) {
+        elements.backendStatus.textContent = newTexts.checking;
+      }
+    }
+    
+    // Actualizar estado de la base de datos
+    if (elements.databaseStatus) {
+      const currentDb = elements.databaseStatus.textContent;
+      if (currentDb === texts.ok || currentDb === newTexts.ok) {
+        elements.databaseStatus.textContent = newTexts.ok;
+      } else if (currentDb === texts.error || currentDb === newTexts.error) {
+        elements.databaseStatus.textContent = newTexts.error;
       }
     }
     

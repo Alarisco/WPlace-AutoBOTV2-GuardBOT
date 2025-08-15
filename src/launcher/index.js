@@ -21,10 +21,18 @@ export async function runLauncher() {
   window.__wplaceBot = { ...window.__wplaceBot, launcherRunning: true };
   
   try {
+    // Variable para el selector de idioma
+    let languageSelector = null;
+    
     // Crear interfaz de usuario
     const ui = createLauncherUI({
       onSelectBot: (botType) => {
         log(`🎯 Bot seleccionado: ${botType}`);
+        // Ocultar el selector de idioma cuando se selecciona un bot
+        if (languageSelector) {
+          languageSelector.unmount();
+          languageSelector = null;
+        }
       },
       
       onLaunch: async (botType) => {
@@ -34,12 +42,17 @@ export async function runLauncher() {
       
       onClose: () => {
         log('👋 Cerrando launcher');
+        // Asegurar que el selector se desmonte al cerrar
+        if (languageSelector) {
+          languageSelector.unmount();
+          languageSelector = null;
+        }
         window.__wplaceBot.launcherRunning = false;
       }
     });
     
-    // Crear selector de idioma integrado en el launcher
-    const languageSelector = createLanguageSelector({
+    // Crear selector de idioma después de la UI
+    languageSelector = createLanguageSelector({
       position: 'top-left', // Esquina opuesta al launcher
       showFlags: true,
       onLanguageChange: (newLanguage) => {
@@ -91,7 +104,9 @@ export async function runLauncher() {
     // Cleanup cuando se cierre la página
     window.addEventListener('beforeunload', () => {
       ui.cleanup();
-      languageSelector.unmount();
+      if (languageSelector) {
+        languageSelector.unmount();
+      }
       window.__wplaceBot.launcherRunning = false;
     });
     
