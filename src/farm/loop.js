@@ -64,7 +64,14 @@ export async function refreshTile(tileX, tileY) {
   }
 }
 
-export async function paintOnce(cfg, state, setStatus, flashEffect, getSession) {
+export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, checkBackendHealth) {
+  // Verificar que se haya seleccionado una posición válida
+  if (!cfg.POSITION_SELECTED || cfg.BASE_X === null || cfg.BASE_Y === null) {
+    setStatus(`🎯 Selecciona una zona primero usando 'Seleccionar Zona'`, 'error');
+    log(`Pintado cancelado: no se ha seleccionado una posición base`);
+    return false;
+  }
+  
   // Verificar que las coordenadas del tile sean válidas antes de pintar
   if (!Number.isFinite(cfg.TILE_X) || !Number.isFinite(cfg.TILE_Y)) {
     setStatus(`🚫 Coordenadas del tile inválidas (${cfg.TILE_X},${cfg.TILE_Y}). Calibra primero`, 'error');
@@ -98,7 +105,7 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession) 
   const firstLocalX = coords[0];
   const firstLocalY = coords[1];
   
-  setStatus(`🎨 Pintando ${pixelCount} píxeles (${availableCharges} cargas completas) en tile(${cfg.TILE_X},${cfg.TILE_Y}) local(${firstLocalX},${firstLocalY})...`, 'status');
+  setStatus(`� Farming ${pixelCount} píxeles en radio ${cfg.FARM_RADIUS}px desde (${cfg.BASE_X},${cfg.BASE_Y}) tile(${cfg.TILE_X},${cfg.TILE_Y})...`, 'status');
   
   const t = await getTurnstileToken(cfg.SITEKEY);
   const r = await postPixel(coords, colors, t, cfg.TILE_X, cfg.TILE_Y);
@@ -133,7 +140,7 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession) 
     // Actualizar la sesión para obtener las cargas actualizadas (única consulta tras pintar)
     await getSession();
     
-    setStatus(`✅ Lote pintado: ${actualPainted}/${pixelCount} píxeles (${availableCharges} cargas usadas)`, 'success');
+    setStatus(`✅ Lote pintado: ${actualPainted}/${pixelCount} píxeles en zona (${cfg.BASE_X},${cfg.BASE_Y}) radio ${cfg.FARM_RADIUS}px`, 'success');
     flashEffect();
     
     // Emitir evento personalizado para notificar que se pintó un lote
@@ -148,6 +155,9 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession) 
           coords: coords,
           tileX: cfg.TILE_X,
           tileY: cfg.TILE_Y,
+          baseX: cfg.BASE_X,
+          baseY: cfg.BASE_Y,
+          radius: cfg.FARM_RADIUS,
           timestamp: Date.now()
         }
       });
@@ -197,7 +207,7 @@ export async function paintWithRetry(cfg, state, setStatus, flashEffect, getSess
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const success = await paintOnce(cfg, state, setStatus, flashEffect, getSession);
+      const success = await paintOnce(cfg, state, setStatus, flashEffect, getSession, checkBackendHealth);
       if (success) {
         state.retryCount = 0; // Reset en éxito
         return true;

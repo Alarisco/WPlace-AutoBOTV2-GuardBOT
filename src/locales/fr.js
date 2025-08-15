@@ -118,7 +118,19 @@ export const fr = {
     stoppingBot: "Arrêt du bot...",
     calibrating: "Calibrage...",
     alreadyRunning: "Auto-Farm est déjà en cours d'exécution.",
-    imageRunningWarning: "Auto-Image est en cours d'exécution. Fermez-le avant de démarrer Auto-Farm."
+    imageRunningWarning: "Auto-Image est en cours d'exécution. Fermez-le avant de démarrer Auto-Farm.",
+    selectPosition: "Sélectionner Zone",
+    selectPositionAlert: "🎯 Peignez un pixel dans une zone VIDE de la carte pour définir la zone de farming",
+    waitingPosition: "👆 En attente que vous peigniez le pixel de référence...",
+    positionSet: "✅ Zone définie! Rayon: 500px",
+    positionTimeout: "❌ Délai dépassé pour la sélection de zone",
+    missingPosition: "❌ Sélectionnez une zone d'abord en utilisant 'Sélectionner Zone'",
+    farmRadius: "Rayon farm",
+    positionInfo: "Zone actuelle",
+    farmingInRadius: "🌾 Farming dans un rayon de {radius}px depuis ({x},{y})",
+    selectEmptyArea: "⚠️ IMPORTANT: Sélectionnez une zone VIDE pour éviter les conflits",
+    noPosition: "Aucune zone",
+    currentZone: "Zone: ({x},{y})"
   },
 
     // Common/Shared
@@ -136,6 +148,7 @@ export const fr = {
     stop: "Arrêter",
     pause: "Pause",
     resume: "Reprendre",
+    reset: "Réinitialiser",
     settings: "Paramètres",
     help: "Aide",
     about: "À propos",

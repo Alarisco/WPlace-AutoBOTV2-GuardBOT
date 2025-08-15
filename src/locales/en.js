@@ -118,7 +118,19 @@ export const en = {
     stoppingBot: "Stopping bot...",
     calibrating: "Calibrating...",
     alreadyRunning: "Auto-Farm is already running.",
-    imageRunningWarning: "Auto-Image is running. Close it before starting Auto-Farm."
+    imageRunningWarning: "Auto-Image is running. Close it before starting Auto-Farm.",
+    selectPosition: "Select Area",
+    selectPositionAlert: "🎯 Paint a pixel in an EMPTY area of the map to set the farming zone",
+    waitingPosition: "👆 Waiting for you to paint the reference pixel...",
+    positionSet: "✅ Area set! Radius: 500px",
+    positionTimeout: "❌ Timeout for area selection",
+    missingPosition: "❌ Select an area first using 'Select Area'",
+    farmRadius: "Farm radius",
+    positionInfo: "Current area",
+    farmingInRadius: "🌾 Farming in {radius}px radius from ({x},{y})",
+    selectEmptyArea: "⚠️ IMPORTANT: Select an EMPTY area to avoid conflicts",
+    noPosition: "No area",
+    currentZone: "Zone: ({x},{y})"
   },
 
   // Common/Shared
@@ -136,6 +148,7 @@ export const en = {
     stop: "Stop",
     pause: "Pause",
     resume: "Resume",
+    reset: "Reset",
     settings: "Settings",
     help: "Help",
     about: "About",

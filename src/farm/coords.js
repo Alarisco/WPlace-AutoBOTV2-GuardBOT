@@ -10,28 +10,62 @@ export function randomCoordInTile(tileX, tileY, margin = 0.05) {
   return { x: rx, y: ry, absX: tileX * size + rx, absY: tileY * size + ry };
 }
 
-// Farm-specific coordinate generation
+// Farm-specific coordinate generation usando posición base y radio
 export function randomCoords(cfg) {
-  // Generar coordenadas locales directamente dentro del tile (0 a TILE_SIZE-1)
-  const margin = Math.floor(cfg.TILE_SIZE * 0.05); // 5% del tamaño del tile como margen
-  const safeSize = cfg.TILE_SIZE - (margin * 2); // Área segura descontando márgenes
-  
-  // Validar que el área segura sea válida
-  if (safeSize <= 0) {
-    log('Error: área segura inválida, usando coordenadas básicas');
-    return [Math.floor(Math.random() * cfg.TILE_SIZE), Math.floor(Math.random() * cfg.TILE_SIZE)];
+  // Verificar si se ha seleccionado una posición base
+  if (!cfg.POSITION_SELECTED || cfg.BASE_X === null || cfg.BASE_Y === null) {
+    log('⚠️ No se ha seleccionado una posición base. Usando coordenadas aleatorias fallback.');
+    // Fallback a coordenadas aleatorias en el tile (comportamiento anterior)
+    const margin = Math.floor(cfg.TILE_SIZE * 0.05);
+    const safeSize = cfg.TILE_SIZE - (margin * 2);
+    
+    if (safeSize <= 0) {
+      return [Math.floor(Math.random() * cfg.TILE_SIZE), Math.floor(Math.random() * cfg.TILE_SIZE)];
+    }
+    
+    const localX = margin + Math.floor(Math.random() * safeSize);
+    const localY = margin + Math.floor(Math.random() * safeSize);
+    return [localX, localY];
   }
   
-  // Generar coordenadas locales dentro del área segura del tile
-  const localX = margin + Math.floor(Math.random() * safeSize);
-  const localY = margin + Math.floor(Math.random() * safeSize);
+  // Generar coordenadas dentro del radio especificado desde la posición base
+  const radius = cfg.FARM_RADIUS;
   
-  // Log para debugging (solo ocasionalmente)
-  if (Math.random() < 0.1) { // 10% de las veces
-    log(`Coordenadas locales generadas: (${localX},${localY}) en área segura [${margin}-${margin + safeSize - 1}]`);
+  // Generar un ángulo aleatorio y una distancia aleatoria dentro del radio
+  const angle = Math.random() * 2 * Math.PI;
+  const distance = Math.random() * radius;
+  
+  // Calcular offset desde la posición base
+  const offsetX = Math.round(distance * Math.cos(angle));
+  const offsetY = Math.round(distance * Math.sin(angle));
+  
+  // Calcular coordenadas finales
+  let localX = cfg.BASE_X + offsetX;
+  let localY = cfg.BASE_Y + offsetY;
+  
+  // Asegurar que las coordenadas estén dentro del tile (0 a TILE_SIZE-1)
+  localX = Math.max(0, Math.min(cfg.TILE_SIZE - 1, localX));
+  localY = Math.max(0, Math.min(cfg.TILE_SIZE - 1, localY));
+  
+  // Log ocasional para debugging
+  if (Math.random() < 0.1) {
+    log(`🎯 Coordenadas en radio: base(${cfg.BASE_X},${cfg.BASE_Y}) radio(${radius}) offset(${offsetX},${offsetY}) final(${localX},${localY})`);
   }
   
   return [localX, localY];
+}
+
+// Función para verificar si una posición está dentro del radio de farming
+export function isWithinFarmRadius(x, y, cfg) {
+  if (!cfg.POSITION_SELECTED || cfg.BASE_X === null || cfg.BASE_Y === null) {
+    return false;
+  }
+  
+  const deltaX = x - cfg.BASE_X;
+  const deltaY = y - cfg.BASE_Y;
+  const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+  
+  return distance <= cfg.FARM_RADIUS;
 }
 
 export function generateMultipleCoords(count, cfg) {

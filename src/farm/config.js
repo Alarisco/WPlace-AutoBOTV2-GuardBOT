@@ -13,6 +13,11 @@ export const FARM_DEFAULTS = {
   COLOR_MODE: 'random',    // 'random' | 'fixed'
   COLOR_FIXED: 1,
   CUSTOM_PALETTE: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
+  // Nueva funcionalidad de posición y radio
+  BASE_X: null,            // Posición X base (local al tile) - se establece al seleccionar zona
+  BASE_Y: null,            // Posición Y base (local al tile) - se establece al seleccionar zona
+  FARM_RADIUS: 500,        // Radio de farming en píxeles (500px por defecto para zona segura)
+  POSITION_SELECTED: false, // Flag para indicar si se seleccionó una posición
   UI_THEME: {
     primary: '#000000',
     secondary: '#111111',
@@ -34,6 +39,7 @@ export const farmState = {
   user: null,
   panel: null,
   captureMode: false,  // sniffer activo para capturar TILE_X/Y desde un POST real
+  selectingPosition: false, // sniffer activo para capturar posición base
   originalFetch: window.fetch,
   retryCount: 0,       // contador de reintentos
   inCooldown: false,   // si está en cooldown de 2 minutos
