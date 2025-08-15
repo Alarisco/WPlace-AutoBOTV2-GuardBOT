@@ -17,6 +17,24 @@ export async function runImage() {
   window.__wplaceBot = { ...window.__wplaceBot, imageRunning: true };
 
   let currentUserInfo = null; // Variable global para información del usuario
+  let originalFetch = window.fetch; // Guardar fetch original globalmente
+  
+  // Función para restaurar fetch original de forma segura
+  const restoreFetch = () => {
+    if (window.fetch !== originalFetch) {
+      window.fetch = originalFetch;
+      log('🔄 Fetch original restaurado');
+    }
+    if (imageState.positionTimeoutId) {
+      clearTimeout(imageState.positionTimeoutId);
+      imageState.positionTimeoutId = null;
+    }
+    if (imageState.cleanupObserver) {
+      imageState.cleanupObserver();
+      imageState.cleanupObserver = null;
+    }
+    imageState.selectingPosition = false;
+  };
 
   try {
     // Inicializar configuración
@@ -42,6 +60,18 @@ export async function runImage() {
     // Crear interfaz de usuario
     const ui = await createImageUI({
       texts,
+      
+      onConfigChange: (config) => {
+        // Manejar cambios de configuración
+        if (config.pixelsPerBatch !== undefined) {
+          imageState.pixelsPerBatch = config.pixelsPerBatch;
+        }
+        if (config.useAllCharges !== undefined) {
+          imageState.useAllChargesFirst = config.useAllCharges;
+        }
+        log(`Configuración actualizada:`, config);
+      },
+      
       onInitBot: async () => {
         log('🤖 Inicializando Auto-Image...');
         
@@ -66,6 +96,7 @@ export async function runImage() {
           };
           currentUserInfo = userInfo; // Actualizar variable global
           imageState.currentCharges = sessionInfo.data.charges;
+          imageState.maxCharges = sessionInfo.data.maxCharges || 50; // Guardar maxCharges en state
           log(`👤 Usuario conectado: ${sessionInfo.data.user.name || 'Anónimo'} - Cargas: ${userInfo.charges}/${userInfo.maxCharges} - Píxeles: ${userInfo.pixels}`);
         } else {
           log('⚠️ No se pudo obtener información del usuario');
@@ -123,57 +154,132 @@ export async function runImage() {
           ui.setStatus(t('image.waitingPosition'), 'info');
           
           imageState.selectingPosition = true;
+          let positionCaptured = false;
           
-          // Interceptar requests para capturar posición
-          const originalFetch = window.fetch;
-          window.fetch = async (url, options) => {
-            if (imageState.selectingPosition && url.includes('/s0/paint')) {
-              try {
-                const response = await originalFetch(url, options);
+          // Método 1: Interceptar fetch (método original mejorado)
+          const setupFetchInterception = () => {
+            window.fetch = async (url, options) => {
+              // Solo interceptar requests específicos de pintado cuando estamos seleccionando posición
+              if (imageState.selectingPosition && 
+                  !positionCaptured &&
+                  typeof url === 'string' && 
+                  url.includes('/s0/pixel/') && 
+                  options && 
+                  options.method === 'POST') {
                 
-                if (response.ok && options.body) {
-                  const bodyData = JSON.parse(options.body);
-                  if (bodyData.coords && bodyData.coords.length >= 2) {
-                    const localX = bodyData.coords[0];
-                    const localY = bodyData.coords[1];
-                    
-                    // Extraer tile de la URL
-                    const tileMatch = url.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);
-                    if (tileMatch) {
-                      imageState.tileX = parseInt(tileMatch[1]);
-                      imageState.tileY = parseInt(tileMatch[2]);
+                try {
+                  log(`🎯 Interceptando request de pintado: ${url}`);
+                  
+                  const response = await originalFetch(url, options);
+                  
+                  if (response.ok && options.body) {
+                    let bodyData;
+                    try {
+                      bodyData = JSON.parse(options.body);
+                    } catch (parseError) {
+                      log('Error parseando body del request:', parseError);
+                      return response;
                     }
                     
-                    imageState.startPosition = { x: localX, y: localY };
-                    imageState.selectingPosition = false;
-                    
-                    window.fetch = originalFetch;
-                    
-                    ui.setStatus(t('image.positionSet'), 'success');
-                    log(`✅ Posición establecida: tile(${imageState.tileX},${imageState.tileY}) local(${localX},${localY})`);
-                    
-                    resolve(true);
+                    if (bodyData.coords && Array.isArray(bodyData.coords) && bodyData.coords.length >= 2) {
+                      const localX = bodyData.coords[0];
+                      const localY = bodyData.coords[1];
+                      
+                      // Extraer tile de la URL de forma más robusta
+                      const tileMatch = url.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);
+                      if (tileMatch && !positionCaptured) {
+                        positionCaptured = true;
+                        imageState.tileX = parseInt(tileMatch[1]);
+                        imageState.tileY = parseInt(tileMatch[2]);
+                        
+                        imageState.startPosition = { x: localX, y: localY };
+                        imageState.selectingPosition = false;
+                        
+                        // Restaurar fetch original inmediatamente
+                        restoreFetch();
+                        
+                        ui.setStatus(t('image.positionSet'), 'success');
+                        log(`✅ Posición establecida: tile(${imageState.tileX},${imageState.tileY}) local(${localX},${localY})`);
+                        
+                        resolve(true);
+                      } else {
+                        log('⚠️ No se pudo extraer tile de la URL:', url);
+                      }
+                    }
+                  }
+                  
+                  return response;
+                } catch (error) {
+                  log('❌ Error interceptando pixel:', error);
+                  // En caso de error, restaurar fetch y continuar con el original
+                  if (!positionCaptured) {
+                    restoreFetch();
+                    return originalFetch(url, options);
                   }
                 }
-                
-                return response;
-              } catch (error) {
-                log('Error interceptando pixel:', error);
-                return originalFetch(url, options);
               }
-            }
-            return originalFetch(url, options);
+              
+              // Para todos los demás requests, usar fetch original
+              return originalFetch(url, options);
+            };
           };
           
-          // Timeout para selección de posición
-          setTimeout(() => {
-            if (imageState.selectingPosition) {
-              window.fetch = originalFetch;
-              imageState.selectingPosition = false;
+          // Método 2: Observer de canvas para detectar cambios visuales
+          const setupCanvasObserver = () => {
+            const canvasElements = document.querySelectorAll('canvas');
+            if (canvasElements.length === 0) {
+              log('⚠️ No se encontraron elementos canvas');
+              return;
+            }
+            
+            log(`📊 Configurando observer para ${canvasElements.length} canvas`);
+            
+            // Escuchar eventos de click en el documento para detectar pintado
+            const clickHandler = (event) => {
+              if (!imageState.selectingPosition || positionCaptured) return;
+              
+              // Verificar si el click fue en un canvas
+              const target = event.target;
+              if (target && target.tagName === 'CANVAS') {
+                log('🖱️ Click detectado en canvas durante selección');
+                
+                // Dar tiempo para que se procese el pintado
+                setTimeout(() => {
+                  if (!positionCaptured && imageState.selectingPosition) {
+                    log('🔍 Buscando requests recientes de pintado...');
+                    // El fetch interceptor manejará la captura
+                  }
+                }, 500);
+              }
+            };
+            
+            document.addEventListener('click', clickHandler);
+            
+            // Limpiar observer al finalizar
+            imageState.cleanupObserver = () => {
+              document.removeEventListener('click', clickHandler);
+            };
+          };
+          
+          // Configurar ambos métodos
+          setupFetchInterception();
+          setupCanvasObserver();
+          
+          // Timeout para selección de posición con cleanup mejorado
+          const timeoutId = setTimeout(() => {
+            if (imageState.selectingPosition && !positionCaptured) {
+              restoreFetch();
+              if (imageState.cleanupObserver) {
+                imageState.cleanupObserver();
+              }
               ui.setStatus(t('image.positionTimeout'), 'error');
+              log('⏰ Timeout en selección de posición');
               resolve(false);
             }
           }, 120000); // 2 minutos
+          
+          // Guardar timeout para poder cancelarlo
+          imageState.positionTimeoutId = timeoutId;
         });
       },
       
@@ -196,6 +302,7 @@ export async function runImage() {
         
         imageState.running = true;
         imageState.stopFlag = false;
+        imageState.isFirstBatch = true; // Resetear flag de primera pasada
         
         ui.setStatus(t('image.startPaintingMsg'), 'success');
         
@@ -203,13 +310,25 @@ export async function runImage() {
           await processImage(
             imageState.imageData,
             imageState.startPosition,
-            // onProgress
-            (painted, total, message) => {
+            // onProgress - ahora incluye tiempo estimado
+            (painted, total, message, estimatedTime) => {
               // Actualizar cargas en userInfo si existe
               if (currentUserInfo) {
                 currentUserInfo.charges = Math.floor(imageState.currentCharges);
+                if (estimatedTime !== undefined) {
+                  currentUserInfo.estimatedTime = estimatedTime;
+                }
               }
+              
               ui.updateProgress(painted, total, currentUserInfo);
+              
+              // Actualizar display de cooldown si hay cooldown activo
+              if (imageState.inCooldown && imageState.nextBatchCooldown > 0) {
+                ui.updateCooldownDisplay(imageState.nextBatchCooldown);
+              } else {
+                ui.updateCooldownDisplay(0);
+              }
+              
               if (message) {
                 ui.setStatus(message, 'info');
               } else {
@@ -358,6 +477,9 @@ export async function runImage() {
 
     // Cleanup al cerrar la página
     window.addEventListener('beforeunload', () => {
+      // Restaurar fetch original si está interceptado
+      restoreFetch();
+      
       stopPainting();
       ui.destroy();
       window.removeEventListener('launcherLanguageChanged', handleLauncherLanguageChange);

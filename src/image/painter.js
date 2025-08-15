@@ -30,12 +30,29 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
   try {
     while (imageState.remainingPixels.length > 0 && !imageState.stopFlag) {
       // Verificar cargas disponibles
-      const availableCharges = Math.floor(imageState.currentCharges);
-      const pixelsPerBatch = Math.min(imageState.pixelsPerBatch, imageState.remainingPixels.length);
+      let availableCharges = Math.floor(imageState.currentCharges);
+      
+      // Determinar tamaño del lote basado en configuración
+      let pixelsPerBatch;
+      if (imageState.isFirstBatch && imageState.useAllChargesFirst && availableCharges > 0) {
+        // Primera pasada: usar todas las cargas disponibles
+        pixelsPerBatch = Math.min(availableCharges, imageState.remainingPixels.length);
+        imageState.isFirstBatch = false; // Marcar que ya no es la primera pasada
+        log(`Primera pasada: usando ${pixelsPerBatch} cargas de ${availableCharges} disponibles`);
+      } else {
+        // Pasadas siguientes: usar configuración normal
+        pixelsPerBatch = Math.min(imageState.pixelsPerBatch, imageState.remainingPixels.length);
+      }
       
       if (availableCharges < pixelsPerBatch) {
         log(`Cargas insuficientes: ${availableCharges}/${pixelsPerBatch} necesarias`);
         await waitForCooldown(pixelsPerBatch - availableCharges, onProgress);
+        // Volver a verificar cargas después del cooldown
+        availableCharges = Math.floor(imageState.currentCharges);
+        // Recalcular el tamaño del lote si es necesario
+        if (!imageState.isFirstBatch) {
+          pixelsPerBatch = Math.min(imageState.pixelsPerBatch, imageState.remainingPixels.length, availableCharges);
+        }
         continue;
       }
       
@@ -50,6 +67,10 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
       if (result.success && result.painted > 0) {
         imageState.paintedPixels += result.painted;
         
+        // Actualizar cargas consumidas
+        imageState.currentCharges = Math.max(0, imageState.currentCharges - result.painted);
+        log(`Cargas después del lote: ${imageState.currentCharges.toFixed(1)} (consumidas: ${result.painted})`);
+        
         // Actualizar posición para continuar desde aquí si se interrumpe
         if (batch.length > 0) {
           const lastPixel = batch[batch.length - 1];
@@ -58,9 +79,12 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
         
         log(`Lote exitoso: ${result.painted}/${batch.length} píxeles pintados. Total: ${imageState.paintedPixels}/${imageState.totalPixels}`);
         
+        // Calcular tiempo estimado
+        const estimatedTime = calculateEstimatedTime();
+        
         // Actualizar progreso
         if (onProgress) {
-          onProgress(imageState.paintedPixels, imageState.totalPixels);
+          onProgress(imageState.paintedPixels, imageState.totalPixels, null, estimatedTime);
         }
       } else {
         // En caso de fallo, devolver el lote a la cola
@@ -149,19 +173,40 @@ export async function paintPixelBatch(batch) {
 
 async function waitForCooldown(chargesNeeded, onProgress) {
   const chargeTime = IMAGE_DEFAULTS.CHARGE_REGEN_MS * chargesNeeded;
-  const waitTime = Math.min(chargeTime, 60000); // Máximo 1 minuto de espera
+  const waitTime = chargeTime + 5000; // Tiempo necesario + 5 segundos de seguridad
   
   log(`Esperando ${Math.round(waitTime/1000)}s para obtener ${chargesNeeded} cargas`);
   
+  // Actualizar estado de cooldown
+  imageState.inCooldown = true;
+  imageState.cooldownEndTime = Date.now() + waitTime;
+  imageState.nextBatchCooldown = Math.round(waitTime / 1000);
+  
   if (onProgress) {
-    onProgress(imageState.paintedPixels, imageState.totalPixels, `Esperando cargas (${Math.round(waitTime/1000)}s)`);
+    const message = `⏳ Esperando cargas: ${Math.floor(imageState.currentCharges)}/${chargesNeeded} (${Math.round(waitTime/1000)}s)`;
+    onProgress(imageState.paintedPixels, imageState.totalPixels, message);
   }
   
-  await sleep(waitTime);
+  // Contar hacia atrás
+  for (let i = Math.round(waitTime/1000); i > 0; i--) {
+    if (imageState.stopFlag) break;
+    
+    imageState.nextBatchCooldown = i;
+    
+    if (onProgress) {
+      const message = `⏳ Esperando cargas: ${Math.floor(imageState.currentCharges)}/${chargesNeeded} (${i}s)`;
+      onProgress(imageState.paintedPixels, imageState.totalPixels, message);
+    }
+    
+    await sleep(1000);
+  }
+  
+  imageState.inCooldown = false;
+  imageState.nextBatchCooldown = 0;
   
   // Simular regeneración de cargas
   imageState.currentCharges = Math.min(
-    50, // máximo de cargas
+    imageState.maxCharges || 50, // usar maxCharges del estado
     imageState.currentCharges + (waitTime / IMAGE_DEFAULTS.CHARGE_REGEN_MS)
   );
 }
@@ -190,6 +235,30 @@ function generatePixelQueue(imageData, startPosition, tileX, tileY) {
   log(`Cola de píxeles generada: ${queue.length} píxeles para pintar`);
   return queue;
 }
+
+function calculateEstimatedTime() {
+  if (!imageState.remainingPixels || imageState.remainingPixels.length === 0) {
+    return 0;
+  }
+  
+  const remainingPixels = imageState.remainingPixels.length;
+  const batchSize = imageState.pixelsPerBatch;
+  const chargeRegenTime = IMAGE_DEFAULTS.CHARGE_REGEN_MS / 1000; // en segundos
+  
+  // Calcular número de lotes necesarios
+  const batchesNeeded = Math.ceil(remainingPixels / batchSize);
+  
+  // Tiempo de espera entre lotes (cada píxel necesita 1 carga, cada carga tarda 30s)
+  const waitTimeBetweenBatches = batchSize * chargeRegenTime;
+  
+  // Tiempo total estimado
+  const totalWaitTime = (batchesNeeded - 1) * waitTimeBetweenBatches;
+  const executionTime = batchesNeeded * 2; // ~2 segundos por lote de ejecución
+  
+  return Math.ceil(totalWaitTime + executionTime);
+}
+
+export { calculateEstimatedTime };
 
 export function stopPainting() {
   imageState.stopFlag = true;

@@ -26,7 +26,10 @@ export function saveProgress(filename = null) {
         tileY: imageState.tileY
       },
       config: {
-        pixelsPerBatch: imageState.pixelsPerBatch
+        pixelsPerBatch: imageState.pixelsPerBatch,
+        useAllChargesFirst: imageState.useAllChargesFirst,
+        isFirstBatch: imageState.isFirstBatch,
+        maxCharges: imageState.maxCharges
       },
       // Filtrar solo los datos serializables de los colores (sin elementos DOM)
       colors: imageState.availableColors.map(color => ({
@@ -126,6 +129,11 @@ export async function loadProgress(file) {
           
           if (progressData.config) {
             imageState.pixelsPerBatch = progressData.config.pixelsPerBatch || imageState.pixelsPerBatch;
+            imageState.useAllChargesFirst = progressData.config.useAllChargesFirst !== undefined ? 
+              progressData.config.useAllChargesFirst : imageState.useAllChargesFirst;
+            imageState.isFirstBatch = progressData.config.isFirstBatch !== undefined ? 
+              progressData.config.isFirstBatch : true; // Por defecto, continuar como no primera pasada
+            imageState.maxCharges = progressData.config.maxCharges || imageState.maxCharges;
           }
           
           // Marcar como imagen cargada y listo para continuar
@@ -172,6 +180,8 @@ export function clearProgress() {
   imageState.startPosition = null;
   imageState.imageLoaded = false;
   imageState.originalImageName = null;
+  imageState.isFirstBatch = true; // Resetear para nueva imagen
+  imageState.nextBatchCooldown = 0;
   
   log('🧹 Progreso limpiado');
 }

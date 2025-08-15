@@ -126,6 +126,38 @@ export async function createImageUI({ texts, ...handlers }) {
       text-align: center;
     }
     
+    .config-checkbox {
+      margin-right: 8px;
+    }
+    
+    .main-config {
+      background: #2d3748;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      border: 1px solid #3a4553;
+    }
+    
+    .config-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .config-label {
+      font-size: 13px;
+      color: #cbd5e0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .batch-value, .cooldown-value {
+      font-weight: bold;
+      color: #60a5fa;
+    }
+    
     .btn {
       padding: 10px;
       border: none;
@@ -413,8 +445,28 @@ export async function createImageUI({ texts, ...handlers }) {
     <div class="content">
       <div class="config-panel">
         <div class="config-item">
-          <label>${texts.pixelsPerBatch}:</label>
-          <input class="config-input pixels-per-batch" type="number" min="1" max="50" value="10">
+          <label>${texts.batchSize}:</label>
+          <input class="config-input pixels-per-batch" type="number" min="1" max="50" value="20">
+        </div>
+        <div class="config-item">
+          <label>
+            <input class="config-checkbox use-all-charges" type="checkbox" checked>
+            ${texts.useAllCharges}
+          </label>
+        </div>
+      </div>
+      
+      <!-- Configuración visible en la interfaz principal -->
+      <div class="main-config">
+        <div class="config-row">
+          <div class="config-label">
+            🎯 ${texts.batchSize}:
+            <span class="batch-value">20</span>
+          </div>
+          <div class="config-label">
+            ⏱️ ${texts.nextBatchTime}:
+            <span class="cooldown-value">--</span>
+          </div>
         </div>
       </div>
       
@@ -526,6 +578,9 @@ export async function createImageUI({ texts, ...handlers }) {
     minimizeBtn: container.querySelector('.minimize-btn'),
     configPanel: container.querySelector('.config-panel'),
     pixelsPerBatch: container.querySelector('.pixels-per-batch'),
+    useAllCharges: container.querySelector('.use-all-charges'),
+    batchValue: container.querySelector('.batch-value'),
+    cooldownValue: container.querySelector('.cooldown-value'),
     initBtn: container.querySelector('.init-btn'),
     uploadBtn: container.querySelector('.upload-btn'),
     loadProgressBtn: container.querySelector('.load-progress-btn'),
@@ -582,6 +637,23 @@ export async function createImageUI({ texts, ...handlers }) {
     } else {
       elements.configPanel.classList.remove('visible');
       elements.configBtn.innerHTML = '⚙️';
+    }
+  });
+  
+  // Event listeners para configuración
+  elements.pixelsPerBatch.addEventListener('change', () => {
+    const value = parseInt(elements.pixelsPerBatch.value) || 20;
+    elements.batchValue.textContent = value;
+    
+    // Actualizar configuración si hay handlers
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ pixelsPerBatch: value });
+    }
+  });
+  
+  elements.useAllCharges.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ useAllCharges: elements.useAllCharges.checked });
     }
   });
   
@@ -810,9 +882,34 @@ export async function createImageUI({ texts, ...handlers }) {
           </div>
         `;
       }
+      
+      // Mostrar tiempo estimado si está disponible
+      if (userInfo.estimatedTime !== undefined && userInfo.estimatedTime > 0) {
+        const hours = Math.floor(userInfo.estimatedTime / 3600);
+        const minutes = Math.floor((userInfo.estimatedTime % 3600) / 60);
+        const timeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        
+        statsHTML += `
+          <div class="stat-item">
+            <div class="stat-label">⏰ ${texts.timeRemaining}</div>
+            <div>${timeStr}</div>
+          </div>
+        `;
+      }
     }
     
     elements.statsArea.innerHTML = statsHTML;
+  }
+  
+  function updateCooldownDisplay(seconds) {
+    if (seconds > 0) {
+      const minutes = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      const timeStr = minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
+      elements.cooldownValue.textContent = timeStr;
+    } else {
+      elements.cooldownValue.textContent = '--';
+    }
   }
   
   function destroy() {
@@ -824,6 +921,7 @@ export async function createImageUI({ texts, ...handlers }) {
   return {
     setStatus,
     updateProgress,
+    updateCooldownDisplay,
     showResizeDialog,
     closeResizeDialog,
     destroy
