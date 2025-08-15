@@ -1,1427 +1,332 @@
-(() => {
-  // =========================================================
-  // WPlace Auto Paint (API + UI).
-  // - POST directo con {coords, colors, t} (Turnstile)
-  // - UI configurable + captura de TILE_X/TILE_Y desde 1 pintada manual
-  // - Persistencia en localStorage
-  // =========================================================
-
-  const DEFAULTS = {
-    SITEKEY: '0x4AAAAAABpqJe8FO0N84q0F', // Turnstile sitekey (ajústalo si cambia)
-    TILE_X: 1086,
-    TILE_Y: 1565,
-    TILE_SIZE: 3000,         // Tiles son de ~3000x3000 según investigación
-    DELAY_MS: 15000,         // 15 segundos entre pintadas (predeterminado)
-    MIN_CHARGES: 10,         // mínimo de cargas para empezar a pintar
-    CHARGE_REGEN_MS: 30000,  // 1 carga cada 30 segundos
-    PIXELS_PER_BATCH: 20,    // número de píxeles a pintar por lote
-    COLOR_MIN: 1,
-    COLOR_MAX: 32,
-    COLOR_MODE: 'random',    // 'random' | 'fixed'
-    COLOR_FIXED: 1,
-    THEME: {
-      primary: '#000000',
-      secondary: '#111111',
-      accent: '#222222',
-      text: '#ffffff',
-      highlight: '#775ce3',
-      success: '#00ff00',
-      error: '#ff0000',
-      running: '#00cc00'     // Verde para cuando está corriendo
-    }
-  };
-
-  // ---------- Estado ----------
-  let cfg; // Será inicializado después de definir loadCfg()
-  const state = {
-    running: false,
-    painted: 0,
-    last: null,          // {x,y,color,status,json}
-    charges: { count: 0, max: 0, cooldownMs: 30000 },
-    user: null,
-    panel: null,
-    captureMode: false,  // sniffer activo para capturar TILE_X/Y desde un POST real
-    originalFetch: window.fetch,
-    retryCount: 0,       // contador de reintentos
-    inCooldown: false,   // si está en cooldown de 2 minutos
-    nextPaintTime: 0,    // timestamp de la próxima pintada
-    cooldownEndTime: 0,  // timestamp del final del cooldown
-    health: null         // estado de salud del backend
-  };
-
-  // ---------- Utils ----------
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-  const randInt = (n) => Math.floor(Math.random() * n);
-  const log = (...a) => console.log('[WPA-UI]', ...a);
-  const noop = () => {};
-  function saveCfg() { try { localStorage.setItem('WPA_UI_CFG', JSON.stringify(cfg)); } catch { /* ignore save errors */ } }
-  function loadCfg() {
-    try {
-      const s = localStorage.getItem('WPA_UI_CFG');
-      if (s) {
-        const loaded = { ...DEFAULTS, ...JSON.parse(s) };
-        
-        // Validar coordenadas cargadas (verificar que sean números válidos)
-        if (!Number.isFinite(loaded.TILE_X) || !Number.isFinite(loaded.TILE_Y)) {
-          log(`Configuración corrupta detectada: coordenadas (${loaded.TILE_X},${loaded.TILE_Y}) inválidas`);
-          resetToSafeDefaults();
-          return { ...DEFAULTS };
-        }
-        
-        return loaded;
-      }
-  } catch { /* ignore load errors */ }
-    return { ...DEFAULTS };
-  }
-  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
-  
-  // Resetear a configuración segura
-  function resetToSafeDefaults() {
-    try {
-      localStorage.removeItem('WPA_UI_CFG');
-      log('Configuración reseteada a valores seguros');
-  } catch { /* ignore reset errors */ }
-  }
-  
-  // Verificar si necesita calibración inicial
-  function needsCalibration() {
-    // Verificar si las coordenadas son las por defecto
-    const hasDefaultCoords = cfg.TILE_X === DEFAULTS.TILE_X && cfg.TILE_Y === DEFAULTS.TILE_Y;
-    // También verificar si no hay configuración guardada
-    const hasNoSavedConfig = !localStorage.getItem('WPA_UI_CFG');
-    // Verificar que las coordenadas sean números válidos
-    const hasInvalidCoords = !Number.isFinite(cfg.TILE_X) || !Number.isFinite(cfg.TILE_Y);
-    
-    const needsCalib = hasDefaultCoords || hasNoSavedConfig || hasInvalidCoords;
-    log(`Verificación calibración: defaults=${hasDefaultCoords}, noConfig=${hasNoSavedConfig}, invalid=${hasInvalidCoords}, coords=(${cfg.TILE_X},${cfg.TILE_Y})`);
-    
-    return needsCalib;
-  }
-
-  // ---------- Sesión / Charges ----------
-  async function getSession() {
-    try {
-      const me = await fetch('https://backend.wplace.live/me', { credentials: 'include' }).then(r => r.json());
-      state.user = me || null;
-      const c = me?.charges || {};
-      state.charges = {
-        count: c.count ?? 0,        // Mantener valor decimal original
-        max: c.max ?? 0,            // Mantener valor original (puede variar por usuario)
-        cooldownMs: c.cooldownMs ?? 30000
-      };
-      return me;
-  } catch { return null; }
-  }
-
-  // ---------- Health Check ----------
-  async function checkBackendHealth() {
-    try {
-      const response = await fetch('https://backend.wplace.live/health', {
-        method: 'GET',
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const health = await response.json();
-        state.health = {
-          ...health,
-          lastCheck: Date.now(),
-          status: 'online'
-        };
-        log('Health check exitoso:', health);
-        return health;
-      } else {
-        state.health = {
-          database: false,
-          up: false,
-          uptime: 'N/A',
-          lastCheck: Date.now(),
-          status: 'error',
-          statusCode: response.status
-        };
-        log('Health check falló con status:', response.status);
-        return null;
-      }
-    } catch (error) {
-      state.health = {
-        database: false,
-        up: false,
-        uptime: 'N/A',
-        lastCheck: Date.now(),
-        status: 'offline',
-        error: error.message
-      };
-      log('Health check error:', error);
-      return null;
-    }
-  }
-
-  // ---------- Turnstile ----------
-  function loadTurnstile() {
-    return new Promise((resolve, reject) => {
-      if (window.turnstile) return resolve();
-      const s = document.createElement('script');
-      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-      s.async = true; s.defer = true;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error('No se pudo cargar Turnstile'));
-      document.head.appendChild(s);
-    });
-  }
-  async function getTurnstileToken() {
-    await loadTurnstile();
-    if (typeof window.turnstile?.execute === 'function') {
-      try {
-        const token = await window.turnstile.execute(cfg.SITEKEY, { action: 'paint' });
-        if (token && token.length > 20) return token;
-  } catch { /* fallback abajo */ }
-    }
-    // Fallback: render oculto
-    return await new Promise((resolve) => {
-      const host = document.createElement('div');
-      host.style.position = 'fixed'; host.style.left = '-9999px';
-      document.body.appendChild(host);
-      window.turnstile.render(host, { sitekey: cfg.SITEKEY, callback: (t) => resolve(t) });
-    });
-  }
-
-  // ---------- API backend ----------
-  function randomCoords() {
-    // Generar coordenadas locales directamente dentro del tile (0 a TILE_SIZE-1)
-    const margin = Math.floor(cfg.TILE_SIZE * 0.05); // 5% del tamaño del tile como margen
-    const safeSize = cfg.TILE_SIZE - (margin * 2); // Área segura descontando márgenes
-    
-    // Validar que el área segura sea válida
-    if (safeSize <= 0) {
-      log('Error: área segura inválida, usando coordenadas básicas');
-      return [Math.floor(Math.random() * cfg.TILE_SIZE), Math.floor(Math.random() * cfg.TILE_SIZE)];
+/* WPlace AutoBOT — uso bajo tu responsabilidad. Compilado 2025-08-15T09:16:59.339Z */
+(()=>{var d=(...e)=>console.log("[WPA-UI]",...e);var b={SITEKEY:"0x4AAAAAABpqJe8FO0N84q0F",TILE_X:1086,TILE_Y:1565,TILE_SIZE:3e3,DELAY_MS:15e3,MIN_CHARGES:10,CHARGE_REGEN_MS:3e4,PIXELS_PER_BATCH:20,COLOR_MIN:1,COLOR_MAX:32,COLOR_MODE:"random",COLOR_FIXED:1,THEME:{primary:"#000000",secondary:"#111111",accent:"#222222",text:"#ffffff",highlight:"#775ce3",success:"#00ff00",error:"#ff0000",running:"#00cc00"}},g={running:!1,painted:0,last:null,charges:{count:0,max:0,cooldownMs:3e4},user:null,panel:null,captureMode:!1,originalFetch:window.fetch,retryCount:0,inCooldown:!1,nextPaintTime:0,cooldownEndTime:0,health:null};function _(e){try{localStorage.setItem("WPA_UI_CFG",JSON.stringify(e))}catch{}}function k(e){try{let o=localStorage.getItem("WPA_UI_CFG");if(o){let a={...e,...JSON.parse(o)};return!Number.isFinite(a.TILE_X)||!Number.isFinite(a.TILE_Y)?(console.log("[WPA-UI]",`Configuraci\xF3n corrupta detectada: coordenadas (${a.TILE_X},${a.TILE_Y}) inv\xE1lidas`),R(),{...e}):a}}catch{}return{...e}}function R(){try{localStorage.removeItem("WPA_UI_CFG"),console.log("[WPA-UI]","Configuraci\xF3n del farm reseteada")}catch{}}function N(e,o){let a=e.TILE_X===o.TILE_X&&e.TILE_Y===o.TILE_Y,t=!localStorage.getItem("WPA_UI_CFG"),s=!Number.isFinite(e.TILE_X)||!Number.isFinite(e.TILE_Y),n=a||t||s;return console.log("[WPA-UI]",`Verificaci\xF3n calibraci\xF3n: defaults=${a}, noConfig=${t}, invalid=${s}, coords=(${e.TILE_X},${e.TILE_Y})`),n}var O="https://backend.wplace.live";async function X(){var e,o,a;try{let t=await fetch(`${O}/me`,{credentials:"include"}).then(c=>c.json()),s=t||null,n=(t==null?void 0:t.charges)||{},u={count:(e=n.count)!=null?e:0,max:(o=n.max)!=null?o:0,cooldownMs:(a=n.cooldownMs)!=null?a:3e4};return{success:!0,data:{user:s,charges:u.count,maxCharges:u.max,chargeRegen:u.cooldownMs}}}catch(t){return{success:!1,error:t.message,data:{user:null,charges:0,maxCharges:0,chargeRegen:3e4}}}}async function H(){try{let e=await fetch(`${O}/health`,{method:"GET",credentials:"include"});return e.ok?{...await e.json(),lastCheck:Date.now(),status:"online"}:{database:!1,up:!1,uptime:"N/A",lastCheck:Date.now(),status:"error",statusCode:e.status}}catch(e){return{database:!1,up:!1,uptime:"N/A",lastCheck:Date.now(),status:"offline",error:e.message}}}async function j(e,o,a){try{let t=await fetch(`${O}/s0/paint`,{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({coords:e,colors:o,t:a})}),s=await t.json().catch(()=>({}));return{status:t.status,json:s,success:t.ok}}catch(t){return{status:0,json:{error:t.message},success:!1}}}function G(e,o,a,t){var C,T,w,y,E,M,$,B,D,Y;let s=document.createElement("div");s.id="wplace-farm-ui",s.style.cssText=`
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 2147483647;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  `;let n=s.attachShadow({mode:"open"}),u=document.createElement("style");u.textContent=`
+    .wplace-container {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: 2px solid #4a5568;
+      border-radius: 12px;
+      padding: 16px;
+      min-width: 320px;
+      max-width: 400px;
+      color: white;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      font-size: 14px;
+      backdrop-filter: blur(10px);
     }
     
-    // Generar coordenadas locales dentro del área segura del tile
-    const localX = margin + Math.floor(Math.random() * safeSize);
-    const localY = margin + Math.floor(Math.random() * safeSize);
-    
-    // Log para debugging (solo ocasionalmente)
-    if (Math.random() < 0.1) { // 10% de las veces
-      log(`Coordenadas locales generadas: (${localX},${localY}) en área segura [${margin}-${margin + safeSize - 1}]`);
+    .wplace-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
     }
     
-    return [localX, localY];
-  }
-
-  function generateMultipleCoords(count) {
-    const coords = [];
-    for (let i = 0; i < count; i++) {
-      const [x, y] = randomCoords();
-      coords.push(x, y); // El formato del API requiere x,y,x,y,x,y...
-    }
-    return coords;
-  }
-
-  function generateMultipleColors(count) {
-    const colors = [];
-    for (let i = 0; i < count; i++) {
-      colors.push(nextColor());
-    }
-    return colors;
-  }
-
-  function nextColor() {
-    if (cfg.COLOR_MODE === 'fixed') {
-      return clamp(parseInt(cfg.COLOR_FIXED,10)||1, cfg.COLOR_MIN, cfg.COLOR_MAX);
-    }
-    const span = cfg.COLOR_MAX - cfg.COLOR_MIN + 1;
-    return cfg.COLOR_MIN + randInt(span);
-  }
-
-  // Función para actualizar el canvas visualmente
-  async function updateCanvasPixel(localX, localY, color) {
-    try {
-      // Buscar elementos del canvas que puedan necesitar actualización
-      const canvasElements = document.querySelectorAll('canvas');
-      canvasElements.forEach(canvas => {
-        try {
-          // Intentar forzar un redibujado del canvas
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            // Emitir eventos para que el canvas se actualice
-            const event = new CustomEvent('pixel-painted', {
-              detail: { x: localX, y: localY, color, tileX: cfg.TILE_X, tileY: cfg.TILE_Y }
-            });
-            canvas.dispatchEvent(event);
-          }
-  } catch { /* ignore canvas error */ }
-      });
-
-      // Intentar actualizar tiles específicos si existen elementos con data-tile
-      const tileElements = document.querySelectorAll(`[data-tile-x="${cfg.TILE_X}"][data-tile-y="${cfg.TILE_Y}"]`);
-      tileElements.forEach(tile => {
-        try {
-          // Forzar actualización del tile
-          if (tile.style) {
-            tile.style.opacity = '0.8';
-            setTimeout(() => { tile.style.opacity = '1'; }, 100);
-          }
-  } catch { /* ignore style update error */ }
-      });
-
-      // Buscar y actualizar elementos que contengan coordenadas
-      const coordElements = document.querySelectorAll('[class*="tile"], [class*="canvas"], [id*="canvas"]');
-      coordElements.forEach(el => {
-        try {
-          if (el.getAttribute && (el.getAttribute('data-x') == localX || el.getAttribute('data-y') == localY)) {
-            el.style.filter = 'brightness(1.2)';
-            setTimeout(() => { el.style.filter = ''; }, 200);
-          }
-  } catch { /* ignore coord highlight error */ }
-      });
-
-    } catch (error) {
-      log('Error actualizando canvas:', error);
-    }
-  }
-
-  // Función para refrescar el tile específico (solo actualización visual, sin GET)
-  async function refreshTile(tileX, tileY) {
-    try {
-      // Solo actualizar visualmente el DOM sin hacer GET
-      // El GET a /s0/tile no funciona y no es necesario para el funcionamiento
-      const tileSelector = `[data-tile="${tileX}-${tileY}"], .tile-${tileX}-${tileY}, [data-tile-x="${tileX}"][data-tile-y="${tileY}"]`;
-      const tileElement = document.querySelector(tileSelector);
-      
-      if (tileElement) {
-        // Añadir una clase temporal para indicar actualización
-        tileElement.classList.add('tile-updating');
-        setTimeout(() => {
-          tileElement.classList.remove('tile-updating');
-          tileElement.classList.add('tile-updated');
-          setTimeout(() => tileElement.classList.remove('tile-updated'), 1000);
-        }, 100);
-        log(`Tile (${tileX},${tileY}) actualizado visualmente`);
-      } else {
-        // Intentar forzar una actualización del canvas general
-        const canvasElements = document.querySelectorAll('canvas');
-        canvasElements.forEach(canvas => {
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            // Trigger redraw sin hacer cambios
-            const imageData = ctx.getImageData(0, 0, 1, 1);
-            ctx.putImageData(imageData, 0, 0);
-          }
-        });
-        log(`Actualización visual genérica realizada para tile (${tileX},${tileY})`);
-      }
-    } catch (error) {
-      log('Error en actualización visual del tile:', error);
-    }
-  }
-
-  async function postPixel(coords, colors, t) {
-    try {
-      const body = JSON.stringify({ colors, coords, t });
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // Timeout de 15 segundos
-      
-      const res = await fetch(`https://backend.wplace.live/s0/pixel/${cfg.TILE_X}/${cfg.TILE_Y}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body,
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      let json = null;
-      try { 
-        const text = await res.text();
-        if (text) {
-          json = JSON.parse(text);
-        }
-      } catch (parseError) {
-        log('Error parseando respuesta JSON:', parseError);
-        // Si no se puede parsear, pero el status es 200, asumir éxito
-        if (res.status === 200) {
-          json = { painted: Math.min(coords.length / 2, colors.length) };
-        }
-      }
-      
-      return { status: res.status, json };
-    } catch (error) {
-      log('Error en postPixel:', error.name, error.message);
-      
-      // Diferentes tipos de error
-      if (error.name === 'AbortError') {
-        return { status: 408, json: { error: 'Timeout' } }; // Request Timeout
-      }
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        return { status: 0, json: { error: 'Network Error' } }; // Error de red
-      }
-      
-      return { status: 500, json: { error: error.message } };
-    }
-  }
-
-  async function paintOnce() {
-    // Verificar que las coordenadas del tile sean válidas antes de pintar
-    if (!Number.isFinite(cfg.TILE_X) || !Number.isFinite(cfg.TILE_Y)) {
-      setStatus(`🚫 Coordenadas del tile inválidas (${cfg.TILE_X},${cfg.TILE_Y}). Calibra primero`, 'error');
-      log(`Pintado cancelado: coordenadas del tile inválidas`);
-      return false;
+    .wplace-title {
+      font-weight: bold;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     
-    // Usar cargas actuales (ya consultadas en el loop)
-    const availableCharges = Math.floor(state.charges.count); // Cargas completas disponibles
-    
-      // Si no hay cargas completas disponibles, no pintar
-      if (availableCharges < 1) {
-        setStatus(`🔋 Sin cargas disponibles. Esperando...`, 'error');
-        return false;
-      }    // Calcular el número óptimo de píxeles a pintar
-    // Usar el mínimo entre: cargas disponibles, configuración del usuario, y límite máximo (50)
-    const optimalPixelCount = Math.min(availableCharges, cfg.PIXELS_PER_BATCH, 50);
-    const pixelCount = Math.max(1, optimalPixelCount);
-    
-    // Informar si se ajustó el número de píxeles
-    if (pixelCount < cfg.PIXELS_PER_BATCH) {
-      log(`Ajustando píxeles por cargas completas disponibles: ${pixelCount}/${cfg.PIXELS_PER_BATCH} (${availableCharges} cargas completas de ${state.charges.count.toFixed(2)} totales)`);
+    .wplace-minimize {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      border-radius: 4px;
+      color: white;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
     }
     
-    const coords = generateMultipleCoords(pixelCount);
-    const colors = generateMultipleColors(pixelCount);
-    
-    // Las coordenadas generadas ya son locales al tile, no necesitamos cálculos adicionales
-    const firstLocalX = coords[0];
-    const firstLocalY = coords[1];
-    
-    setStatus(`🎨 Pintando ${pixelCount} píxeles (${availableCharges} cargas completas) en tile(${cfg.TILE_X},${cfg.TILE_Y}) local(${firstLocalX},${firstLocalY})...`, 'status');
-    
-    const t = await getTurnstileToken();
-    const r = await postPixel(coords, colors, t);
-
-    state.last = { 
-      x: firstLocalX, 
-      y: firstLocalY, 
-      color: colors[0], 
-      pixelCount,
-      availableCharges,
-      status: r.status, 
-      json: r.json 
-    };
-    
-    if (r.status === 200 && r.json && (r.json.painted > 0 || r.json.painted === pixelCount)) {
-      const actualPainted = r.json.painted || pixelCount;
-      state.painted += actualPainted;
-      state.retryCount = 0; // Resetear contador de reintentos al éxito
-      
-      // Actualizar visualmente el canvas para múltiples píxeles
-      for (let i = 0; i < coords.length; i += 2) {
-        const localX = coords[i];
-        const localY = coords[i + 1];
-        const color = colors[Math.floor(i / 2)];
-        // Las coordenadas ya son locales al tile
-        await updateCanvasPixel(localX, localY, color);
-      }
-      
-      // Refrescar el tile específico
-      await refreshTile(cfg.TILE_X, cfg.TILE_Y);
-      
-      // Actualizar la sesión para obtener las cargas actualizadas (única consulta tras pintar)
-      await getSession();
-      
-      setStatus(`✅ Lote pintado: ${actualPainted}/${pixelCount} píxeles (${availableCharges} cargas usadas)`, 'success');
-      flashEffect();
-      
-      // Emitir evento personalizado para notificar que se pintó un lote
-      const event = new CustomEvent('wplace-batch-painted', {
-        detail: { 
-          firstX: firstLocalX, 
-          firstY: firstLocalY, 
-          pixelCount: actualPainted,
-          totalPixels: pixelCount,
-          colors: colors,
-          coords: coords,
-          tileX: cfg.TILE_X,
-          tileY: cfg.TILE_Y,
-          timestamp: Date.now()
-        }
-      });
-      window.dispatchEvent(event);
-      
-      return true;
+    .wplace-minimize:hover {
+      background: rgba(255,255,255,0.3);
     }
     
-    // Manejo de errores mejorado
-    if (r.status === 403) {
-      setStatus('⚠️ 403 (token expirado o Cloudflare). Reintentará...', 'error');
-    } else if (r.status === 401) {
-      setStatus('🔒 401 (no autorizado). Verifica tu sesión.', 'error');
-    } else if (r.status === 429) {
-      setStatus('⏳ 429 (límite de tasa). Esperando...', 'error');
-    } else if (r.status === 408) {
-      setStatus('⏰ Timeout del servidor. Coordenadas problemáticas o servidor sobrecargado', 'error');
-    } else if (r.status === 0) {
-      setStatus('🌐 Error de red. Verificando conectividad...', 'error');
-    } else if (r.status === 500) {
-      setStatus('🔥 500 (error interno del servidor). Reintentará...', 'error');
-    } else if (r.status === 502 || r.status === 503 || r.status === 504) {
-      setStatus(`🚫 ${r.status} (servidor no disponible). Reintentará...`, 'error');
-    } else if (r.status === 404) {
-      setStatus(`🗺️ 404 (tile no encontrado). Verificando coordenadas tile(${cfg.TILE_X},${cfg.TILE_Y})`, 'error');
-    } else {
-      // Para otros errores, verificar el health del backend
-      try {
-        await checkBackendHealth();
-        const healthStatus = state.health?.up ? '🟢 Online' : '🔴 Offline';
-        setStatus(`❌ Error ${r.status}: ${r.json?.message || r.json?.error || 'Fallo al pintar'} (Backend: ${healthStatus})`, 'error');
-  } catch (healthError) {
-        setStatus(`❌ Error ${r.status}: ${r.json?.message || r.json?.error || 'Fallo al pintar'} (Health check falló)`, 'error');
-      }
+    .wplace-content {
+      display: block;
     }
     
-    // Log detallado para debugging
-    log(`Fallo en pintado: status=${r.status}, json=`, r.json, 'coords=', coords, 'colors=', colors);
-    
-    return false;
-  }
-
-  async function paintWithRetry() {
-    const maxAttempts = 5; // Aumentar a 5 intentos
-    const baseDelay = 3000; // Delay base de 3 segundos
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const success = await paintOnce();
-        if (success) {
-          state.retryCount = 0; // Reset en éxito
-          return true;
-        }
-        
-        state.retryCount = attempt;
-        
-        if (attempt < maxAttempts) {
-          // Delay exponencial: 3s, 6s, 12s, 24s
-          const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), 30000); // Máximo 30s
-          setStatus(`❌ Intento ${attempt}/${maxAttempts} falló. Reintentando en ${delay/1000}s...`, 'error');
-          log(`Reintento ${attempt}/${maxAttempts} programado en ${delay/1000}s`);
-          
-          // Verificar si se debe detener durante el delay
-          for (let i = 0; i < delay/1000 && state.running; i++) {
-            await sleep(1000);
-          }
-          
-          if (!state.running) {
-            log('Bot detenido durante reintentos');
-            return false;
-          }
-        }
-      } catch (error) {
-        log(`Error en intento ${attempt}:`, error);
-        state.retryCount = attempt;
-        
-        if (attempt < maxAttempts) {
-          const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), 30000);
-          setStatus(`💥 Error en intento ${attempt}/${maxAttempts}. Reintentando en ${delay/1000}s...`, 'error');
-          
-          for (let i = 0; i < delay/1000 && state.running; i++) {
-            await sleep(1000);
-          }
-          
-          if (!state.running) {
-            return false;
-          }
-        }
-      }
+    .wplace-content.minimized {
+      display: none;
     }
     
-    // Si llegamos aquí, fallaron todos los intentos
-    state.inCooldown = true;
-    state.cooldownEndTime = Date.now() + (3 * 60 * 1000); // Aumentar a 3 minutos
-    state.retryCount = 0;
-    setStatus(`🚫 ${maxAttempts} intentos fallidos. Cooldown de 3 minutos...`, 'error');
-    log(`Todos los reintentos fallaron, iniciando cooldown de 3 minutos`);
-    return false;
-  }
-
-  async function loop() {
-    // Verificar calibración antes de empezar
-    if (needsCalibration()) {
-      setStatus('🎯 Calibración requerida antes de iniciar el bot', 'error');
-      enableCaptureOnce();
-      
-      // Esperar hasta que se complete la calibración
-      while (state.captureMode && state.running) {
-        await sleep(1000);
-      }
-      
-      // Verificar si se capturó correctamente
-      if (needsCalibration()) {
-        setStatus('❌ Calibración cancelada. Deteniendo bot...', 'error');
-        state.running = false;
-        updateButtonStates();
-        return;
-      } else {
-        setStatus('✅ Calibración completada. Iniciando bot...', 'success');
-        await sleep(2000); // Mostrar mensaje por 2 segundos
-      }
+    .wplace-section {
+      margin-bottom: 12px;
     }
-
-    while (state.running) {
-      try {
-        // Hacer UNA consulta a /me al inicio de cada ciclo
-        await getSession();
-        
-        // Verificar si estamos en cooldown
-        if (state.inCooldown) {
-          const now = Date.now();
-          if (now < state.cooldownEndTime) {
-            const remainingMs = state.cooldownEndTime - now;
-            const remainingSec = Math.ceil(remainingMs / 1000);
-            const remainingMin = Math.floor(remainingSec / 60);
-            const remainingSecOnly = remainingSec % 60;
-            if (remainingMin > 0) {
-              setStatus(`🚫 Cooldown: ${remainingMin}m ${remainingSecOnly}s restantes`, 'error');
-            } else {
-              setStatus(`🚫 Cooldown: ${remainingSec}s restantes`, 'error');
-            }
-            await sleep(1000);
-            updateStats();
-            continue;
-          } else {
-            // Cooldown terminado
-            state.inCooldown = false;
-            state.cooldownEndTime = 0;
-            setStatus('✅ Cooldown terminado. Continuando...', 'success');
-          }
-        }
-
-      const { count } = state.charges;
-      
-      // Verificar si tenemos al menos las cargas mínimas para pintar
-      if (count < cfg.MIN_CHARGES) {
-        const waitTimeMs = cfg.MIN_CHARGES * 30 * 1000; // MIN_CHARGES × 30 segundos
-        const waitTimeSec = Math.ceil(waitTimeMs / 1000);
-        
-        // Activar cooldown específico para cargas insuficientes
-        if (!state.inCooldown) {
-          state.inCooldown = true;
-          state.cooldownEndTime = Date.now() + waitTimeMs;
-          setStatus(`🔋 Cargas insuficientes (${Math.floor(count)}/${cfg.MIN_CHARGES}). Cooldown: ${Math.ceil(waitTimeSec/60)}min`, 'error');
-        }
-        
-        const now = Date.now();
-        if (now < state.cooldownEndTime) {
-          const remainingMs = state.cooldownEndTime - now;
-          const remainingSec = Math.ceil(remainingMs / 1000);
-          const remainingMin = Math.floor(remainingSec / 60);
-          const remainingSecOnly = remainingSec % 60;
-          if (remainingMin > 0) {
-            setStatus(`⏳ Cooldown: ${remainingMin}m ${remainingSecOnly}s (esperando ${cfg.MIN_CHARGES} cargas)`, 'status');
-          } else {
-            setStatus(`⏳ Cooldown: ${remainingSec}s (esperando ${cfg.MIN_CHARGES} cargas)`, 'status');
-          }
-          await sleep(1000);
-          updateStats();
-          continue;
-        } else {
-          // Cooldown terminado, verificar si ya tenemos suficientes cargas
-          state.inCooldown = false;
-          state.cooldownEndTime = 0;
-          // NO hacer consulta adicional aquí - la próxima iteración del loop la hará
-          if (state.charges.count >= cfg.MIN_CHARGES) {
-            setStatus('✅ Cargas suficientes alcanzadas. Continuando...', 'success');
-            updateStats();
-            continue;
-          } else {
-            // Aún no hay suficientes cargas, renovar cooldown
-            state.inCooldown = true;
-            state.cooldownEndTime = Date.now() + waitTimeMs;
-            setStatus(`🔋 Aún sin cargas suficientes. Renovando cooldown: ${Math.ceil(waitTimeSec/60)}min`, 'error');
-            updateStats();
-            continue;
-          }
-        }
-      }
-      
-      // Si tenemos cargas disponibles, pintar
-      state.nextPaintTime = Date.now() + cfg.DELAY_MS;
-      
-      try {
-        const paintSuccess = await paintWithRetry();
-        updateStats();
-        
-        // Si el pixel se pintó exitosamente, mantener el mensaje de éxito por 3 segundos
-        if (paintSuccess) {
-          await sleep(3000); // Mostrar mensaje de éxito por 3 segundos
-          // Luego mostrar countdown con el tiempo restante
-          const remainingDelay = cfg.DELAY_MS - 3000;
-          if (remainingDelay > 0) {
-            await sleepWithCountdown(remainingDelay);
-          }
-        } else {
-          // Si falló el pintado, verificar el estado del backend
-          try {
-            await checkBackendHealth();
-          } catch (healthError) {
-            log('Error verificando health del backend:', healthError);
-          }
-          
-          // Si falló, mostrar countdown completo
-          await sleepWithCountdown(cfg.DELAY_MS);
-        }
-      } catch (paintError) {
-        // Error crítico en el proceso de pintado
-        log('Error crítico en paintWithRetry:', paintError);
-        setStatus(`💥 Error crítico: ${paintError.message}. Cooldown de seguridad...`, 'error');
-        
-        // Cooldown de seguridad
-        state.inCooldown = true;
-        state.cooldownEndTime = Date.now() + (5 * 60 * 1000); // 5 minutos
-        
-        // Verificar health del backend
-        try {
-          await checkBackendHealth();
-        } catch (healthError) {
-          log('Error verificando health tras error crítico:', healthError);
-        }
-        
-        updateStats();
-      }
-      } catch (cycleError) {
-        // Error en el ciclo principal
-        log('Error en ciclo del loop:', cycleError);
-        setStatus(`💥 Error en ciclo: ${cycleError.message}. Reintentando en 10s...`, 'error');
-        
-        // Pausa de seguridad antes de continuar
-        await sleep(10000);
-        
-        // Verificar health del backend
-        try {
-          await checkBackendHealth();
-        } catch (healthError) {
-          log('Error verificando health tras error de ciclo:', healthError);
-        }
-      }
-    }
-  }
-
-  async function sleepWithCountdown(ms) {
-    const endTime = Date.now() + ms;
-    while (Date.now() < endTime && state.running) {
-      const remainingMs = endTime - Date.now();
-      const remainingSec = Math.ceil(remainingMs / 1000);
-      if (remainingSec > 0) {
-        setStatus(`⏳ Próxima pintada en: ${remainingSec}s`, 'status');
-      }
-      await sleep(1000);
-    }
-  }
-
-  // ---------- Captura TILE_X / TILE_Y (sniffer) ----------
-  function enableCaptureOnce() {
-    if (state.captureMode) return;
-    state.captureMode = true;
-    setStatus('🎯 Esperando calibración: pinta un pixel manualmente...', 'status');
-
-    window.fetch = async function(resource, init) {
-      try {
-        let url = typeof resource === 'string' ? resource : (resource && resource.url) || '';
-        if (state.captureMode && url.includes('/s0/pixel/')) {
-          // Extrae TILE_X/Y del path
-          try {
-            const u = new URL(url, location.origin);
-            const parts = (u.pathname || '').split('/').filter(Boolean); // ["s0","pixel","1086","1565"]
-            const px = parseInt(parts[2],10), py = parseInt(parts[3],10);
-            if (Number.isFinite(px) && Number.isFinite(py)) {
-              cfg.TILE_X = px; cfg.TILE_Y = py; saveCfg();
-              fillInputsFromCfg();
-              
-              // Calcular información del área segura dentro del tile
-              const margin = Math.floor(cfg.TILE_SIZE * 0.05);
-              const safeMinX = margin;
-              const safeMaxX = cfg.TILE_SIZE - margin - 1;
-              const safeMinY = margin;
-              const safeMaxY = cfg.TILE_SIZE - margin - 1;
-              
-              setStatus(`✅ Tile capturado: (${px},${py}) área local segura: (${safeMinX}-${safeMaxX}, ${safeMinY}-${safeMaxY})`, 'success');
-              log(`Tile capturado: (${px},${py}), área local segura: (${safeMinX},${safeMinY}) a (${safeMaxX},${safeMaxY})`);
-            }
-          } catch { /* ignore parse error */ }
-          // desactiva sniffer tras la primera coincidencia
-          window.fetch = state.originalFetch;
-          state.captureMode = false;
-        }
-  } catch { /* ignore fetch wrapper errors */ }
-      return state.originalFetch.apply(this, arguments);
-    };
-  }
-
-  // ---------- UI Functions ----------
-  function updateButtonStates() {
-    const el = {
-      start: $('#wpa-start'),
-      stop: $('#wpa-stop'),
-      running: $('#wpa-running')
-    };
     
-    if (state.running) {
-      el.start?.classList.add('running');
-      if (el.start) el.start.textContent = 'Ejecutando...';
-      el.stop?.classList.add('active');
-      if (el.running) {
-        el.running.textContent = '🟢 Activo';
-        el.running.style.color = cfg.THEME.success;
-      }
-    } else {
-      el.start?.classList.remove('running');
-      if (el.start) el.start.textContent = 'Start';
-      el.stop?.classList.remove('active');
-      if (el.running) {
-        el.running.textContent = '🔴 Detenido';
-        el.running.style.color = cfg.THEME.error;
-      }
+    .wplace-section-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #e2e8f0;
     }
-  }
-
-  function createUI() {
-    if (state.panel) return;
-    const css = `
-      @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,255,0,.7)}70%{box-shadow:0 0 0 10px rgba(0,255,0,0)}100%{box-shadow:0 0 0 0 rgba(0,255,0,0)}}
-      @keyframes slideIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-      @keyframes pixelPaint{0%{filter:brightness(1)}50%{filter:brightness(1.5) saturate(1.3)}100%{filter:brightness(1)}}
-      @keyframes tileUpdate{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}
-      
-      .wpa-panel{position:fixed;top:20px;right:20px;width:300px;background:${cfg.THEME.primary};border:1px solid ${cfg.THEME.accent};border-radius:10px;color:${cfg.THEME.text};font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;z-index:999999;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;animation:slideIn .3s}
-      .wpa-head{display:flex;justify-content:space-between;align-items:center;background:${cfg.THEME.secondary};padding:10px 12px;color:${cfg.THEME.highlight};font-weight:600}
-      .wpa-body{padding:12px}
-      .wpa-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-      .wpa-row{display:flex;gap:8px;margin:8px 0}
-      .wpa-input, .wpa-select{width:100%;padding:6px 8px;border-radius:6px;border:1px solid ${cfg.THEME.accent};background:#0f0f0f;color:${cfg.THEME.text}}
-      .wpa-btn{flex:1;padding:9px;border:none;border-radius:8px;font-weight:700;cursor:pointer;transition:all 0.2s}
-      .wpa-btn.primary{background:${cfg.THEME.accent};color:#fff}
-      .wpa-btn.primary:hover{background:${cfg.THEME.highlight}}
-      .wpa-btn.primary.running{background:${cfg.THEME.running};color:#fff;box-shadow:0 0 10px rgba(0,204,0,0.3)}
-      .wpa-btn.stop{background:${cfg.THEME.error};color:#fff}
-      .wpa-btn.stop.active{background:#cc0000;box-shadow:0 0 8px rgba(255,0,0,0.3)}
-      .wpa-btn.ghost{background:transparent;border:1px solid ${cfg.THEME.accent};color:${cfg.THEME.text}}
-      .wpa-btn.ghost:hover{background:${cfg.THEME.accent}22}
-      .wpa-card{background:${cfg.THEME.secondary};padding:10px;border-radius:8px;margin-top:10px}
-      .wpa-stat{display:flex;justify-content:space-between;margin:4px 0;font-size:13px;opacity:.95}
-      .wpa-status{margin-top:10px;padding:8px;border-radius:6px;text-align:center;font-size:13px;background:rgba(255,255,255,.08);transition:all 0.3s}
-      .wpa-status.success{background:rgba(0,255,0,.12);color:${cfg.THEME.success}}
-      .wpa-status.error{background:rgba(255,0,0,.12);color:${cfg.THEME.error}}
-      #wpa-effect{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;border-radius:10px}
-      
-      /* Estilos para tiles actualizados */
-      .tile-updating{animation:tileUpdate 0.3s ease-in-out;}
-      .tile-updated{animation:pixelPaint 0.5s ease-in-out;}
-      
-      /* Indicador de pixel pintado */
-      .pixel-painted{
-        position:relative;
-      }
-      .pixel-painted::after{
-        content:'✓';
-        position:absolute;
-        top:-5px;
-        right:-5px;
-        background:${cfg.THEME.success};
-        color:white;
-        border-radius:50%;
-        width:12px;
-        height:12px;
-        font-size:8px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        animation:fadeInOut 2s ease-in-out;
-      }
-      
-      @keyframes fadeInOut{
-        0%{opacity:0;transform:scale(0)}
-        50%{opacity:1;transform:scale(1)}
-        100%{opacity:0;transform:scale(0)}
-      }
-    `;
-    const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
-
-    const panel = document.createElement('div');
-    panel.className = 'wpa-panel';
-    panel.innerHTML = `
-      <div id="wpa-effect"></div>
-      <div class="wpa-head">
-        <div>WPlace Auto Paint</div>
+    
+    .wplace-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+    
+    .wplace-label {
+      flex: 1;
+      font-size: 12px;
+      color: #cbd5e0;
+    }
+    
+    .wplace-input {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      width: 80px;
+    }
+    
+    .wplace-input:focus {
+      outline: none;
+      border-color: #90cdf4;
+      background: rgba(255,255,255,0.15);
+    }
+    
+    .wplace-select {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      width: 100px;
+    }
+    
+    .wplace-button {
+      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      margin: 2px;
+      transition: all 0.2s;
+    }
+    
+    .wplace-button:hover {
+      background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+      transform: translateY(-1px);
+    }
+    
+    .wplace-button:active {
+      transform: translateY(0);
+    }
+    
+    .wplace-button.start {
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    }
+    
+    .wplace-button.start:hover {
+      background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+    }
+    
+    .wplace-button.stop {
+      background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+    }
+    
+    .wplace-button.stop:hover {
+      background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+    }
+    
+    .wplace-button.calibrate {
+      background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+    }
+    
+    .wplace-button.calibrate:hover {
+      background: linear-gradient(135deg, #dd6b20 0%, #c05621 100%);
+    }
+    
+    .wplace-status {
+      background: rgba(0,0,0,0.3);
+      border-radius: 6px;
+      padding: 8px;
+      margin: 8px 0;
+      font-size: 12px;
+      min-height: 20px;
+      word-wrap: break-word;
+    }
+    
+    .wplace-status.success {
+      background: rgba(72, 187, 120, 0.2);
+      border-left: 3px solid #48bb78;
+    }
+    
+    .wplace-status.error {
+      background: rgba(245, 101, 101, 0.2);
+      border-left: 3px solid #f56565;
+    }
+    
+    .wplace-status.status {
+      background: rgba(66, 153, 225, 0.2);
+      border-left: 3px solid #4299e1;
+    }
+    
+    .wplace-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    
+    .wplace-stat {
+      background: rgba(0,0,0,0.2);
+      border-radius: 4px;
+      padding: 6px;
+      text-align: center;
+    }
+    
+    .wplace-stat-value {
+      font-weight: bold;
+      font-size: 14px;
+    }
+    
+    .wplace-stat-label {
+      font-size: 10px;
+      color: #a0aec0;
+    }
+    
+    .wplace-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    
+    .wplace-advanced {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .wplace-theme-preview {
+      display: flex;
+      gap: 2px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    
+    .wplace-color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+  `,n.appendChild(u);let c=document.createElement("div");c.className="wplace-container";let i={minimized:!1,showAdvanced:!1};c.innerHTML=`
+    <div class="wplace-header">
+      <div class="wplace-title">
+        \u{1F916} WPlace Farm Bot
       </div>
-      <div class="wpa-body">
-        <div class="wpa-grid">
-          <div><label>Delay (seg)</label><input id="wpa-delay" class="wpa-input" type="number" min="5" max="300" /></div>
-          <div><label>Min. Cargas</label><input id="wpa-mincharges" class="wpa-input" type="number" min="1" max="50" /></div>
-          <div><label>Píxeles/Lote</label><input id="wpa-pixelsbatch" class="wpa-input" type="number" min="1" max="50" /></div>
-          <div>
-            <label>Color</label>
-            <select id="wpa-cmode" class="wpa-select">
-              <option value="random">Random</option>
-              <option value="fixed">Fijo</option>
-            </select>
+      <button class="wplace-minimize">\u2212</button>
+    </div>
+    
+    <div class="wplace-content">
+      <!-- Estado y controles principales -->
+      <div class="wplace-section">
+        <div class="wplace-status" id="status">\u{1F4A4} Bot detenido</div>
+        
+        <div class="wplace-stats">
+          <div class="wplace-stat">
+            <div class="wplace-stat-value" id="painted-count">0</div>
+            <div class="wplace-stat-label">Pintados</div>
           </div>
-          <div id="wpa-cfixed-container"><label>Color fijo (1-32)</label><input id="wpa-cfixed" class="wpa-input" type="number" min="1" max="32"/></div>
+          <div class="wplace-stat">
+            <div class="wplace-stat-value" id="charges-count">0</div>
+            <div class="wplace-stat-label">Cargas</div>
+          </div>
         </div>
-
-        <div class="wpa-row" style="margin-top:12px">
-          <button id="wpa-start" class="wpa-btn primary">Start</button>
-          <button id="wpa-once"  class="wpa-btn ghost">Once</button>
-          <button id="wpa-stop"  class="wpa-btn ghost">Stop</button>
-        </div>
-
-        <div class="wpa-card" id="wpa-stats">
-          <div class="wpa-stat"><span>User</span><span id="wpa-user">-</span></div>
-          <div class="wpa-stat"><span>Charges</span><span id="wpa-charges">-</span></div>
-          <div class="wpa-stat"><span>Painted</span><span id="wpa-painted">0</span></div>
-          <div class="wpa-stat"><span>Último</span><span id="wpa-last">-</span></div>
-          <div class="wpa-stat"><span>Estado</span><span id="wpa-running">🔴 Detenido</span></div>
-          <div class="wpa-stat" id="wpa-retry-info" style="display:none"><span>Reintentos</span><span id="wpa-retries">0/5</span></div>
-          <div class="wpa-stat" id="wpa-cooldown-info" style="display:none"><span>Cooldown</span><span id="wpa-cooldown">-</span></div>
-        </div>
-
-        <div class="wpa-card" id="wpa-health">
-          <div class="wpa-stat"><span>Backend</span><span id="wpa-backend-status">🔄 Verificando...</span></div>
-          <div class="wpa-stat"><span>Database</span><span id="wpa-database-status">-</span></div>
-          <div class="wpa-stat"><span>Uptime</span><span id="wpa-uptime">-</span></div>
-        </div>
-
-        <div id="wpa-status" class="wpa-status">Ready</div>
-      </div>
-    `;
-    document.body.appendChild(panel);
-    state.panel = panel;
-
-    // Inputs
-    const el = {
-      delay: $('#wpa-delay'),
-      mincharges: $('#wpa-mincharges'), pixelsbatch: $('#wpa-pixelsbatch'), cmode: $('#wpa-cmode'), cfixed: $('#wpa-cfixed'),
-      start: $('#wpa-start'), once: $('#wpa-once'), stop: $('#wpa-stop'),
-      status: $('#wpa-status'), user: $('#wpa-user'), charges: $('#wpa-charges'),
-      painted: $('#wpa-painted'), last: $('#wpa-last'), running: $('#wpa-running'), 
-      retries: $('#wpa-retries'), retryInfo: $('#wpa-retry-info'), cooldown: $('#wpa-cooldown'), cooldownInfo: $('#wpa-cooldown-info'),
-      effect: $('#wpa-effect')
-    };
-
-    function bindInputs() {
-      el.delay.addEventListener('change', () => { 
-        const delaySec = clamp(parseInt(el.delay.value,10)||15, 5, 300);
-        cfg.DELAY_MS = delaySec * 1000; // Convertir segundos a milisegundos
-        el.delay.value = delaySec; // Asegurar que el input muestre el valor clampado
-        saveCfg(); 
-      });
-      el.mincharges.addEventListener('change', () => { cfg.MIN_CHARGES = clamp(parseInt(el.mincharges.value,10)||cfg.MIN_CHARGES, 1, 50); saveCfg(); });
-      el.pixelsbatch.addEventListener('change', () => { 
-        cfg.PIXELS_PER_BATCH = clamp(parseInt(el.pixelsbatch.value,10)||cfg.PIXELS_PER_BATCH, 1, 50); 
-        el.pixelsbatch.value = cfg.PIXELS_PER_BATCH; // Asegurar que el input muestre el valor clampado
-        saveCfg(); 
-      });
-      el.cmode.addEventListener('change', () => { 
-        cfg.COLOR_MODE = el.cmode.value; 
-        toggleColorFixedField();
-        saveCfg(); 
-      });
-      el.cfixed.addEventListener('change', () => { cfg.COLOR_FIXED = clamp(parseInt(el.cfixed.value,10)||1, cfg.COLOR_MIN, cfg.COLOR_MAX); el.cfixed.value = cfg.COLOR_FIXED; saveCfg(); });
-    }
-
-    function toggleColorFixedField() {
-      const container = $('#wpa-cfixed-container');
-      if (container) {
-        container.style.display = cfg.COLOR_MODE === 'fixed' ? 'block' : 'none';
-      }
-    }
-
-    function bindButtons() {
-      el.start.onclick = async () => {
-        if (!state.running) {
-          state.running = true;
-          updateButtonStates();
-          setStatus('🚀 Empezando…','status');
-          loop();
-        }
-      };
-      el.stop.onclick = () => { 
-        state.running = false; 
-        // También cancelar captura si está activa
-        if (state.captureMode) {
-          state.captureMode = false;
-          window.fetch = state.originalFetch;
-        }
-        updateButtonStates();
-        setStatus('⏸️ Bot detenido por el usuario','error'); 
-      };
-      el.once.onclick = async () => { 
-        // Verificar calibración antes de pintar
-        if (needsCalibration()) {
-          setStatus('🎯 Calibración requerida: pinta un pixel manualmente primero', 'error');
-          enableCaptureOnce();
-          return;
-        }
-        setStatus('⏳ Consultando cargas y pintando…','status');
         
-        // Hacer consulta manual solo para el botón "Once"
-        await getSession();
-        await paintWithRetry(); 
-        updateStats(); 
-      };
-    }
-
-    bindInputs(); bindButtons();
-    fillInputsFromCfg();
-    toggleColorFixedField(); // Inicializar visibilidad del campo color fijo
-    updateStats();
-    updateButtonStates(); // Inicializar estados de botones
-    dragHeader(panel.querySelector('.wpa-head'), panel);
-  }
-
-  function fillInputsFromCfg() {
-    $('#wpa-delay').value = Math.floor(cfg.DELAY_MS / 1000); // Mostrar en segundos
-    $('#wpa-mincharges').value = cfg.MIN_CHARGES;
-    $('#wpa-pixelsbatch').value = cfg.PIXELS_PER_BATCH;
-    $('#wpa-cmode').value = cfg.COLOR_MODE;
-    $('#wpa-cfixed').value = cfg.COLOR_FIXED;
-  }
-
-  function setStatus(msg, kind='status') {
-    const el = $('#wpa-status'); if (!el) return;
-    el.className = `wpa-status ${kind}`;
-    el.textContent = msg;
-  }
-
-  function flashEffect() {
-    const fx = $('#wpa-effect'); 
-    if (!fx) return;
-    
-    // Efecto de pulso verde para éxito
-    fx.style.animation = 'pulse .5s';
-    fx.style.background = 'radial-gradient(circle, rgba(0,255,0,0.1) 0%, transparent 70%)';
-    
-    setTimeout(() => {
-      fx.style.animation = '';
-      fx.style.background = '';
-    }, 500);
-    
-    // Agregar efecto de brillo al panel
-    const panel = state.panel;
-    if (panel) {
-      panel.style.boxShadow = '0 8px 24px rgba(0,255,0,.3), 0 0 20px rgba(0,255,0,.2)';
-      setTimeout(() => {
-        panel.style.boxShadow = '0 8px 24px rgba(0,0,0,.5)';
-      }, 800);
-    }
-  }
-
-  async function updateStats() {
-    // NO hacer consulta automática a /me - usar datos existentes
-    $('#wpa-user').textContent = state.user?.name || '-';
-    
-    // Mostrar solo cargas completas disponibles (sin máximo)
-    const completeCharges = Math.floor(state.charges.count);
-    const chargeDisplay = `${completeCharges}`;
-    $('#wpa-charges').textContent = chargeDisplay;
-    
-    // Mostrar información de cooldown si está activo
-    const cooldownEl = $('#wpa-cooldown');
-    const cooldownInfo = $('#wpa-cooldown-info');
-    if (state.inCooldown && cooldownEl && cooldownInfo) {
-      const remainingMs = state.cooldownEndTime - Date.now();
-      const remainingSec = Math.ceil(remainingMs / 1000);
-      if (remainingSec > 0) {
-        const remainingMin = Math.floor(remainingSec / 60);
-        const remainingSecOnly = remainingSec % 60;
-        if (remainingMin > 0) {
-          cooldownEl.textContent = `${remainingMin}m ${remainingSecOnly}s`;
-        } else {
-          cooldownEl.textContent = `${remainingSec}s`;
-        }
-        cooldownInfo.style.display = 'flex';
-      } else {
-        cooldownInfo.style.display = 'none';
-      }
-    } else if (cooldownInfo) {
-      cooldownInfo.style.display = 'none';
-    }
-    
-    $('#wpa-painted').textContent = String(state.painted);
-    
-    // Mostrar información de reintentos solo si hay reintentos activos
-    if (state.retryCount > 0) {
-      $('#wpa-retries').textContent = `${state.retryCount}/5`;
-      $('#wpa-retry-info').style.display = 'flex';
-    } else {
-      $('#wpa-retry-info').style.display = 'none';
-    }
-    
-    if (state.last) {
-      const j = state.last;
-      const statusIcon = j.status === 200 ? '✅' : j.status === 403 ? '⚠️' : '❌';
-      const pixelInfo = j.pixelCount > 1 ? ` (${j.pixelCount} píxeles)` : '';
-      const chargeInfo = j.availableCharges ? ` [${j.availableCharges} cargas]` : '';
-      $('#wpa-last').textContent = `${statusIcon} ${j.status} @ (${j.x},${j.y}) c${j.color}${pixelInfo}${chargeInfo}`;
+        <div class="wplace-buttons">
+          <button class="wplace-button start" id="start-btn">\u25B6\uFE0F Iniciar</button>
+          <button class="wplace-button stop" id="stop-btn" disabled>\u23F9\uFE0F Detener</button>
+          <button class="wplace-button calibrate" id="calibrate-btn">\u{1F3AF} Calibrar</button>
+        </div>
+      </div>
       
-      // Agregar información adicional si hay JSON de respuesta
-      if (j.json) {
-        const additionalInfo = j.json.painted > 0 ? ` ✓${j.json.painted}` : 
-                              j.json.message ? ` (${j.json.message})` : '';
-        $('#wpa-last').textContent += additionalInfo;
-      }
-    }
-    
-    // Actualizar información de health del backend
-    if (state.health) {
-      const backendEl = $('#wpa-backend-status');
-      const databaseEl = $('#wpa-database-status');
-      const uptimeEl = $('#wpa-uptime');
+      <!-- Configuraci\xF3n b\xE1sica -->
+      <div class="wplace-section">
+        <div class="wplace-section-title">\u2699\uFE0F Configuraci\xF3n</div>
+        
+        <div class="wplace-row">
+          <span class="wplace-label">Tema:</span>
+          <select class="wplace-select" id="theme-select">
+            <option value="random">\u{1F3B2} Aleatorio</option>
+            <option value="ukraine">\u{1F1FA}\u{1F1E6} Ucrania</option>
+            <option value="spain">\u{1F1EA}\u{1F1F8} Espa\xF1a</option>
+            <option value="catalonia">\u{1F3F4}\u{E0065}\u{E0073}\u{E0063}\u{E0074}\u{E007F} Catalu\xF1a</option>
+            <option value="usa">\u{1F1FA}\u{1F1F8} USA</option>
+            <option value="trans">\u{1F3F3}\uFE0F\u200D\u26A7\uFE0F Trans</option>
+            <option value="rainbow">\u{1F308} Arco\xEDris</option>
+            <option value="custom">\u{1F3A8} Personalizado</option>
+          </select>
+        </div>
+        
+        <div class="wplace-theme-preview" id="theme-preview"></div>
+        
+        <div class="wplace-row">
+          <span class="wplace-label">Delay (ms):</span>
+          <input type="number" class="wplace-input" id="delay-input" min="1000" max="300000" step="1000">
+        </div>
+        
+        <div class="wplace-row">
+          <span class="wplace-label">P\xEDxeles/lote:</span>
+          <input type="number" class="wplace-input" id="pixels-input" min="1" max="50">
+        </div>
+        
+        <div class="wplace-row">
+          <span class="wplace-label">Cargas m\xEDn:</span>
+          <input type="number" class="wplace-input" id="min-charges-input" min="0" max="50" step="0.1">
+        </div>
+      </div>
       
-      if (backendEl) {
-        if (state.health.status === 'online' && state.health.up) {
-          backendEl.textContent = '🟢 Online';
-          backendEl.style.color = cfg.THEME.success;
-        } else if (state.health.status === 'offline') {
-          backendEl.textContent = '🔴 Offline';
-          backendEl.style.color = cfg.THEME.error;
-        } else {
-          backendEl.textContent = '🟡 Error';
-          backendEl.style.color = '#ffaa00';
-        }
-      }
-      
-      if (databaseEl) {
-        databaseEl.textContent = state.health.database ? '🟢 OK' : '🔴 Error';
-        databaseEl.style.color = state.health.database ? cfg.THEME.success : cfg.THEME.error;
-      }
-      
-      if (uptimeEl) {
-        uptimeEl.textContent = state.health.uptime || '-';
-      }
-    }
-    
-    // Actualizar título del panel con el estado actual
-    const headerTitle = document.querySelector('.wpa-head div');
-    if (headerTitle && state.running) {
-      headerTitle.textContent = `WPlace Auto Paint [${state.painted} pixels]`;
-    } else if (headerTitle && !state.running) {
-      headerTitle.textContent = 'WPlace Auto Paint';
-    }
-    
-    // Actualizar estados de botones
-    updateButtonStates();
-    
-    // Mostrar información específica según el estado (sin referencias a tiempos de carga)
-    if (state.inCooldown && state.running) {
-      const remainingMs = state.cooldownEndTime - Date.now();
-      const remainingSec = Math.ceil(remainingMs / 1000);
-      const remainingMin = Math.floor(remainingSec / 60);
-      const remainingSecOnly = remainingSec % 60;
-      if (remainingMin > 0) {
-        setStatus(`⏳ Cooldown: ${remainingMin}m ${remainingSecOnly}s (esperando ${cfg.MIN_CHARGES} cargas)`, 'status');
-      } else {
-        setStatus(`⏳ Cooldown: ${remainingSec}s (esperando ${cfg.MIN_CHARGES} cargas)`, 'status');
-      }
-    } else if (completeCharges < cfg.MIN_CHARGES && state.running && !state.inCooldown) {
-      setStatus(`⚡ Cargas insuficientes: ${completeCharges}/${cfg.MIN_CHARGES} (iniciando cooldown...)`, 'status');
-    }
-  }
-
-  // ---------- helpers UI ----------
-  function $(sel){ return document.querySelector(sel); }
-
-  function dragHeader(headerEl, panelEl){
-    let dragging=false, sx=0, sy=0, ox=0, oy=0;
-    headerEl.addEventListener('mousedown',(e)=>{
-      dragging=true; sx=e.clientX; sy=e.clientY; const r=panelEl.getBoundingClientRect(); ox=r.left; oy=r.top;
-      e.preventDefault();
-    });
-    document.addEventListener('mouseup',()=> dragging=false);
-    document.addEventListener('mousemove',(e)=>{
-      if (!dragging) return;
-      const nx = ox + (e.clientX - sx);
-      const ny = oy + (e.clientY - sy);
-      panelEl.style.left = `${nx}px`;
-      panelEl.style.top  = `${ny}px`;
-      panelEl.style.right = 'auto';
-    });
-  }
-
-  // ---------- Exponer API por consola ----------
-  window.WPAUI = {
-    start(){ 
-      if (!state.running){ 
-        state.running=true; 
-        updateButtonStates();
-        setStatus('🚀 Empezando…'); 
-        loop(); 
-      }
-    },
-    stop(){ 
-      state.running=false; 
-      updateButtonStates();
-      setStatus('⏸️ Bot detenido'); 
-    },
-    once: paintOnce,
-    set(o={}){ Object.assign(cfg,o); saveCfg(); fillInputsFromCfg(); },
-    get: ()=>({ ...cfg }),
-    capture: enableCaptureOnce,
-    
-    // Nuevas funciones de utilidad
-    refreshCanvas: () => updateCanvasPixel(state.last?.x || 0, state.last?.y || 0, state.last?.color || 1),
-    verifyPixel: async (x, y) => {
-      try {
-        const tileX = Math.floor(x / cfg.TILE_SIZE) * cfg.TILE_SIZE;
-        const tileY = Math.floor(y / cfg.TILE_SIZE) * cfg.TILE_SIZE;
-        const response = await fetch(`https://backend.wplace.live/s0/tile/${tileX}/${tileY}`, {
-          credentials: 'include'
-        });
-        if (response.ok) {
-          const data = await response.json();
-          console.log(`Pixel en (${x},${y}):`, data);
-          return data;
-        }
-      } catch (err) {
-        console.error('Error verificando pixel:', err);
-      }
-      return null;
-    },
-    
-    getStats: () => ({
-      painted: state.painted,
-      last: state.last,
-      charges: state.charges,
-      user: state.user,
-      running: state.running,
-      minCharges: cfg.MIN_CHARGES,
-      delay: cfg.DELAY_MS,
-      tileInfo: {
-        tileX: cfg.TILE_X,
-        tileY: cfg.TILE_Y,
-        tileSize: cfg.TILE_SIZE,
-        safeMargin: Math.floor(cfg.TILE_SIZE * 0.05),
-        safeArea: {
-          minX: Math.floor(cfg.TILE_SIZE * 0.05),
-          maxX: cfg.TILE_SIZE - Math.floor(cfg.TILE_SIZE * 0.05) - 1,
-          minY: Math.floor(cfg.TILE_SIZE * 0.05),
-          maxY: cfg.TILE_SIZE - Math.floor(cfg.TILE_SIZE * 0.05) - 1
-        }
-      }
-    }),
-    
-    // Función para establecer píxeles por lote
-    setPixelsPerBatch: (count) => {
-      cfg.PIXELS_PER_BATCH = clamp(count, 1, 50);
-      saveCfg();
-      fillInputsFromCfg();
-      console.log(`Píxeles por lote establecido a: ${cfg.PIXELS_PER_BATCH}`);
-    },
-    
-    // Funciones para gestión de cargas
-    setMinCharges: (min) => {
-      cfg.MIN_CHARGES = clamp(min, 1, 50);
-      saveCfg();
-      fillInputsFromCfg();
-      console.log(`Mínimo de cargas establecido a: ${cfg.MIN_CHARGES}`);
-    },
-    
-    setDelay: (seconds) => {
-      const delaySec = clamp(seconds, 5, 300);
-      cfg.DELAY_MS = delaySec * 1000;
-      saveCfg();
-      fillInputsFromCfg();
-      console.log(`Delay establecido a: ${delaySec} segundos`);
-    },
-    
-    // Función de diagnóstico
-    diagnose: () => {
-      const isValidTile = Number.isFinite(cfg.TILE_X) && Number.isFinite(cfg.TILE_Y);
-      
-      console.log('🔍 DIAGNÓSTICO DEL BOT:');
-      console.log('─'.repeat(50));
-      console.log(`Coordenadas del tile: (${cfg.TILE_X}, ${cfg.TILE_Y})`);
-      console.log(`Tamaño del tile: ${cfg.TILE_SIZE}x${cfg.TILE_SIZE}`);
-      console.log(`¿Tile válido?: ${isValidTile ? '✅ SÍ' : '❌ NO'}`);
-      console.log(`¿Necesita calibración?: ${needsCalibration() ? '⚠️ SÍ' : '✅ NO'}`);
-      console.log(`Estado del bot: ${state.running ? '🟢 Ejecutando' : '🔴 Detenido'}`);
-      console.log(`Modo captura: ${state.captureMode ? '🎯 Activo' : '🚫 Inactivo'}`);
-      console.log(`Cargas disponibles: ${Math.floor(state.charges.count)}`);
-      console.log(`Píxeles por lote: ${cfg.PIXELS_PER_BATCH} (ajustable según cargas completas)`);
-      console.log(`Pixels pintados: ${state.painted}`);
-      if (state.last) {
-        const pixelInfo = state.last.pixelCount > 1 ? ` (lote de ${state.last.pixelCount})` : '';
-        const chargeInfo = state.last.availableCharges ? ` con ${state.last.availableCharges} cargas completas` : '';
-        console.log(`Último intento: ${state.last.status} @ tile(${cfg.TILE_X},${cfg.TILE_Y}) local(${state.last.x},${state.last.y}) color ${state.last.color}${pixelInfo}${chargeInfo}`);
-      }
-      
-      // Información de health del backend
-      if (state.health) {
-        console.log('🏥 ESTADO DEL BACKEND:');
-        console.log(`  Servidor: ${state.health.up ? '🟢 Online' : '🔴 Offline'}`);
-        console.log(`  Base de datos: ${state.health.database ? '🟢 OK' : '🔴 Error'}`);
-        console.log(`  Uptime: ${state.health.uptime}`);
-        if (state.health.lastCheck) {
-          const checkTime = new Date(state.health.lastCheck).toLocaleTimeString();
-          console.log(`  Última verificación: ${checkTime}`);
-        }
-      } else {
-        console.log('🏥 ESTADO DEL BACKEND: No verificado');
-      }
-      
-      console.log('─'.repeat(50));
-      
-      if (!isValidTile) {
-        console.log('🚨 ACCIÓN REQUERIDA: Las coordenadas del tile no son válidas.');
-        console.log('   Ejecuta: WPAUI.resetConfig() y luego pinta un pixel manualmente para calibrar.');
-      }
-      
-      return {
-        tileCoordinates: { x: cfg.TILE_X, y: cfg.TILE_Y },
-        tileSize: cfg.TILE_SIZE,
-        isValidTile,
-        needsCalibration: needsCalibration(),
-        botRunning: state.running,
-        captureMode: state.captureMode,
-        charges: state.charges,
-        painted: state.painted,
-        lastAttempt: state.last,
-        backendHealth: state.health
-      };
-    },
-    
-    // Función para verificar health del backend manualmente
-    checkHealth: async () => {
-      console.log('🔄 Verificando estado del backend...');
-      const health = await checkBackendHealth();
-      updateStats();
-      if (health) {
-        console.log('✅ Backend funcionando correctamente:', health);
-      } else {
-        console.log('❌ Problemas detectados en el backend');
-      }
-      return state.health;
-    },
-    
-    // Función para resetear configuración
-    resetConfig: () => {
-      resetToSafeDefaults();
-      cfg = loadCfg();
-      fillInputsFromCfg();
-      setStatus('🔄 Configuración reseteada. Pinta un pixel manualmente para recalibrar.', 'error');
-      enableCaptureOnce();
-      console.log('✅ Configuración reseteada a valores seguros');
-    },
-    
-    // Función para diagnosticar sistema de reintentos
-    debugRetries: () => {
-      console.log('🔄 SISTEMA DE REINTENTOS:');
-      console.log('─'.repeat(50));
-      console.log(`Reintentos actuales: ${state.retryCount}/5`);
-      console.log(`En cooldown: ${state.inCooldown ? '✅ SÍ' : '❌ NO'}`);
-      if (state.inCooldown && state.cooldownEndTime > Date.now()) {
-        const remainingMs = state.cooldownEndTime - Date.now();
-        const remainingMin = Math.floor(remainingMs / 60000);
-        const remainingSec = Math.floor((remainingMs % 60000) / 1000);
-        console.log(`Tiempo restante de cooldown: ${remainingMin}m ${remainingSec}s`);
-      }
-      console.log(`Última respuesta del servidor: ${state.last?.status || 'N/A'}`);
-      if (state.last?.json) {
-        console.log(`Respuesta JSON:`, state.last.json);
-      }
-      console.log('─'.repeat(50));
-      
-      // Consejos según el estado
-      if (state.retryCount > 0) {
-        console.log('💡 CONSEJOS:');
-        console.log('- El bot está reintentando automáticamente');
-        console.log('- Los delays son exponenciales: 3s, 6s, 12s, 24s');
-        console.log('- Después de 5 fallos hay cooldown de 3 minutos');
-      }
-      if (state.inCooldown) {
-        console.log('⏰ El bot está en cooldown de seguridad');
-        console.log('- Esto es normal después de errores consecutivos');
-        console.log('- Use WPAUI.checkHealth() para verificar el backend');
-      }
-      
-      return {
-        retryCount: state.retryCount,
-        inCooldown: state.inCooldown,
-        cooldownEndTime: state.cooldownEndTime,
-        lastStatus: state.last?.status,
-        lastResponse: state.last?.json
-      };
-    },
-    
-    // Función para forzar salir del cooldown (usar con cuidado)
-    forceClearCooldown: () => {
-      const wasCooldown = state.inCooldown;
-      state.inCooldown = false;
-      state.cooldownEndTime = 0;
-      state.retryCount = 0;
-      
-      if (wasCooldown) {
-        setStatus('🔓 Cooldown forzado a terminar por el usuario', 'success');
-        console.log('⚠️ Cooldown eliminado manualmente');
-        updateStats();
-      } else {
-        console.log('ℹ️ No había cooldown activo');
-      }
-      
-      return !wasCooldown;
-    },
-    
-    // Función para simular error (para testing)
-    simulateError: (statusCode = 500) => {
-      console.log(`🧪 Simulando error ${statusCode} para testing...`);
-      state.last = {
-        x: 0, y: 0, color: 1,
-        status: statusCode,
-        json: { error: 'Error simulado para testing' }
-      };
-      updateStats();
-      setStatus(`🧪 Error ${statusCode} simulado`, 'error');
-    }
-  };
-
-  // ---------- Arranque ----------
-  cfg = loadCfg(); // Inicializar configuración ahora que loadCfg() está definida
-  log('Bot iniciado con configuración:', cfg);
-  log('¿Necesita calibración?', needsCalibration());
-  
-  // Usar sistema de tiles - ya no hay zonas "peligrosas" globales
-  // Las coordenadas ahora son locales dentro de cada tile (0-2999)
-  
-  createUI();
-  
-  // Verificar health del backend y obtener sesión al inicializar
-  Promise.all([checkBackendHealth(), getSession()]).then(() => {
-    updateStats();
-    
-    // Verificar si necesita calibración al cargar
-    if (needsCalibration()) {
-      setTimeout(() => {
-        setStatus('🎯 Calibración requerida: pinta un pixel para detectar tile actual', 'error');
-        enableCaptureOnce(); // Activar captura automáticamente
-      }, 1000);
-    } else {
-      // Mostrar estado basado en health del backend
-      if (state.health?.up) {
-        setStatus(`✅ Bot listo para usar (Backend: ${state.health.uptime})`, 'success');
-      } else {
-        setStatus('⚠️ Bot listo, pero hay problemas con el backend', 'error');
-      }
-    }
-  }).catch(() => {
-    // Si falla la verificación inicial, continuar con la inicialización básica
-    getSession().then(() => {
-      updateStats();
-      if (needsCalibration()) {
-        setTimeout(() => {
-          setStatus('🎯 Calibración requerida: pinta un pixel para detectar tile actual', 'error');
-          enableCaptureOnce();
-        }, 1000);
-      } else {
-        setStatus('⚠️ Bot listo, pero no se pudo verificar el backend', 'error');
-      }
-    });
-  });
-})();
+      <!-- Configuraci\xF3n avanzada (colapsable) -->
+      <div class="wplace-section">
+        <div class="wplace-section-title" style="cursor: pointer;" id="advanced-toggle">
+          \u{1F527} Avanzado <span id="advanced-arrow">\u25B6</span>
+        </div>
+        
+        <div class="wplace-advanced" id="advanced-section" style="display: none;">
+          <div class="wplace-row">
+            <span class="wplace-label">Tile X:</span>
+            <input type="number" class="wplace-input" id="tile-x-input">
+          </div>
+          
+          <div class="wplace-row">
+            <span class="wplace-label">Tile Y:</span>
+            <input type="number" class="wplace-input" id="tile-y-input">
+          </div>
+          
+          <div class="wplace-row">
+            <span class="wplace-label">Paleta personalizada:</span>
+          </div>
+          <div class="wplace-row">
+            <input type="text" class="wplace-input" id="custom-palette-input" 
+                   placeholder="ej: #FF0000,#00FF00,#0000FF" style="width: 100%;">
+          </div>
+          
+          <div class="wplace-buttons">
+            <button class="wplace-button" id="save-btn">\u{1F4BE} Guardar</button>
+            <button class="wplace-button" id="load-btn">\u{1F4C1} Cargar</button>
+            <button class="wplace-button" id="reset-btn">\u{1F504} Reset</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,n.appendChild(c),document.body.appendChild(s);let r={minimizeBtn:n.getElementById("minimize-btn")||n.querySelector(".wplace-minimize"),content:n.querySelector(".wplace-content"),status:n.getElementById("status"),paintedCount:n.getElementById("painted-count"),chargesCount:n.getElementById("charges-count"),startBtn:n.getElementById("start-btn"),stopBtn:n.getElementById("stop-btn"),calibrateBtn:n.getElementById("calibrate-btn"),themeSelect:n.getElementById("theme-select"),themePreview:n.getElementById("theme-preview"),delayInput:n.getElementById("delay-input"),pixelsInput:n.getElementById("pixels-input"),minChargesInput:n.getElementById("min-charges-input"),advancedToggle:n.getElementById("advanced-toggle"),advancedSection:n.getElementById("advanced-section"),advancedArrow:n.getElementById("advanced-arrow"),tileXInput:n.getElementById("tile-x-input"),tileYInput:n.getElementById("tile-y-input"),customPaletteInput:n.getElementById("custom-palette-input"),saveBtn:n.getElementById("save-btn"),loadBtn:n.getElementById("load-btn"),resetBtn:n.getElementById("reset-btn")};function p(){let m=r.themeSelect.value,h=r.themePreview;h.innerHTML="";let f=[];switch(m){case"ukraine":f=["#0057B7","#FFD700"];break;case"spain":f=["#AA151B","#F1BF00","#AA151B"];break;case"catalonia":f=["#FCDD09","#DA020E","#FCDD09","#DA020E"];break;case"usa":f=["#B22234","#FFFFFF","#3C3B6E"];break;case"trans":f=["#5BCEFA","#F5A9B8","#FFFFFF","#F5A9B8","#5BCEFA"];break;case"rainbow":f=["#FF0000","#FF7F00","#FFFF00","#00FF00","#0000FF","#4B0082","#9400D3"];break;case"custom":let F=r.customPaletteInput.value;f=F?F.split(",").map(I=>I.trim()):["#CCCCCC"];break;default:f=["#FF0000","#00FF00","#0000FF","#FFFF00","#FF00FF","#00FFFF"]}f.forEach(F=>{let I=document.createElement("div");I.className="wplace-color-dot",I.style.backgroundColor=F,I.title=F,h.appendChild(I)})}function x(){r.themeSelect.value=e.THEME,r.delayInput.value=e.DELAY_MS,r.pixelsInput.value=e.PIXELS_PER_BATCH,r.minChargesInput.value=e.MIN_CHARGES,r.tileXInput.value=e.TILE_X||"",r.tileYInput.value=e.TILE_Y||"",r.customPaletteInput.value=e.CUSTOM_PALETTE.join(","),p()}function v(){if(e.THEME=r.themeSelect.value,e.DELAY_MS=parseInt(r.delayInput.value)||b.DELAY_MS,e.PIXELS_PER_BATCH=parseInt(r.pixelsInput.value)||b.PIXELS_PER_BATCH,e.MIN_CHARGES=parseFloat(r.minChargesInput.value)||b.MIN_CHARGES,e.TILE_X=parseInt(r.tileXInput.value)||e.TILE_X,e.TILE_Y=parseInt(r.tileYInput.value)||e.TILE_Y,e.THEME==="custom"){let m=r.customPaletteInput.value;e.CUSTOM_PALETTE=m?m.split(",").map(h=>h.trim()):b.CUSTOM_PALETTE}}(C=r.minimizeBtn)==null||C.addEventListener("click",()=>{i.minimized=!i.minimized,r.content.classList.toggle("minimized",i.minimized),r.minimizeBtn.textContent=i.minimized?"+":"\u2212"}),(T=r.startBtn)==null||T.addEventListener("click",()=>{v(),o(),r.startBtn.disabled=!0,r.stopBtn.disabled=!1}),(w=r.stopBtn)==null||w.addEventListener("click",()=>{a(),r.startBtn.disabled=!1,r.stopBtn.disabled=!0}),(y=r.calibrateBtn)==null||y.addEventListener("click",()=>{t()}),(E=r.themeSelect)==null||E.addEventListener("change",()=>{p(),v()}),(M=r.customPaletteInput)==null||M.addEventListener("input",()=>{r.themeSelect.value==="custom"&&(p(),v())}),($=r.advancedToggle)==null||$.addEventListener("click",()=>{i.showAdvanced=!i.showAdvanced,r.advancedSection.style.display=i.showAdvanced?"block":"none",r.advancedArrow.textContent=i.showAdvanced?"\u25BC":"\u25B6"}),["delayInput","pixelsInput","minChargesInput","tileXInput","tileYInput"].forEach(m=>{var h;(h=r[m])==null||h.addEventListener("change",v)}),(B=r.saveBtn)==null||B.addEventListener("click",()=>{v(),_(e),l("\u{1F4BE} Configuraci\xF3n guardada","success")}),(D=r.loadBtn)==null||D.addEventListener("click",()=>{let m=k(b);Object.assign(e,m),x(),l("\u{1F4C1} Configuraci\xF3n cargada","success")}),(Y=r.resetBtn)==null||Y.addEventListener("click",()=>{R(),Object.assign(e,b),x(),l("\u{1F504} Configuraci\xF3n reiniciada","success")});function l(m,h="status"){r.status&&(r.status.textContent=m,r.status.className=`wplace-status ${h}`,d(`Status: ${m}`))}function L(m,h){r.paintedCount&&(r.paintedCount.textContent=m||0),r.chargesCount&&(r.chargesCount.textContent=typeof h=="number"?h.toFixed(1):"0")}function S(){c.style.boxShadow="0 0 20px #48bb78",setTimeout(()=>{c.style.boxShadow="0 10px 25px rgba(0,0,0,0.3)"},200)}return x(),{setStatus:l,updateStats:L,flashEffect:S,destroy:()=>{document.body.removeChild(s)},updateConfig:x,getElement:()=>s}}async function z(e){try{d("\u{1F3AF} Iniciando auto-calibraci\xF3n del tile...");let o=new URLSearchParams(window.location.search),a=window.location.hash,t,s;if(o.has("x")&&o.has("y")&&(t=parseInt(o.get("x")),s=parseInt(o.get("y"))),!t&&!s&&a){let n=a.match(/#(-?\d+),(-?\d+)/);n&&(t=parseInt(n[1]),s=parseInt(n[2]))}if(!t&&!s){let n=document.querySelectorAll("[data-x], [data-y], .coordinates, .position");for(let u of n){let c=u.getAttribute("data-x")||u.getAttribute("x"),i=u.getAttribute("data-y")||u.getAttribute("y");if(c&&i){t=parseInt(c),s=parseInt(i);break}}}if(!t&&!s){let u=(document.body.textContent||"").match(/(?:tile|pos|position)?\s*[(\[]?\s*(-?\d+)\s*[,;]\s*(-?\d+)\s*[)\]]?/i);u&&(t=parseInt(u[1]),s=parseInt(u[2]))}return(!Number.isFinite(t)||!Number.isFinite(s))&&(t=0,s=0,d("\u26A0\uFE0F No se pudieron detectar coordenadas autom\xE1ticamente, usando (0,0)")),(Math.abs(t)>1e6||Math.abs(s)>1e6)&&(d("\u26A0\uFE0F Coordenadas detectadas parecen incorrectas, limitando a rango v\xE1lido"),t=Math.max(-1e6,Math.min(1e6,t)),s=Math.max(-1e6,Math.min(1e6,s))),e.TILE_X=t,e.TILE_Y=s,d(`\u2705 Tile calibrado autom\xE1ticamente: (${t}, ${s})`),_(e),{tileX:t,tileY:s,success:!0}}catch(o){return d("\u274C Error en auto-calibraci\xF3n:",o),{tileX:0,tileY:0,success:!1,error:o.message}}}var U=!1;async function Z(){if(!(U||window.turnstile))return new Promise((e,o)=>{let a=document.createElement("script");a.src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",a.async=!0,a.defer=!0,a.onload=()=>{U=!0,e()},a.onerror=()=>o(new Error("No se pudo cargar Turnstile")),document.head.appendChild(a)})}async function Q(e,o="paint"){var a;if(await Z(),typeof((a=window.turnstile)==null?void 0:a.execute)=="function")try{let t=await window.turnstile.execute(e,{action:o});if(t&&t.length>20)return t}catch{}return await new Promise(t=>{let s=document.createElement("div");s.style.position="fixed",s.style.left="-9999px",document.body.appendChild(s),window.turnstile.render(s,{sitekey:e,callback:n=>{document.body.removeChild(s),t(n)}})})}async function W(e){return Q(e,"paint")}var P=e=>new Promise(o=>setTimeout(o,e));var q=e=>Math.floor(Math.random()*e);async function A(e,o){let t=Date.now()+e;for(;Date.now()<t;){let s=t-Date.now();o&&o(s),await P(Math.min(1e3,s))}}function ee(e){let o=Math.floor(e.TILE_SIZE*.05),a=e.TILE_SIZE-o*2;if(a<=0)return d("Error: \xE1rea segura inv\xE1lida, usando coordenadas b\xE1sicas"),[Math.floor(Math.random()*e.TILE_SIZE),Math.floor(Math.random()*e.TILE_SIZE)];let t=o+Math.floor(Math.random()*a),s=o+Math.floor(Math.random()*a);return Math.random()<.1&&d(`Coordenadas locales generadas: (${t},${s}) en \xE1rea segura [${o}-${o+a-1}]`),[t,s]}function J(e,o){let a=[];for(let t=0;t<e;t++)a.push(ee(o));return a}function V(e,o){let a=[];for(let t=0;t<e;t++)a.push(te(o));return a}function te(e){return e.COLOR_MODE==="fixed"?e.COLOR_FIXED:e.COLOR_MIN+q(e.COLOR_MAX-e.COLOR_MIN+1)}async function ae(e,o,a){try{let t=document.querySelectorAll("canvas");for(let s of t){let n=s.getContext("2d");if(n){let u=typeof a=="number"?`#${a.toString(16).padStart(6,"0")}`:a;n.fillStyle=u,n.fillRect(e,o,1,1),s.dispatchEvent(new Event("pixel-updated"))}}}catch(t){d("Error actualizando canvas:",t)}}async function ne(e,o){try{let a=`[data-tile="${e}-${o}"], .tile-${e}-${o}, [data-tile-x="${e}"][data-tile-y="${o}"]`,t=document.querySelector(a);t?(t.classList.add("tile-updating"),setTimeout(()=>{t.classList.remove("tile-updating"),t.classList.add("tile-updated"),setTimeout(()=>t.classList.remove("tile-updated"),1e3)},100),d(`Tile (${e},${o}) actualizado visualmente`)):(document.querySelectorAll("canvas").forEach(n=>{let u=n.getContext("2d");if(u){let c=u.getImageData(0,0,1,1);u.putImageData(c,0,0)}}),d(`Actualizaci\xF3n visual gen\xE9rica realizada para tile (${e},${o})`))}catch(a){d("Error en actualizaci\xF3n visual del tile:",a)}}async function oe(e,o,a,t,s){var L,S,C,T;if(!Number.isFinite(e.TILE_X)||!Number.isFinite(e.TILE_Y))return a(`\u{1F6AB} Coordenadas del tile inv\xE1lidas (${e.TILE_X},${e.TILE_Y}). Calibra primero`,"error"),d("Pintado cancelado: coordenadas del tile inv\xE1lidas"),!1;let n=Math.floor(o.charges.count);if(n<1)return a("\u{1F50B} Sin cargas disponibles. Esperando...","error"),!1;let u=Math.min(n,e.PIXELS_PER_BATCH,50),c=Math.max(1,u);c<e.PIXELS_PER_BATCH&&d(`Ajustando p\xEDxeles por cargas completas disponibles: ${c}/${e.PIXELS_PER_BATCH} (${n} cargas completas de ${o.charges.count.toFixed(2)} totales)`);let i=J(c,e),r=V(c,e),p=i[0],x=i[1];a(`\u{1F3A8} Pintando ${c} p\xEDxeles (${n} cargas completas) en tile(${e.TILE_X},${e.TILE_Y}) local(${p},${x})...`,"status");let v=await W(e.SITEKEY),l=await j(i,r,v);if(o.last={x:p,y:x,color:r[0],pixelCount:c,availableCharges:n,status:l.status,json:l.json},l.status===200&&l.json&&(l.json.painted>0||l.json.painted===c)){let w=l.json.painted||c;o.painted+=w,o.retryCount=0;for(let E=0;E<i.length;E+=2){let M=i[E],$=i[E+1],B=r[Math.floor(E/2)];await ae(M,$,B)}await ne(e.TILE_X,e.TILE_Y),await s(),a(`\u2705 Lote pintado: ${w}/${c} p\xEDxeles (${n} cargas usadas)`,"success"),t();let y=new CustomEvent("wplace-batch-painted",{detail:{firstX:p,firstY:x,pixelCount:w,totalPixels:c,colors:r,coords:i,tileX:e.TILE_X,tileY:e.TILE_Y,timestamp:Date.now()}});return window.dispatchEvent(y),!0}if(l.status===403)a("\u26A0\uFE0F 403 (token expirado o Cloudflare). Reintentar\xE1...","error");else if(l.status===401)a("\u{1F512} 401 (no autorizado). Verifica tu sesi\xF3n.","error");else if(l.status===429)a("\u23F3 429 (l\xEDmite de tasa). Esperando...","error");else if(l.status===408)a("\u23F0 Timeout del servidor. Coordenadas problem\xE1ticas o servidor sobrecargado","error");else if(l.status===0)a("\u{1F310} Error de red. Verificando conectividad...","error");else if(l.status===500)a("\u{1F525} 500 (error interno del servidor). Reintentar\xE1...","error");else if(l.status===502||l.status===503||l.status===504)a(`\u{1F6AB} ${l.status} (servidor no disponible). Reintentar\xE1...`,"error");else if(l.status===404)a(`\u{1F5FA}\uFE0F 404 (tile no encontrado). Verificando coordenadas tile(${e.TILE_X},${e.TILE_Y})`,"error");else try{let w=await checkBackendHealth(),y=w!=null&&w.up?"\u{1F7E2} Online":"\u{1F534} Offline";a(`\u274C Error ${l.status}: ${((L=l.json)==null?void 0:L.message)||((S=l.json)==null?void 0:S.error)||"Fallo al pintar"} (Backend: ${y})`,"error")}catch{a(`\u274C Error ${l.status}: ${((C=l.json)==null?void 0:C.message)||((T=l.json)==null?void 0:T.error)||"Fallo al pintar"} (Health check fall\xF3)`,"error")}return d(`Fallo en pintado: status=${l.status}, json=`,l.json,"coords=",i,"colors=",r),!1}async function re(e,o,a,t,s,n){for(let i=1;i<=5;i++)try{if(await oe(e,o,a,t,s))return o.retryCount=0,!0;if(o.retryCount=i,i<5){let p=3e3*Math.pow(2,i-1);a(`\u{1F504} Reintento ${i}/5 en ${p/1e3}s...`,"error"),await P(p)}}catch(r){if(d(`Error en intento ${i}:`,r),o.retryCount=i,i<5){let p=3e3*Math.pow(2,i-1);a(`\u{1F4A5} Error en intento ${i}/5, reintentando en ${p/1e3}s...`,"error"),await P(p)}}return o.retryCount=5,a("\u274C Fall\xF3 despu\xE9s de 5 intentos. Se requiere intervenci\xF3n manual.","error"),!1}async function K(e,o,a,t,s,n,u){for(d("\u{1F680} Loop iniciado"),o.running=!0;o.running;)try{if(await u(),o.charges.count<e.MIN_CHARGES){let i=Math.max(0,(e.MIN_CHARGES-o.charges.count)*e.CHARGE_REGEN_MS);a(`\u23F3 Esperando cargas: ${o.charges.count.toFixed(1)}/${e.MIN_CHARGES} (${Math.round(i/1e3)}s)`,"status"),await A(Math.min(i,e.DELAY_MS),r=>{let p=e.MIN_CHARGES-o.charges.count;a(`\u23F3 Esperando cargas: ${o.charges.count.toFixed(1)}/${e.MIN_CHARGES} (~${Math.round(r/1e3)}s)`,"status")});continue}if(!await re(e,o,a,t,s,n)){a("\u{1F634} Esperando antes del siguiente intento...","error"),await A(e.DELAY_MS*2,i=>{a(`\u{1F634} Cooldown extendido: ${Math.round(i/1e3)}s`,"error")});continue}o.running&&await A(e.DELAY_MS,i=>{a(`\u{1F4A4} Esperando ${Math.round(i/1e3)}s hasta siguiente pintada...`,"status")})}catch(c){d("Error cr\xEDtico en loop:",c),a(`\u{1F4A5} Error cr\xEDtico: ${c.message}`,"error"),o.running&&await A(e.DELAY_MS*3,i=>{a(`\u{1F6A8} Recuper\xE1ndose de error cr\xEDtico: ${Math.round(i/1e3)}s`,"error")})}d("\u23F9\uFE0F Loop detenido"),a("\u23F9\uFE0F Bot detenido","status")}(async function(){"use strict";var s;if((s=window.__wplaceBot)!=null&&s.running){alert("WPlace BOT ya est\xE1 corriendo.");return}window.__wplaceBot={running:!0},d("\u{1F680} Iniciando WPlace Farm Bot (versi\xF3n modular)");let e={...b,...k(b)};if(!e.SITEKEY){let n=document.querySelector("*[data-sitekey]");n?(e.SITEKEY=n.getAttribute("data-sitekey"),d(`\u{1F4DD} Sitekey encontrada autom\xE1ticamente: ${e.SITEKEY.substring(0,20)}...`),_(e)):d("\u26A0\uFE0F No se pudo encontrar la sitekey autom\xE1ticamente")}async function o(){try{let n=await X();return n.success&&n.data?(g.charges.count=n.data.charges||0,g.charges.max=n.data.maxCharges||50,g.charges.regen=n.data.chargeRegen||3e4,e.CHARGE_REGEN_MS=g.charges.regen,t.updateStats(g.painted,g.charges.count),!0):!1}catch(n){return d("Error actualizando estad\xEDsticas:",n),!1}}async function a(){try{return await H()}catch(n){return d("Error verificando health:",n),{up:!1,error:n.message}}}let t=G(e,async()=>{if(g.running){t.setStatus("\u26A0\uFE0F El bot ya est\xE1 ejecut\xE1ndose","error");return}if(N(e,b)){t.setStatus("\u{1F3AF} Calibrando autom\xE1ticamente...","status");let c=await z(e);if(c.success)t.setStatus(`\u2705 Calibrado: tile(${c.tileX},${c.tileY})`,"success"),t.updateConfig();else{t.setStatus("\u274C Error en calibraci\xF3n. Configura manualmente.","error");return}}if(t.setStatus("\u{1F50D} Verificando conectividad...","status"),!(await a()).up){t.setStatus("\u{1F534} Backend no disponible. Verifica tu conexi\xF3n.","error");return}if(t.setStatus("\u{1F504} Obteniendo informaci\xF3n de sesi\xF3n...","status"),!await o()){t.setStatus("\u274C Error obteniendo sesi\xF3n. Verifica tu login.","error");return}t.setStatus("\u{1F680} Iniciando bot...","status"),K(e,g,t.setStatus,t.flashEffect,o,a,o)},()=>{g.running=!1,window.__wplaceBot.running=!1,t.setStatus("\u23F9\uFE0F Deteniendo bot...","status")},async()=>{t.setStatus("\u{1F3AF} Calibrando posici\xF3n...","status");let n=await z(e);n.success?(t.setStatus(`\u2705 Calibrado: tile(${n.tileX},${n.tileY})`,"success"),t.updateConfig()):t.setStatus(`\u274C Error en calibraci\xF3n: ${n.error||"Desconocido"}`,"error")});await o(),window.addEventListener("wplace-batch-painted",n=>{d(`\u{1F3A8} Lote pintado: ${n.detail.pixelCount} p\xEDxeles en tile(${n.detail.tileX},${n.detail.tileY})`)}),window.addEventListener("beforeunload",()=>{g.running=!1,window.__wplaceBot.running=!1,t.destroy()}),d("\u2705 Farm Bot inicializado correctamente")})().catch(e=>{console.error("[BOT] Error en Auto-Farm:",e),window.__wplaceBot.running=!1,alert("Auto-Farm: error inesperado. Revisa consola.")});})();

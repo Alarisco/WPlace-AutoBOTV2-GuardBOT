@@ -8,3 +8,21 @@ export async function retry(fn, { tries = 3, base = 500 } = {}) {
   }
   throw last;
 }
+
+export const randInt = (n) => Math.floor(Math.random() * n);
+
+// Sleep with countdown (from farm)
+export async function sleepWithCountdown(ms, onUpdate) {
+  const startTime = Date.now();
+  const endTime = startTime + ms;
+  
+  while (Date.now() < endTime) {
+    const remaining = endTime - Date.now();
+    
+    if (onUpdate) {
+      onUpdate(remaining);
+    }
+    
+    await sleep(Math.min(1000, remaining));
+  }
+}

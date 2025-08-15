@@ -6,7 +6,7 @@ const dev = args.has("--dev");
 const watch = args.has("--watch");
 
 // Por ahora, usar archivos originales hasta completar la migración
-const useOriginals = true;
+const useOriginals = false; // ✅ Migración del farm completada
 
 if (useOriginals) {
   console.log("🔄 Usando archivos originales temporalmente...");

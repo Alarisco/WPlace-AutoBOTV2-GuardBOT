@@ -1,2093 +1,393 @@
-(async () => {
-  const CONFIG = {
-    SITEKEY: '0x4AAAAAABpqJe8FO0N84q0F', // Turnstile sitekey
-    COOLDOWN_DEFAULT: 31000,
-    TRANSPARENCY_THRESHOLD: 100,
-    WHITE_THRESHOLD: 250,
-    LOG_INTERVAL: 10,
-    TILE_SIZE: 3000, // Tiles son de ~3000x3000 según investigación
-    PIXELS_PER_BATCH: 20, // Píxeles por lote por defecto
-    CHARGE_REGEN_MS: 30000, // 30 segundos por carga
-    THEME: {
-      primary: '#000000',
-      secondary: '#111111',
-      accent: '#222222',
-      text: '#ffffff',
-      highlight: '#775ce3',
-      success: '#00ff00',
-      error: '#ff0000',
-      warning: '#ffaa00'
+/* WPlace AutoBOT — uso bajo tu responsabilidad. Compilado 2025-08-15T09:16:59.339Z */
+(()=>{var d=(...l)=>console.log("[WPA-UI]",...l);var b={SITEKEY:"0x4AAAAAABpqJe8FO0N84q0F",COOLDOWN_DEFAULT:31e3,TRANSPARENCY_THRESHOLD:100,WHITE_THRESHOLD:250,LOG_INTERVAL:10,TILE_SIZE:3e3,PIXELS_PER_BATCH:20,CHARGE_REGEN_MS:3e4,THEME:{primary:"#000000",secondary:"#111111",accent:"#222222",text:"#ffffff",highlight:"#775ce3",success:"#00ff00",error:"#ff0000",warning:"#ffaa00"}},g={es:{title:"WPlace Auto-Image",initBot:"Iniciar Auto-BOT",uploadImage:"Subir Imagen",resizeImage:"Redimensionar Imagen",selectPosition:"Seleccionar Posici\xF3n",startPainting:"Iniciar Pintura",stopPainting:"Detener Pintura",saveProgress:"Guardar Progreso",loadProgress:"Cargar Progreso",checkingColors:"\u{1F50D} Verificando colores disponibles...",noColorsFound:"\u274C \xA1Abre la paleta de colores en el sitio e int\xE9ntalo de nuevo!",colorsFound:"\u2705 {count} colores disponibles encontrados",loadingImage:"\u{1F5BC}\uFE0F Cargando imagen...",imageLoaded:"\u2705 Imagen cargada con {count} p\xEDxeles v\xE1lidos",imageError:"\u274C Error al cargar la imagen",selectPositionAlert:"\xA1Pinta el primer p\xEDxel en la ubicaci\xF3n donde quieres que comience el arte!",waitingPosition:"\u{1F446} Esperando que pintes el p\xEDxel de referencia...",positionSet:"\u2705 \xA1Posici\xF3n establecida con \xE9xito!",positionTimeout:"\u274C Tiempo agotado para seleccionar posici\xF3n",startPaintingMsg:"\u{1F3A8} Iniciando pintura...",paintingProgress:"\u{1F9F1} Progreso: {painted}/{total} p\xEDxeles...",noCharges:"\u231B Sin cargas. Esperando {time}...",paintingStopped:"\u23F9\uFE0F Pintura detenida por el usuario",paintingComplete:"\u2705 \xA1Pintura completada! {count} p\xEDxeles pintados.",paintingError:"\u274C Error durante la pintura",missingRequirements:"\u274C Carga una imagen y selecciona una posici\xF3n primero",progress:"Progreso",pixels:"P\xEDxeles",charges:"Cargas",estimatedTime:"Tiempo estimado",initMessage:"Haz clic en 'Iniciar Auto-BOT' para comenzar",waitingInit:"Esperando inicializaci\xF3n...",resizeSuccess:"\u2705 Imagen redimensionada a {width}x{height}",paintingPaused:"\u23F8\uFE0F Pintura pausada en la posici\xF3n X: {x}, Y: {y}",pixelsPerBatch:"P\xEDxeles por lote",cooldownWaiting:"\u23F3 Esperando {time} para continuar...",progressSaved:"\u2705 Progreso guardado como {filename}",progressLoaded:"\u2705 Progreso cargado: {painted}/{total} p\xEDxeles pintados",progressLoadError:"\u274C Error al cargar progreso: {error}",progressSaveError:"\u274C Error al guardar progreso: {error}",confirmSaveProgress:"\xBFDeseas guardar el progreso actual antes de detener?",saveProgressTitle:"Guardar Progreso",discardProgress:"Descartar",cancel:"Cancelar",minimize:"Minimizar"}},e={running:!1,imageLoaded:!1,processing:!1,totalPixels:0,paintedPixels:0,availableColors:[],currentCharges:0,cooldown:b.COOLDOWN_DEFAULT,imageData:null,stopFlag:!1,colorsChecked:!1,startPosition:null,selectingPosition:!1,region:null,minimized:!1,lastPosition:{x:0,y:0},estimatedTime:0,language:"es",tileX:null,tileY:null,pixelsPerBatch:b.PIXELS_PER_BATCH,inCooldown:!1,cooldownEndTime:0,remainingPixels:[],lastChargeUpdate:0,chargeDecimalPart:0,originalImageName:null};var y=class{constructor(s){this.imageSrc=s,this.img=new window.Image,this.canvas=document.createElement("canvas"),this.ctx=this.canvas.getContext("2d",{willReadFrequently:!0}),this.previewCanvas=document.createElement("canvas"),this.previewCtx=this.previewCanvas.getContext("2d")}async load(){return new Promise((s,t)=>{this.img.onload=()=>{this.canvas.width=this.img.width,this.canvas.height=this.img.height,this.ctx.drawImage(this.img,0,0),s()},this.img.onerror=t,this.img.src=this.imageSrc})}getPixelData(){return this.ctx.getImageData(0,0,this.canvas.width,this.canvas.height).data}getDimensions(){return{width:this.canvas.width,height:this.canvas.height}}resize(s,t){let n=document.createElement("canvas");return n.width=s,n.height=t,n.getContext("2d").drawImage(this.img,0,0,s,t),this.canvas.width=s,this.canvas.height=t,this.ctx.drawImage(n,0,0),this.getPixelData()}generatePreview(s,t){return this.previewCanvas.width=s,this.previewCanvas.height=t,this.previewCtx.imageSmoothingEnabled=!1,this.previewCtx.drawImage(this.img,0,0,s,t),this.previewCanvas.toDataURL()}getImageData(){let{width:s,height:t}=this.getDimensions(),n=this.getPixelData();return{width:s,height:t,pixels:n,originalName:this.originalName||"image.png"}}processImage(s,t){let{width:n,height:a}=this.getDimensions(),o=this.getPixelData(),r=[],c=0;for(let p=0;p<a;p++)for(let i=0;i<n;i++){let u=(p*n+i)*4,m=o[u],f=o[u+1],x=o[u+2],h=o[u+3];if(h<t.TRANSPARENCY_THRESHOLD||m>t.WHITE_THRESHOLD&&f>t.WHITE_THRESHOLD&&x>t.WHITE_THRESHOLD)continue;let w=this.findClosestColor({r:m,g:f,b:x},s);w&&(r.push({x:i,y:p,originalColor:{r:m,g:f,b:x,alpha:h},targetColor:w}),c++)}return{width:n,height:a,pixels:r,validPixelCount:c,originalName:this.originalName||"image.png"}}findClosestColor(s,t){if(!t||t.length===0)return null;let n=null,a=1/0;for(let o of t){let r=Math.sqrt(Math.pow(s.r-o.r,2)+Math.pow(s.g-o.g,2)+Math.pow(s.b-o.b,2));r<a&&(a=r,n=o)}return n}};function C(){let l=[],s=document.querySelectorAll(".color-option, .palette-color, [data-color]");for(let t of s){let n=t.getAttribute("data-color")||t.style.backgroundColor||window.getComputedStyle(t).backgroundColor;if(n){let a=N(n);a&&l.push({id:t.getAttribute("data-id")||l.length,element:t,...a})}}return l}function N(l){if(l.startsWith("#")){let s=l.slice(1);if(s.length===6)return{r:parseInt(s.slice(0,2),16),g:parseInt(s.slice(2,4),16),b:parseInt(s.slice(4,6),16)}}if(l.startsWith("rgb")){let s=l.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);if(s)return{r:parseInt(s[1]),g:parseInt(s[2]),b:parseInt(s[3])}}return null}var v=l=>new Promise(s=>setTimeout(s,l));var q="https://backend.wplace.live";async function I(l,s,t){try{let n=await fetch(`${q}/s0/paint`,{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({coords:l,colors:s,t})}),a=await n.json().catch(()=>({}));return{status:n.status,json:a,success:n.ok}}catch(n){return{status:0,json:{error:n.message},success:!1}}}var T=!1;async function O(){if(!(T||window.turnstile))return new Promise((l,s)=>{let t=document.createElement("script");t.src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",t.async=!0,t.defer=!0,t.onload=()=>{T=!0,l()},t.onerror=()=>s(new Error("No se pudo cargar Turnstile")),document.head.appendChild(t)})}async function j(l,s="paint"){var t;if(await O(),typeof((t=window.turnstile)==null?void 0:t.execute)=="function")try{let n=await window.turnstile.execute(l,{action:s});if(n&&n.length>20)return n}catch{}return await new Promise(n=>{let a=document.createElement("div");a.style.position="fixed",a.style.left="-9999px",document.body.appendChild(a),window.turnstile.render(a,{sitekey:l,callback:o=>{document.body.removeChild(a),n(o)}})})}async function k(l){return j(l,"paint")}async function L(l,s,t,n,a){let{width:o,height:r}=l,{x:c,y:p}=s;d(`Iniciando pintado: imagen(${o}x${r}) inicio LOCAL(${c},${p}) tile(${e.tileX},${e.tileY})`),(!e.remainingPixels||e.remainingPixels.length===0||e.lastPosition.x===0&&e.lastPosition.y===0)&&(d("Generando cola de p\xEDxeles..."),e.remainingPixels=H(l,s,e.tileX,e.tileY),(e.lastPosition.x>0||e.lastPosition.y>0)&&(e.remainingPixels=e.remainingPixels.filter(i=>{let u=i.imageY*o+i.imageX,m=e.lastPosition.y*o+e.lastPosition.x;return u>=m})),d(`Cola generada: ${e.remainingPixels.length} p\xEDxeles pendientes`));try{for(;e.remainingPixels.length>0&&!e.stopFlag;){let i=Math.floor(e.currentCharges),u=Math.min(e.pixelsPerBatch,e.remainingPixels.length);if(i<u){d(`Cargas insuficientes: ${i}/${u} necesarias`),await F(u-i,t);continue}let m=e.remainingPixels.splice(0,u);d(`Pintando lote de ${m.length} p\xEDxeles...`);let f=await X(m);if(f.success&&f.painted>0){if(e.paintedPixels+=f.painted,m.length>0){let x=m[m.length-1];e.lastPosition={x:x.imageX,y:x.imageY}}d(`Lote exitoso: ${f.painted}/${m.length} p\xEDxeles pintados. Total: ${e.paintedPixels}/${e.totalPixels}`),t&&t(e.paintedPixels,e.totalPixels)}else e.remainingPixels.unshift(...m),d("Lote fall\xF3: reintentando en 5 segundos..."),await v(5e3);await v(500)}e.stopFlag?(d(`Pintado pausado en p\xEDxel imagen(${e.lastPosition.x},${e.lastPosition.y})`),n&&n(!1,e.paintedPixels)):(d(`Pintado completado: ${e.paintedPixels} p\xEDxeles pintados`),e.lastPosition={x:0,y:0},e.remainingPixels=[],n&&n(!0,e.paintedPixels))}catch(i){d("Error en proceso de pintado:",i),a&&a(i)}}async function X(l){var s;try{if(!l||l.length===0)return{success:!1,painted:0,error:"Lote vac\xEDo"};let t=[],n=[];for(let r of l)t.push(r.localX,r.localY),n.push(r.color.id||r.color.value||1);let a=await k(b.SITEKEY),o=await I(t,n,a);return o.status===200&&o.json?{success:!0,painted:o.json.painted||l.length,response:o.json}:{success:!1,painted:0,error:((s=o.json)==null?void 0:s.message)||`HTTP ${o.status}`,status:o.status}}catch(t){return d("Error en paintPixelBatch:",t),{success:!1,painted:0,error:t.message}}}async function F(l,s){let t=b.CHARGE_REGEN_MS*l,n=Math.min(t,6e4);d(`Esperando ${Math.round(n/1e3)}s para obtener ${l} cargas`),s&&s(e.paintedPixels,e.totalPixels,`Esperando cargas (${Math.round(n/1e3)}s)`),await v(n),e.currentCharges=Math.min(50,e.currentCharges+n/b.CHARGE_REGEN_MS)}function H(l,s,t,n){let{pixels:a}=l,{x:o,y:r}=s,c=[];for(let p of a){let i=o+p.x,u=r+p.y;c.push({imageX:p.x,imageY:p.y,localX:i,localY:u,tileX:t,tileY:n,color:p.targetColor,originalColor:p.originalColor})}return d(`Cola de p\xEDxeles generada: ${c.length} p\xEDxeles para pintar`),c}function S(){e.stopFlag=!0,e.running=!1,d("\u{1F6D1} Deteniendo proceso de pintado...")}function E(l=null){try{if(!e.imageData||e.paintedPixels===0)throw new Error("No hay progreso para guardar");let s={version:"1.0",timestamp:Date.now(),imageData:{width:e.imageData.width,height:e.imageData.height,originalName:e.originalImageName},progress:{paintedPixels:e.paintedPixels,totalPixels:e.totalPixels,lastPosition:{...e.lastPosition}},position:{startPosition:{...e.startPosition},tileX:e.tileX,tileY:e.tileY},config:{pixelsPerBatch:e.pixelsPerBatch},colors:e.availableColors,remainingPixels:e.remainingPixels||[]},t=JSON.stringify(s,null,2),n=new window.Blob([t],{type:"application/json"}),a=l||`wplace_progress_${e.originalImageName||"image"}_${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.json`,o=window.URL.createObjectURL(n),r=document.createElement("a");return r.href=o,r.download=a,document.body.appendChild(r),r.click(),document.body.removeChild(r),window.URL.revokeObjectURL(o),d(`\u2705 Progreso guardado: ${a}`),{success:!0,filename:a}}catch(s){return d("\u274C Error guardando progreso:",s),{success:!1,error:s.message}}}async function $(l){return new Promise(s=>{try{let t=new window.FileReader;t.onload=n=>{try{let a=JSON.parse(n.target.result),r=["imageData","progress","position","colors"].filter(c=>!(c in a));if(r.length>0)throw new Error(`Campos requeridos faltantes: ${r.join(", ")}`);if(e.availableColors.length>0){let c=a.colors.map(u=>u.id),p=e.availableColors.map(u=>u.id);c.filter(u=>p.includes(u)).length<c.length*.8&&d("\u26A0\uFE0F Los colores guardados no coinciden completamente con los actuales")}e.imageData={...a.imageData,pixels:[]},e.paintedPixels=a.progress.paintedPixels,e.totalPixels=a.progress.totalPixels,e.lastPosition=a.progress.lastPosition,e.startPosition=a.position.startPosition,e.tileX=a.position.tileX,e.tileY=a.position.tileY,e.originalImageName=a.imageData.originalName,e.remainingPixels=a.remainingPixels||[],a.config&&(e.pixelsPerBatch=a.config.pixelsPerBatch||e.pixelsPerBatch),e.imageLoaded=!0,e.colorsChecked=!0,d(`\u2705 Progreso cargado: ${e.paintedPixels}/${e.totalPixels} p\xEDxeles`),s({success:!0,data:a,painted:e.paintedPixels,total:e.totalPixels,canContinue:e.remainingPixels.length>0})}catch(a){d("\u274C Error parseando archivo de progreso:",a),s({success:!1,error:a.message})}},t.onerror=()=>{let n="Error leyendo archivo";d("\u274C",n),s({success:!1,error:n})},t.readAsText(l)}catch(t){d("\u274C Error cargando progreso:",t),s({success:!1,error:t.message})}})}function D(){e.paintedPixels=0,e.totalPixels=0,e.lastPosition={x:0,y:0},e.remainingPixels=[],e.imageData=null,e.startPosition=null,e.imageLoaded=!1,e.originalImageName=null,d("\u{1F9F9} Progreso limpiado")}function B(){return e.imageLoaded&&e.paintedPixels>0&&e.remainingPixels&&e.remainingPixels.length>0}function A(){return{hasProgress:B(),painted:e.paintedPixels,total:e.totalPixels,remaining:e.remainingPixels?e.remainingPixels.length:0,percentage:e.totalPixels>0?e.paintedPixels/e.totalPixels*100:0,lastPosition:{...e.lastPosition},canContinue:B()}}function R(l=null){let s=document.createElement("div");l&&(s.id=l),s.style.cssText=`
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 2147483647;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  `;let t=s.attachShadow({mode:"open"});return document.body.appendChild(s),{host:s,root:t}}function M(l,s){let t=0,n=0,a=0,o=0;l.style.cursor="move",l.addEventListener("mousedown",r);function r(i){i.target.closest(".header-btn, .wplace-header-btn")||(i.preventDefault(),a=i.clientX,o=i.clientY,document.addEventListener("mouseup",p),document.addEventListener("mousemove",c))}function c(i){i.preventDefault(),t=a-i.clientX,n=o-i.clientY,a=i.clientX,o=i.clientY,s.style.top=s.offsetTop-n+"px",s.style.left=s.offsetLeft-t+"px"}function p(){document.removeEventListener("mouseup",p),document.removeEventListener("mousemove",c)}}async function z({texts:l,...s}){d("\u{1F3A8} Creando interfaz de Auto-Image");let{host:t,root:n}=R(),a=document.createElement("link");a.rel="stylesheet",a.href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css",n.appendChild(a);let o=document.createElement("style");o.textContent=`
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
-  };
-
-  const TEXTS = {
-    es: {
-      title: "WPlace Auto-Image",
-      initBot: "Iniciar Auto-BOT",
-      uploadImage: "Subir Imagen",
-      resizeImage: "Redimensionar Imagen",
-      selectPosition: "Seleccionar Posición",
-      startPainting: "Iniciar Pintura",
-      stopPainting: "Detener Pintura",
-      saveProgress: "Guardar Progreso",
-      loadProgress: "Cargar Progreso",
-      checkingColors: "🔍 Verificando colores disponibles...",
-      noColorsFound: "❌ ¡Abre la paleta de colores en el sitio e inténtalo de nuevo!",
-      colorsFound: "✅ {count} colores disponibles encontrados",
-      loadingImage: "🖼️ Cargando imagen...",
-      imageLoaded: "✅ Imagen cargada con {count} píxeles válidos",
-      imageError: "❌ Error al cargar la imagen",
-      selectPositionAlert: "¡Pinta el primer píxel en la ubicación donde quieres que comience el arte!",
-      waitingPosition: "👆 Esperando que pintes el píxel de referencia...",
-      positionSet: "✅ ¡Posición establecida con éxito!",
-      positionTimeout: "❌ Tiempo agotado para seleccionar posición",
-      startPaintingMsg: "🎨 Iniciando pintura...",
-      paintingProgress: "🧱 Progreso: {painted}/{total} píxeles...",
-      noCharges: "⌛ Sin cargas. Esperando {time}...",
-      paintingStopped: "⏹️ Pintura detenida por el usuario",
-      paintingComplete: "✅ ¡Pintura completada! {count} píxeles pintados.",
-      paintingError: "❌ Error durante la pintura",
-      missingRequirements: "❌ Carga una imagen y selecciona una posición primero",
-      progress: "Progreso",
-      pixels: "Píxeles",
-      charges: "Cargas",
-      estimatedTime: "Tiempo estimado",
-      initMessage: "Haz clic en 'Iniciar Auto-BOT' para comenzar",
-      waitingInit: "Esperando inicialización...",
-      resizeSuccess: "✅ Imagen redimensionada a {width}x{height}",
-      paintingPaused: "⏸️ Pintura pausada en la posición X: {x}, Y: {y}",
-      pixelsPerBatch: "Píxeles por lote",
-      cooldownWaiting: "⏳ Esperando {time} para continuar...",
-      progressSaved: "✅ Progreso guardado como {filename}",
-      progressLoaded: "✅ Progreso cargado: {painted}/{total} píxeles pintados",
-      progressLoadError: "❌ Error al cargar progreso: {error}",
-      progressSaveError: "❌ Error al guardar progreso: {error}",
-      confirmSaveProgress: "¿Deseas guardar el progreso actual antes de detener?",
-      saveProgressTitle: "Guardar Progreso",
-      discardProgress: "Descartar",
-      cancel: "Cancelar"
-    }
-  };
-
-  const state = {
-    running: false,
-    imageLoaded: false,
-    processing: false,
-    totalPixels: 0,
-    paintedPixels: 0,
-    availableColors: [],
-    currentCharges: 0,
-    cooldown: CONFIG.COOLDOWN_DEFAULT,
-    imageData: null,
-    stopFlag: false,
-    colorsChecked: false,
-    startPosition: null,
-    selectingPosition: false,
-    region: null,
-    minimized: false,
-    lastPosition: { x: 0, y: 0 },
-    estimatedTime: 0,
-    language: 'es',
-    tileX: null, // Coordenada X del tile
-    tileY: null, // Coordenada Y del tile
-    pixelsPerBatch: CONFIG.PIXELS_PER_BATCH, // Píxeles por lote (configurable)
-    inCooldown: false, // Si está en cooldown
-    cooldownEndTime: 0, // Timestamp del final del cooldown
-    remainingPixels: [], // Lista de píxeles pendientes para pintar
-    lastChargeUpdate: 0, // Timestamp de la última actualización de cargas
-    chargeDecimalPart: 0, // Parte decimal para calcular el cooldown restante
-    originalImageName: null // Nombre original de la imagen cargada
-  };
-
-  function detectLanguage() {
-    // Bot configurado solo en español
-    state.language = 'es';
-  }
-
-  const Utils = {
-    sleep: ms => new Promise(r => setTimeout(r, ms)),
-    
-    colorDistance: (a, b) => Math.sqrt(
-      Math.pow(a[0] - b[0], 2) + 
-      Math.pow(a[1] - b[1], 2) + 
-      Math.pow(a[2] - b[2], 2)
-    ),
-    
-    createImageUploader: () => new Promise(resolve => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/png,image/jpeg';
-      input.onchange = () => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(fr.result);
-        fr.readAsDataURL(input.files[0]);
-      };
-      input.click();
-    }),
-    
-    extractAvailableColors: () => {
-      const colorElements = document.querySelectorAll('[id^="color-"]');
-      return Array.from(colorElements)
-        .filter(el => !el.querySelector('svg'))
-        .filter(el => {
-          const id = parseInt(el.id.replace('color-', ''));
-          return id !== 0 && id !== 5;
-        })
-        .map(el => {
-          const id = parseInt(el.id.replace('color-', ''));
-          const rgbStr = el.style.backgroundColor.match(/\d+/g);
-          const rgb = rgbStr ? rgbStr.map(Number) : [0, 0, 0];
-          return { id, rgb };
-        });
-    },
-    
-    formatTime: ms => {
-      const seconds = Math.floor((ms / 1000) % 60);
-      const minutes = Math.floor((ms / (1000 * 60)) % 60);
-      const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
-      const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-      
-      let result = '';
-      if (days > 0) result += `${days}d `;
-      if (hours > 0 || days > 0) result += `${hours}h `;
-      if (minutes > 0 || hours > 0 || days > 0) result += `${minutes}m `;
-      result += `${seconds}s`;
-      
-      return result;
-    },
-    
-    showAlert: (message, type = 'info') => {
-      const alert = document.createElement('div');
-      alert.style.position = 'fixed';
-      alert.style.top = '20px';
-      alert.style.left = '50%';
-      alert.style.transform = 'translateX(-50%)';
-      alert.style.padding = '15px 20px';
-      alert.style.background = CONFIG.THEME[type] || CONFIG.THEME.accent;
-      alert.style.color = CONFIG.THEME.text;
-      alert.style.borderRadius = '5px';
-      alert.style.zIndex = '10000';
-      alert.style.boxShadow = '0 3px 10px rgba(0,0,0,0.3)';
-      alert.style.display = 'flex';
-      alert.style.alignItems = 'center';
-      alert.style.gap = '10px';
-      
-      const icons = {
-        error: 'exclamation-circle',
-        success: 'check-circle',
-        warning: 'exclamation-triangle',
-        info: 'info-circle'
-      };
-      
-      alert.innerHTML = `
-        <i class="fas fa-${icons[type] || 'info-circle'}"></i>
-        <span>${message}</span>
-      `;
-      
-      document.body.appendChild(alert);
-      
-      setTimeout(() => {
-        alert.style.opacity = '0';
-        alert.style.transition = 'opacity 0.5s';
-        setTimeout(() => alert.remove(), 500);
-      }, 3000);
-    },
-    
-    calculateEstimatedTime: (remainingPixels, currentCharges, cooldown) => {
-      const pixelsPerCharge = currentCharges > 0 ? currentCharges : 0;
-      const fullCycles = Math.ceil((remainingPixels - pixelsPerCharge) / Math.max(currentCharges, 1));
-      return (fullCycles * cooldown) + ((remainingPixels - 1) * 100);
-    },
-    
-    isWhitePixel: (r, g, b) => {
-      return r >= CONFIG.WHITE_THRESHOLD && 
-             g >= CONFIG.WHITE_THRESHOLD && 
-             b >= CONFIG.WHITE_THRESHOLD;
-    },
-    
-    t: (key, params = {}) => {
-      let text = TEXTS.es[key] || key;
-      for (const [k, v] of Object.entries(params)) {
-        text = text.replace(`{${k}}`, v);
-      }
-      return text;
-    },
-
-    // Funciones de Turnstile
-    loadTurnstile: () => {
-      return new Promise((resolve, reject) => {
-        if (window.turnstile) return resolve();
-        const s = document.createElement('script');
-        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-        s.async = true; s.defer = true;
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error('No se pudo cargar Turnstile'));
-        document.head.appendChild(s);
-      });
-    },
-
-    getTurnstileToken: async () => {
-      await Utils.loadTurnstile();
-      if (typeof window.turnstile?.execute === 'function') {
-        try {
-          const token = await window.turnstile.execute(CONFIG.SITEKEY, { action: 'paint' });
-          if (token && token.length > 20) return token;
-  } catch { /* fallback abajo */ }
-      }
-      // Fallback: render oculto
-      return await new Promise((resolve) => {
-        const host = document.createElement('div');
-        host.style.position = 'fixed'; host.style.left = '-9999px';
-        document.body.appendChild(host);
-        window.turnstile.render(host, { sitekey: CONFIG.SITEKEY, callback: (t) => resolve(t) });
-      });
-    },
-
-    // Funciones de manejo de progreso
-    generateProgressFileName: () => {
-      const imageName = state.originalImageName || 'imagen';
-      const cleanImageName = imageName.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, '_');
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-      return `wplace_progress_${cleanImageName}_tile_${state.tileX}_${state.tileY}_${timestamp}.json`;
-    },
-
-    serializeProgress: () => {
-      if (!state.imageLoaded || !state.imageData) {
-        throw new Error('No hay imagen cargada para guardar');
-      }
-
-      if (!state.startPosition || state.tileX === null || state.tileY === null) {
-        throw new Error('No hay posición establecida para guardar');
-      }
-
-      // Convertir ImageData a array para serialización
-      const pixelsArray = Array.from(state.imageData.pixels);
-
-      const progressData = {
-        version: "1.0",
-        timestamp: new Date().toISOString(),
-        imageData: {
-          width: state.imageData.width,
-          height: state.imageData.height,
-          pixels: pixelsArray,
-          totalPixels: state.imageData.totalPixels || state.totalPixels
-        },
-        position: {
-          tileX: state.tileX,
-          tileY: state.tileY,
-          startX: state.startPosition.x,
-          startY: state.startPosition.y,
-          lastX: state.lastPosition ? state.lastPosition.x : state.startPosition.x,
-          lastY: state.lastPosition ? state.lastPosition.y : state.startPosition.y
-        },
-        progress: {
-          paintedPixels: state.paintedPixels || 0,
-          totalPixels: state.totalPixels || 0,
-          remainingPixels: state.remainingPixels || [],
-          pixelsPerBatch: state.pixelsPerBatch || CONFIG.PIXELS_PER_BATCH
-        },
-        colors: state.availableColors || [],
-        metadata: {
-          imageName: state.originalImageName || 'imagen_sin_nombre',
-          savedAt: new Date().toISOString(),
-          appVersion: "Auto-Image v1.0"
-        }
-      };
-
-      return progressData;
-    },
-
-    downloadProgress: () => {
-      try {
-        // Generar datos de progreso
-        const progressData = Utils.serializeProgress();
-        
-        // Generar nombre de archivo
-        const fileName = Utils.generateProgressFileName();
-        
-        // Serializar a JSON
-        const jsonString = JSON.stringify(progressData, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        // Descargar archivo
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        return fileName;
-      } catch (error) {
-        throw new Error(`Error al guardar progreso: ${error.message}`);
-      }
-    },
-
-    validateProgressData: (data) => {
-      const requiredFields = ['version', 'imageData', 'position', 'progress', 'colors'];
-      const missingFields = requiredFields.filter(field => !(field in data));
-      
-      if (missingFields.length > 0) {
-        throw new Error(`Archivo de progreso inválido. Faltan campos: ${missingFields.join(', ')}`);
-      }
-
-      if (!data.imageData.pixels || !Array.isArray(data.imageData.pixels)) {
-        throw new Error('Datos de imagen inválidos en el archivo de progreso');
-      }
-
-      if (!data.position.tileX || !data.position.tileY) {
-        throw new Error('Coordenadas de tile inválidas en el archivo de progreso');
-      }
-
-      if (!Array.isArray(data.colors) || data.colors.length === 0) {
-        throw new Error('Datos de colores inválidos en el archivo de progreso');
-      }
-
-      return true;
-    },
-
-    loadProgressFromFile: (file) => {
-      return new Promise((resolve, reject) => {
-        if (!file) {
-          reject(new Error('No se seleccionó ningún archivo'));
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            const progressData = JSON.parse(reader.result);
-            Utils.validateProgressData(progressData);
-            const progressInfo = Utils.restoreProgress(progressData);
-            resolve(progressInfo);
-          } catch (error) {
-            reject(new Error(`Error al cargar el archivo: ${error.message}`));
-          }
-        };
-        reader.onerror = () => reject(new Error('Error al leer el archivo'));
-        reader.readAsText(file);
-      });
-    },
-
-    restoreProgress: (progressData) => {
-      try {
-        // Validar que los colores actuales coincidan con los guardados
-        if (!state.colorsChecked || state.availableColors.length === 0) {
-          throw new Error('Debes inicializar el bot y verificar colores antes de cargar progreso');
-        }
-
-        // Verificar compatibilidad de colores (al menos 80% deben coincidir)
-        const savedColorIds = progressData.colors.map(c => c.id);
-        const currentColorIds = state.availableColors.map(c => c.id);
-        const commonColors = savedColorIds.filter(id => currentColorIds.includes(id));
-        
-        if (commonColors.length < savedColorIds.length * 0.8) {
-          throw new Error(`Incompatibilidad de colores. Solo ${commonColors.length}/${savedColorIds.length} colores coinciden. Verifica que la paleta sea la misma.`);
-        }
-
-        // Restaurar datos de imagen
-        const pixelsUint8 = new Uint8ClampedArray(progressData.imageData.pixels);
-        
-        state.imageData = {
-          width: progressData.imageData.width,
-          height: progressData.imageData.height,
-          pixels: pixelsUint8,
-          totalPixels: progressData.imageData.totalPixels,
-          processor: null // Se recreará si es necesario
-        };
-
-        // Restaurar posiciones
-        state.tileX = progressData.position.tileX;
-        state.tileY = progressData.position.tileY;
-        state.startPosition = {
-          x: progressData.position.startX,
-          y: progressData.position.startY
-        };
-        state.lastPosition = {
-          x: progressData.position.lastX,
-          y: progressData.position.lastY
-        };
-
-        // Restaurar progreso
-        state.totalPixels = progressData.progress.totalPixels;
-        state.paintedPixels = progressData.progress.paintedPixels;
-        state.remainingPixels = progressData.progress.remainingPixels || [];
-        state.pixelsPerBatch = progressData.progress.pixelsPerBatch || CONFIG.PIXELS_PER_BATCH;
-
-        // Restaurar colores (usar los actuales pero validar)
-        // No restauramos los colores directamente, usamos los actuales del DOM
-
-        // Restaurar metadata
-        state.originalImageName = progressData.metadata?.imageName || 'imagen_cargada';
-
-        // Marcar como imagen cargada y posición establecida
-        state.imageLoaded = true;
-        state.positionSelected = true;
-        state.selectingPosition = false;
-        
-        // Crear una región temporal para compatibilidad
-        const regionWidth = Math.min(state.imageData.width, 64);
-        const regionHeight = Math.min(state.imageData.height, 64);
-        state.region = {
-          startX: state.startPosition.x,
-          startY: state.startPosition.y,
-          endX: state.startPosition.x + regionWidth - 1,
-          endY: state.startPosition.y + regionHeight - 1,
-          width: regionWidth,
-          height: regionHeight
-        };
-
-        // Actualizar configuración de píxeles por lote en la UI
-        const pixelsPerBatchInput = document.querySelector('#pixelsPerBatchInput');
-        if (pixelsPerBatchInput) {
-          pixelsPerBatchInput.value = state.pixelsPerBatch;
-        }
-
-        return {
-          imageName: state.originalImageName,
-          totalPixels: state.totalPixels,
-          paintedPixels: state.paintedPixels,
-          remainingPixels: state.remainingPixels.length,
-          position: `tile(${state.tileX}, ${state.tileY}) start(${state.startPosition.x}, ${state.startPosition.y})`
-        };
-
-      } catch (error) {
-        throw new Error(`Error al restaurar progreso: ${error.message}`);
-      }
-    },
-
-    // Funciones para el modal de guardar progreso
-    showSaveProgressModal: () => {
-      const modal = document.getElementById('saveProgressModal');
-      const overlay = document.getElementById('modalOverlay');
-      if (modal && overlay) {
-        overlay.style.display = 'block';
-        modal.style.display = 'block';
-      }
-    },
-
-    hideSaveProgressModal: () => {
-      const modal = document.getElementById('saveProgressModal');
-      const overlay = document.getElementById('modalOverlay');
-      if (modal && overlay) {
-        overlay.style.display = 'none';
-        modal.style.display = 'none';
-      }
-    },
-
-    // Función que devuelve una promesa para el diálogo de guardar progreso
-    showSaveProgressDialog: () => {
-      return new Promise((resolve) => {
-        Utils.showSaveProgressModal();
-        
-        const saveBtn = document.getElementById('saveProgressBtn');
-        const discardBtn = document.getElementById('discardProgressBtn');
-        const cancelBtn = document.getElementById('cancelStopBtn');
-        const overlay = document.getElementById('modalOverlay');
-        
-        const handleResponse = (response) => {
-          Utils.hideSaveProgressModal();
-          // Remover event listeners para evitar múltiples respuestas
-          saveBtn.removeEventListener('click', handleSave);
-          discardBtn.removeEventListener('click', handleDiscard);
-          cancelBtn.removeEventListener('click', handleCancel);
-          overlay.removeEventListener('click', handleCancel);
-          resolve(response);
-        };
-        
-        const handleSave = () => handleResponse('save');
-        const handleDiscard = () => handleResponse('discard');
-        const handleCancel = () => handleResponse('cancel');
-        
-        saveBtn.addEventListener('click', handleSave);
-        discardBtn.addEventListener('click', handleDiscard);
-        cancelBtn.addEventListener('click', handleCancel);
-        overlay.addEventListener('click', handleCancel);
-      });
-    }
-  };
-
-  const WPlaceService = {
-    async paintPixelBatch(pixels) {
-      if (!pixels || pixels.length === 0) return { success: false, painted: 0 };
-      
-      try {
-        // Obtener token de Turnstile
-        const t = await Utils.getTurnstileToken();
-        
-        // Agrupar píxeles por tile
-        const tileGroups = {};
-        pixels.forEach(pixel => {
-          const tileKey = `${pixel.tileX},${pixel.tileY}`;
-          if (!tileGroups[tileKey]) {
-            tileGroups[tileKey] = {
-              tileX: pixel.tileX,
-              tileY: pixel.tileY,
-              coords: [],
-              colors: []
-            };
-          }
-          tileGroups[tileKey].coords.push(pixel.localX, pixel.localY);
-          tileGroups[tileKey].colors.push(pixel.color);
-        });
-        
-        let totalPainted = 0;
-        let allSuccess = true;
-        
-        // Pintar cada grupo de tile
-        for (const group of Object.values(tileGroups)) {
-          const body = JSON.stringify({ 
-            colors: group.colors, 
-            coords: group.coords, 
-            t 
-          });
-          
-          const res = await fetch(`https://backend.wplace.live/s0/pixel/${group.tileX}/${group.tileY}`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-            body
-          });
-          
-          let json = null; 
-          try { 
-            json = await res.json(); 
-          } catch { /* ignore JSON parse */ }
-          
-          const painted = json?.painted || 0;
-          totalPainted += painted;
-          
-          console.log(`Lote pintado en tile(${group.tileX},${group.tileY}): ${painted}/${group.colors.length} píxeles`);
-          
-          if (res.status !== 200 || painted === 0) {
-            allSuccess = false;
-          }
-        }
-        
-        return { success: allSuccess, painted: totalPainted };
-      } catch (error) {
-        console.error('Error pintando lote:', error);
-        return { success: false, painted: 0 };
-      }
-    },
-
-    async paintPixelInRegion(tileX, tileY, localX, localY, color) {
-      // Usar el método de lote para un solo píxel
-      const result = await this.paintPixelBatch([{
-        tileX,
-        tileY,
-        localX,
-        localY,
-        color
-      }]);
-      return result.success && result.painted > 0;
-    },
-    
-    async getCharges() {
-      try {
-        const res = await fetch('https://backend.wplace.live/me', { 
-          credentials: 'include' 
-        });
-        const data = await res.json();
-        const charges = data.charges?.count || 0;
-        const cooldown = data.charges?.cooldownMs || CONFIG.COOLDOWN_DEFAULT;
-        
-        // Actualizar el timestamp de la última consulta
-        state.lastChargeUpdate = Date.now();
-        state.chargeDecimalPart = charges - Math.floor(charges);
-        
-        console.log(`Cargas actualizadas: ${charges.toFixed(3)} (entero: ${Math.floor(charges)}, decimal: ${state.chargeDecimalPart.toFixed(3)})`);
-        
-        return { 
-          charges, 
-          cooldown,
-          pixels: data.pixels || 0
-        };
-      } catch {
-        return { charges: 0, cooldown: CONFIG.COOLDOWN_DEFAULT, pixels: 0 };
-      }
-    },
-
-    // Función para calcular cargas estimadas sin hacer consulta a /me
-    getEstimatedCharges() {
-      if (state.lastChargeUpdate === 0) return Math.floor(state.currentCharges);
-      
-      const timeSinceUpdate = Date.now() - state.lastChargeUpdate;
-      const chargesGenerated = timeSinceUpdate / CONFIG.CHARGE_REGEN_MS;
-      const estimatedCharges = state.currentCharges + chargesGenerated;
-      
-      return Math.floor(estimatedCharges);
-    },
-
-    // Función para calcular tiempo restante para la próxima carga
-    getTimeToNextCharge() {
-      if (state.lastChargeUpdate === 0 || state.chargeDecimalPart === 0) return 0;
-      
-      const timeSinceUpdate = Date.now() - state.lastChargeUpdate;
-      
-      // Calcular el progreso actual desde la última actualización
-      const progressSinceUpdate = timeSinceUpdate / CONFIG.CHARGE_REGEN_MS;
-      const currentDecimalPart = state.chargeDecimalPart + progressSinceUpdate;
-      
-      // Si ya pasó el 100%, no hay tiempo restante
-      if (currentDecimalPart >= 1.0) return 0;
-      
-      // Calcular tiempo restante: (1.0 - progreso_actual) × 30 segundos
-      const remainingProgress = 1.0 - currentDecimalPart;
-      const remainingTime = remainingProgress * CONFIG.CHARGE_REGEN_MS;
-      
-      return Math.max(0, remainingTime);
-    }
-  };
-
-  class ImageProcessor {
-    constructor(imageSrc) {
-      this.imageSrc = imageSrc;
-      this.img = new Image();
-      this.canvas = document.createElement('canvas');
-      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
-      this.previewCanvas = document.createElement('canvas');
-      this.previewCtx = this.previewCanvas.getContext('2d');
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0); }
     }
     
-    async load() {
-      return new Promise((resolve, reject) => {
-        this.img.onload = () => {
-          this.canvas.width = this.img.width;
-          this.canvas.height = this.img.height;
-          this.ctx.drawImage(this.img, 0, 0);
-          resolve();
-        };
-        this.img.onerror = reject;
-        this.img.src = this.imageSrc;
-      });
+    .container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 300px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 0;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+      z-index: 9998;
+      font-family: 'Segoe UI', Roboto, sans-serif;
+      color: #eee;
+      animation: slideIn 0.4s ease-out;
+      overflow: hidden;
     }
     
-    getPixelData() {
-      return this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height).data;
+    .header {
+      padding: 12px 15px;
+      background: #2d3748;
+      color: #60a5fa;
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: move;
+      user-select: none;
     }
     
-    getDimensions() {
-      return { width: this.canvas.width, height: this.canvas.height };
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     
-    resize(newWidth, newHeight) {
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = newWidth;
-      tempCanvas.height = newHeight;
-      const tempCtx = tempCanvas.getContext('2d');
-      
-      tempCtx.drawImage(this.img, 0, 0, newWidth, newHeight);
-      
-      this.canvas.width = newWidth;
-      this.canvas.height = newHeight;
-      this.ctx.drawImage(tempCanvas, 0, 0);
-      
-      return this.getPixelData();
+    .header-controls {
+      display: flex;
+      gap: 10px;
     }
     
-    generatePreview(newWidth, newHeight) {
-      this.previewCanvas.width = newWidth;
-      this.previewCanvas.height = newHeight;
-      this.previewCtx.imageSmoothingEnabled = false;
-      this.previewCtx.drawImage(this.img, 0, 0, newWidth, newHeight);
-      return this.previewCanvas.toDataURL();
+    .header-btn {
+      background: none;
+      border: none;
+      color: #eee;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+      padding: 5px;
     }
-  }
-
-  function findClosestColor(rgb, palette) {
-    return palette.reduce((closest, current) => {
-      const currentDistance = Utils.colorDistance(rgb, current.rgb);
-      return currentDistance < closest.distance 
-        ? { color: current, distance: currentDistance } 
-        : closest;
-    }, { color: palette[0], distance: Utils.colorDistance(rgb, palette[0].rgb) }).color.id;
-  }
-
-  async function createUI() {
-    detectLanguage();
-
-    const fontAwesome = document.createElement('link');
-    fontAwesome.rel = 'stylesheet';
-    fontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
-    document.head.appendChild(fontAwesome);
-
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7); }
-        70% { box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0); }
-      }
-      @keyframes slideIn {
-        from { transform: translateY(20px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-      }
-      #wplace-image-bot-container {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        width: 300px;
-        background: ${CONFIG.THEME.primary};
-        border: 1px solid ${CONFIG.THEME.accent};
-        border-radius: 8px;
-        padding: 0;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-        z-index: 9998;
-        font-family: 'Segoe UI', Roboto, sans-serif;
-        color: ${CONFIG.THEME.text};
-        animation: slideIn 0.4s ease-out;
-        overflow: hidden;
-      }
-      .wplace-header {
-        padding: 12px 15px;
-        background: ${CONFIG.THEME.secondary};
-        color: ${CONFIG.THEME.highlight};
-        font-size: 16px;
-        font-weight: 600;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: move;
-        user-select: none;
-      }
-      .wplace-header-title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .wplace-header-controls {
-        display: flex;
-        gap: 10px;
-      }
-      .wplace-header-btn {
-        background: none;
-        border: none;
-        color: ${CONFIG.THEME.text};
-        cursor: pointer;
-        opacity: 0.7;
-        transition: opacity 0.2s;
-      }
-      .wplace-header-btn:hover {
-        opacity: 1;
-      }
-      .wplace-content {
-        padding: 15px;
-        display: block;
-      }
-      .wplace-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin-bottom: 15px;
-      }
-      .wplace-config {
-        display: none;
-        background: ${CONFIG.THEME.secondary};
-        padding: 10px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-      }
-      .wplace-config.visible {
-        display: block;
-      }
-      .wplace-config-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-        font-size: 14px;
-      }
-      .wplace-config-input {
-        width: 60px;
-        padding: 4px;
-        border: 1px solid ${CONFIG.THEME.accent};
-        border-radius: 4px;
-        background: ${CONFIG.THEME.primary};
-        color: ${CONFIG.THEME.text};
-        text-align: center;
-      }
-      .wplace-btn {
-        padding: 10px;
-        border: none;
-        border-radius: 6px;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        transition: all 0.2s;
-      }
-      .wplace-btn:hover {
-        transform: translateY(-2px);
-      }
-      .wplace-btn-primary {
-        background: ${CONFIG.THEME.accent};
-        color: white;
-      }
-      .wplace-btn-upload {
-        background: ${CONFIG.THEME.secondary};
-        color: white;
-        border: 1px dashed ${CONFIG.THEME.text};
-      }
-      .wplace-btn-load {
-        background: #2196F3;
-        color: white;
-        border: 1px solid #1976D2;
-      }
-      .wplace-btn-load:hover {
-        background: #1976D2;
-      }
-      .wplace-btn-start {
-        background: ${CONFIG.THEME.success};
-        color: white;
-      }
-      .wplace-btn-stop {
-        background: ${CONFIG.THEME.error};
-        color: white;
-      }
-      .wplace-btn-select {
-        background: ${CONFIG.THEME.highlight};
-        color: black;
-      }
-      .wplace-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        transform: none !important;
-      }
-      .wplace-stats {
-        background: ${CONFIG.THEME.secondary};
-        padding: 12px;
-        border-radius: 6px;
-        margin-bottom: 15px;
-      }
-      .wplace-stat-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 6px 0;
-        font-size: 14px;
-      }
-      .wplace-stat-label {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        opacity: 0.8;
-      }
-      .wplace-progress {
-        width: 100%;
-        background: ${CONFIG.THEME.secondary};
-        border-radius: 4px;
-        margin: 10px 0;
-        overflow: hidden;
-      }
-      .wplace-progress-bar {
-        height: 10px;
-        background: ${CONFIG.THEME.highlight};
-        transition: width 0.3s;
-      }
-      .wplace-status {
-        padding: 8px;
-        border-radius: 4px;
-        text-align: center;
-        font-size: 13px;
-      }
-      .status-default {
-        background: rgba(255,255,255,0.1);
-      }
-      .status-success {
-        background: rgba(0, 255, 0, 0.1);
-        color: ${CONFIG.THEME.success};
-      }
-      .status-error {
-        background: rgba(255, 0, 0, 0.1);
-        color: ${CONFIG.THEME.error};
-      }
-      .status-warning {
-        background: rgba(255, 165, 0, 0.1);
-        color: orange;
-      }
-      #paintEffect {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        border-radius: 8px;
-      }
-      .position-info {
-        font-size: 13px;
-        margin-top: 5px;
-        padding: 5px;
-        background: ${CONFIG.THEME.secondary};
-        border-radius: 4px;
-        text-align: center;
-      }
-      .wplace-minimized .wplace-content {
-        display: none;
-      }
-      .resize-container {
-        display: none;
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: ${CONFIG.THEME.primary};
-        padding: 20px;
-        border-radius: 8px;
-        z-index: 10000;
-        box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        max-width: 90%;
-        max-height: 90%;
-        overflow: auto;
-      }
-      .save-progress-modal {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: ${CONFIG.THEME.primary};
-        border: 2px solid ${CONFIG.THEME.accent};
-        border-radius: 15px;
-        padding: 25px;
-        z-index: 10002;
-        color: ${CONFIG.THEME.text};
-        min-width: 350px;
-        max-width: 400px;
-        display: none;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      }
-      .save-progress-modal h3 {
-        margin: 0 0 15px 0;
-        color: ${CONFIG.THEME.text};
-        text-align: center;
-        font-size: 18px;
-      }
-      .save-progress-modal p {
-        margin: 0 0 20px 0;
-        color: ${CONFIG.THEME.text};
-        text-align: center;
-        line-height: 1.4;
-      }
-      .save-progress-modal .modal-buttons {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-      }
-      .save-progress-modal .modal-btn {
-        padding: 10px 20px;
-        border: none;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: all 0.3s;
-        min-width: 100px;
-      }
-      .save-progress-modal .modal-btn-save {
-        background: ${CONFIG.THEME.success};
-        color: white;
-      }
-      .save-progress-modal .modal-btn-save:hover {
-        background: #45a049;
-        transform: translateY(-2px);
-      }
-      .save-progress-modal .modal-btn-discard {
-        background: ${CONFIG.THEME.error};
-        color: white;
-      }
-      .save-progress-modal .modal-btn-discard:hover {
-        background: #da190b;
-        transform: translateY(-2px);
-      }
-      .save-progress-modal .modal-btn-cancel {
-        background: ${CONFIG.THEME.secondary};
-        color: white;
-      }
-      .save-progress-modal .modal-btn-cancel:hover {
-        background: #555;
-        transform: translateY(-2px);
-      }
-      .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.7);
-        z-index: 10001;
-        display: none;
-      }
-      .resize-preview {
-        max-width: 100%;
-        max-height: 300px;
-        margin: 10px 0;
-        border: 1px solid ${CONFIG.THEME.accent};
-      }
-      .resize-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin-top: 15px;
-      }
-      .resize-slider {
-        width: 100%;
-      }
-      .resize-buttons {
-        display: flex;
-        gap: 10px;
-      }
-      .resize-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.7);
-        z-index: 9999;
-        display: none;
-      }
-    `;
-    document.head.appendChild(style);
-
-    const container = document.createElement('div');
-    container.id = 'wplace-image-bot-container';
-    container.innerHTML = `
-      <div class="wplace-header">
-        <div class="wplace-header-title">
-          <i class="fas fa-image"></i>
-          <span>${Utils.t('title')}</span>
-        </div>
-        <div class="wplace-header-controls">
-          <button id="configBtn" class="wplace-header-btn" title="Configuración">
-            <i class="fas fa-cog"></i>
-          </button>
-          <button id="minimizeBtn" class="wplace-header-btn" title="${Utils.t('minimize')}">
-            <i class="fas fa-minus"></i>
-          </button>
-        </div>
+    
+    .header-btn:hover {
+      opacity: 1;
+    }
+    
+    .content {
+      padding: 15px;
+      display: block;
+    }
+    
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .config-panel {
+      display: none;
+      background: #2d3748;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    
+    .config-panel.visible {
+      display: block;
+    }
+    
+    .config-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    
+    .config-input {
+      width: 60px;
+      padding: 4px;
+      border: 1px solid #333;
+      border-radius: 4px;
+      background: #1a1a1a;
+      color: #eee;
+      text-align: center;
+    }
+    
+    .btn {
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+    
+    .btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    
+    .btn-primary {
+      background: #60a5fa;
+      color: white;
+    }
+    
+    .btn-upload {
+      background: #2d3748;
+      color: white;
+      border: 1px dashed #eee;
+    }
+    
+    .btn-load {
+      background: #2196F3;
+      color: white;
+    }
+    
+    .btn-start {
+      background: #10b981;
+      color: white;
+    }
+    
+    .btn-stop {
+      background: #ef4444;
+      color: white;
+    }
+    
+    .btn-select {
+      background: #f59e0b;
+      color: black;
+    }
+    
+    .progress {
+      width: 100%;
+      background: #2d3748;
+      border-radius: 4px;
+      margin: 10px 0;
+      overflow: hidden;
+      height: 10px;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      background: #60a5fa;
+      transition: width 0.3s;
+      width: 0%;
+    }
+    
+    .stats {
+      background: #2d3748;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+    }
+    
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 14px;
+    }
+    
+    .stat-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      opacity: 0.8;
+    }
+    
+    .status {
+      padding: 8px;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 13px;
+    }
+    
+    .status-default {
+      background: rgba(255,255,255,0.1);
+    }
+    
+    .status-success {
+      background: rgba(0, 255, 0, 0.1);
+      color: #10b981;
+    }
+    
+    .status-error {
+      background: rgba(255, 0, 0, 0.1);
+      color: #ef4444;
+    }
+    
+    .status-warning {
+      background: rgba(255, 165, 0, 0.1);
+      color: orange;
+    }
+    
+    .status-info {
+      background: rgba(0, 150, 255, 0.1);
+      color: #60a5fa;
+    }
+    
+    .minimized .content {
+      display: none;
+    }
+    
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .modal {
+      background: #1a1a1a;
+      border: 2px solid #333;
+      border-radius: 15px;
+      padding: 25px;
+      color: #eee;
+      min-width: 350px;
+      max-width: 400px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    
+    .modal h3 {
+      margin: 0 0 15px 0;
+      text-align: center;
+      font-size: 18px;
+    }
+    
+    .modal p {
+      margin: 0 0 20px 0;
+      text-align: center;
+      line-height: 1.4;
+    }
+    
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    
+    .modal-btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+      min-width: 100px;
+    }
+    
+    .modal-btn-save {
+      background: #10b981;
+      color: white;
+    }
+    
+    .modal-btn-discard {
+      background: #ef4444;
+      color: white;
+    }
+    
+    .modal-btn-cancel {
+      background: #2d3748;
+      color: white;
+    }
+    
+    .modal-btn:hover {
+      transform: translateY(-2px);
+    }
+  `,n.appendChild(o);let r=document.createElement("div");r.className="container",r.innerHTML=`
+    <div class="header">
+      <div class="header-title">
+        <i class="fas fa-image"></i>
+        <span>${l.title}</span>
       </div>
-      <div class="wplace-content">
-        <div id="configPanel" class="wplace-config">
-          <div class="wplace-config-item">
-            <label>${Utils.t('pixelsPerBatch')}:</label>
-            <input id="pixelsPerBatchInput" type="number" class="wplace-config-input" min="1" max="50" value="${state.pixelsPerBatch}">
-          </div>
-        </div>
-        
-        <div class="wplace-controls">
-          <button id="initBotBtn" class="wplace-btn wplace-btn-primary">
-            <i class="fas fa-robot"></i>
-            <span>${Utils.t('initBot')}</span>
-          </button>
-          <button id="uploadBtn" class="wplace-btn wplace-btn-upload" disabled>
-            <i class="fas fa-upload"></i>
-            <span>${Utils.t('uploadImage')}</span>
-          </button>
-          <button id="loadProgressBtn" class="wplace-btn wplace-btn-load" disabled>
-            <i class="fas fa-file-import"></i>
-            <span>${Utils.t('loadProgress')}</span>
-          </button>
-          <button id="resizeBtn" class="wplace-btn wplace-btn-primary" disabled>
-            <i class="fas fa-expand"></i>
-            <span>${Utils.t('resizeImage')}</span>
-          </button>
-          <button id="selectPosBtn" class="wplace-btn wplace-btn-select" disabled>
-            <i class="fas fa-crosshairs"></i>
-            <span>${Utils.t('selectPosition')}</span>
-          </button>
-          <button id="startBtn" class="wplace-btn wplace-btn-start" disabled>
-            <i class="fas fa-play"></i>
-            <span>${Utils.t('startPainting')}</span>
-          </button>
-          <button id="stopBtn" class="wplace-btn wplace-btn-stop" disabled>
-            <i class="fas fa-stop"></i>
-            <span>${Utils.t('stopPainting')}</span>
-          </button>
-        </div>
-        
-        <div class="wplace-progress">
-          <div id="progressBar" class="wplace-progress-bar" style="width: 0%"></div>
-        </div>
-        
-        <div class="wplace-stats">
-          <div id="statsArea">
-            <div class="wplace-stat-item">
-              <div class="wplace-stat-label"><i class="fas fa-info-circle"></i> ${Utils.t('initMessage')}</div>
-            </div>
-          </div>
-        </div>
-        
-        <div id="statusText" class="wplace-status status-default">
-          ${Utils.t('waitingInit')}
-        </div>
-      </div>
-    `;
-    
-    const resizeContainer = document.createElement('div');
-    resizeContainer.className = 'resize-container';
-    resizeContainer.innerHTML = `
-      <h3 style="margin-top: 0; color: ${CONFIG.THEME.text}">${Utils.t('resizeImage')}</h3>
-      <div class="resize-controls">
-        <label style="color: ${CONFIG.THEME.text}">
-          ${Utils.t('width')}: <span id="widthValue">0</span>px
-          <input type="range" id="widthSlider" class="resize-slider" min="10" max="500" value="100">
-        </label>
-        <label style="color: ${CONFIG.THEME.text}">
-          ${Utils.t('height')}: <span id="heightValue">0</span>px
-          <input type="range" id="heightSlider" class="resize-slider" min="10" max="500" value="100">
-        </label>
-        <label style="color: ${CONFIG.THEME.text}">
-          <input type="checkbox" id="keepAspect" checked>
-          ${Utils.t('keepAspect')}
-        </label>
-        <img id="resizePreview" class="resize-preview" src="">
-        <div class="resize-buttons">
-          <button id="confirmResize" class="wplace-btn wplace-btn-primary">
-            <i class="fas fa-check"></i>
-            <span>${Utils.t('apply')}</span>
-          </button>
-          <button id="cancelResize" class="wplace-btn wplace-btn-stop">
-            <i class="fas fa-times"></i>
-            <span>${Utils.t('cancel')}</span>
-          </button>
-        </div>
-      </div>
-    `;
-    
-    const resizeOverlay = document.createElement('div');
-    resizeOverlay.className = 'resize-overlay';
-    
-    // Crear modal para guardar progreso
-    const saveProgressModal = document.createElement('div');
-    saveProgressModal.className = 'save-progress-modal';
-    saveProgressModal.id = 'saveProgressModal';
-    saveProgressModal.innerHTML = `
-      <h3><i class="fas fa-save"></i> ${Utils.t('saveProgressTitle')}</h3>
-      <p>${Utils.t('confirmSaveProgress')}</p>
-      <div class="modal-buttons">
-        <button id="saveProgressBtn" class="modal-btn modal-btn-save">
-          <i class="fas fa-save"></i> ${Utils.t('saveProgress')}
+      <div class="header-controls">
+        <button class="header-btn config-btn" title="Configuraci\xF3n">
+          <i class="fas fa-cog"></i>
         </button>
-        <button id="discardProgressBtn" class="modal-btn modal-btn-discard">
-          <i class="fas fa-trash"></i> ${Utils.t('discardProgress')}
-        </button>
-        <button id="cancelStopBtn" class="modal-btn modal-btn-cancel">
-          <i class="fas fa-times"></i> ${Utils.t('cancel')}
+        <button class="header-btn minimize-btn" title="${l.minimize}">
+          <i class="fas fa-minus"></i>
         </button>
       </div>
-    `;
-    
-    const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'modal-overlay';
-    modalOverlay.id = 'modalOverlay';
-    
-    document.body.appendChild(container);
-    document.body.appendChild(resizeOverlay);
-    document.body.appendChild(resizeContainer);
-    document.body.appendChild(modalOverlay);
-    document.body.appendChild(saveProgressModal);
-    
-    // Crear input file oculto para cargar progreso
-    const loadProgressInput = document.createElement('input');
-    loadProgressInput.type = 'file';
-    loadProgressInput.accept = '.json';
-    loadProgressInput.style.display = 'none';
-    loadProgressInput.id = 'loadProgressInput';
-    document.body.appendChild(loadProgressInput);
-    
-    const header = container.querySelector('.wplace-header');
-    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-    
-    header.onmousedown = dragMouseDown;
-    
-    function dragMouseDown(e) {
-      if (e.target.closest('.wplace-header-btn')) return;
+    </div>
+    <div class="content">
+      <div class="config-panel">
+        <div class="config-item">
+          <label>${l.pixelsPerBatch}:</label>
+          <input class="config-input pixels-per-batch" type="number" min="1" max="50" value="10">
+        </div>
+      </div>
       
-      e.preventDefault();
-      pos3 = e.clientX;
-      pos4 = e.clientY;
-      document.onmouseup = closeDragElement;
-      document.onmousemove = elementDrag;
-    }
-    
-    function elementDrag(e) {
-      e.preventDefault();
-      pos1 = pos3 - e.clientX;
-      pos2 = pos4 - e.clientY;
-      pos3 = e.clientX;
-      pos4 = e.clientY;
-      container.style.top = (container.offsetTop - pos2) + "px";
-      container.style.left = (container.offsetLeft - pos1) + "px";
-    }
-    
-    function closeDragElement() {
-      document.onmouseup = null;
-      document.onmousemove = null;
-    }
-    
-    const resizeBtn = container.querySelector('#resizeBtn');
-    const selectPosBtn = container.querySelector('#selectPosBtn');
-    const startBtn = container.querySelector('#startBtn');
-    const stopBtn = container.querySelector('#stopBtn');
-    const loadProgressBtn = container.querySelector('#loadProgressBtn');
-    const minimizeBtn = container.querySelector('#minimizeBtn');
-    const configBtn = container.querySelector('#configBtn');
-    const statusText = container.querySelector('#statusText');
-    const progressBar = container.querySelector('#progressBar');
-    const statsArea = container.querySelector('#statsArea');
-    const content = container.querySelector('.wplace-content');
-    const configPanel = container.querySelector('#configPanel');
-    const pixelsPerBatchInput = container.querySelector('#pixelsPerBatchInput');
-    
-    const widthSlider = resizeContainer.querySelector('#widthSlider');
-    const heightSlider = resizeContainer.querySelector('#heightSlider');
-    const widthValue = resizeContainer.querySelector('#widthValue');
-    const heightValue = resizeContainer.querySelector('#heightValue');
-    const keepAspect = resizeContainer.querySelector('#keepAspect');
-    const resizePreview = resizeContainer.querySelector('#resizePreview');
-    const confirmResize = resizeContainer.querySelector('#confirmResize');
-    const cancelResize = resizeContainer.querySelector('#cancelResize');
-    
-    minimizeBtn.addEventListener('click', () => {
-      state.minimized = !state.minimized;
-      if (state.minimized) {
-        container.classList.add('wplace-minimized');
-        minimizeBtn.innerHTML = '<i class="fas fa-expand"></i>';
-      } else {
-        container.classList.remove('wplace-minimized');
-        minimizeBtn.innerHTML = '<i class="fas fa-minus"></i>';
-      }
-    });
-
-    configBtn.addEventListener('click', () => {
-      const isVisible = configPanel.classList.contains('visible');
-      if (isVisible) {
-        configPanel.classList.remove('visible');
-        configBtn.innerHTML = '<i class="fas fa-cog"></i>';
-      } else {
-        configPanel.classList.add('visible');
-        configBtn.innerHTML = '<i class="fas fa-times"></i>';
-      }
-    });
-
-    pixelsPerBatchInput.addEventListener('change', () => {
-      const value = Math.max(1, Math.min(50, parseInt(pixelsPerBatchInput.value) || CONFIG.PIXELS_PER_BATCH));
-      state.pixelsPerBatch = value;
-      pixelsPerBatchInput.value = value;
-    });
-    
-    window.updateUI = (messageKey, type = 'default', params = {}) => {
-      const message = Utils.t(messageKey, params);
-      statusText.textContent = message;
-      statusText.className = `wplace-status status-${type}`;
-      statusText.style.animation = 'none';
-      void statusText.offsetWidth;
-      statusText.style.animation = 'slideIn 0.3s ease-out';
-    };
-
-      window.updateStats = async (forceUpdate = false) => {
-        if (!state.colorsChecked || !state.imageLoaded) return;
-        
-        let charges, cooldown, pixels;
-        
-        // Solo hacer consulta a /me si es forzada (inicio o después de pintar)
-        if (forceUpdate || state.lastChargeUpdate === 0) {
-          const chargeData = await WPlaceService.getCharges();
-          charges = chargeData.charges;
-          cooldown = chargeData.cooldown;
-          pixels = chargeData.pixels;
-          
-          state.currentCharges = charges;
-          state.cooldown = cooldown;
-        } else {
-          // Usar valores estimados sin consultar el servidor
-          charges = state.currentCharges;
-          cooldown = state.cooldown;
-          pixels = 0; // No actualizar píxeles sin consulta real
-        }
-        
-        const progress = state.totalPixels > 0 ? 
-          Math.round((state.paintedPixels / state.totalPixels) * 100) : 0;
-        const remainingPixels = state.totalPixels - state.paintedPixels;
-        
-        // Calcular tiempo estimado considerando el sistema de lotes
-        const pixelsPerBatch = state.pixelsPerBatch;
-        const remainingBatches = Math.ceil(remainingPixels / pixelsPerBatch);
-        const chargesNeeded = remainingBatches * pixelsPerBatch;
-        const currentAvailableCharges = WPlaceService.getEstimatedCharges();
-        
-        let estimatedTime = 0;
-        if (chargesNeeded > currentAvailableCharges) {
-          const chargesToWait = chargesNeeded - currentAvailableCharges;
-          estimatedTime = chargesToWait * CONFIG.CHARGE_REGEN_MS;
-        }
-        state.estimatedTime = estimatedTime;
-        
-        progressBar.style.width = `${progress}%`;
-        
-        // Mostrar información de cooldown si está activo
-        let cooldownInfo = '';
-        if (state.inCooldown && state.cooldownEndTime > Date.now()) {
-          const remainingMs = state.cooldownEndTime - Date.now();
-          const remainingSec = Math.ceil(remainingMs / 1000);
-          const remainingMin = Math.floor(remainingSec / 60);
-          const remainingSecOnly = remainingSec % 60;
-          
-          if (remainingMin > 0) {
-            cooldownInfo = `⏳ Cooldown: ${remainingMin}m ${remainingSecOnly}s`;
-          } else {
-            cooldownInfo = `⏳ Cooldown: ${remainingSec}s`;
-          }
-        } else {
-          // Mostrar tiempo para la próxima carga si no estamos en cooldown forzado
-          const timeToNext = WPlaceService.getTimeToNextCharge();
-          if (timeToNext > 1000) {
-            const remainingSec = Math.ceil(timeToNext / 1000);
-            cooldownInfo = `⏳ Próxima carga: ${remainingSec}s`;
-            
-            // Debug: mostrar información detallada del cálculo
-            if (Math.random() < 0.1) { // Solo 10% de las veces para no spam
-              const currentDecimal = state.chargeDecimalPart + ((Date.now() - state.lastChargeUpdate) / CONFIG.CHARGE_REGEN_MS);
-              console.log(`Debug cooldown: decimal inicial: ${state.chargeDecimalPart.toFixed(3)}, actual: ${currentDecimal.toFixed(3)}, restantes: ${remainingSec}s`);
-            }
-          }
-        }
-        
-        // Mostrar cargas como número entero
-        const integerCharges = Math.floor(charges);
-        
-        statsArea.innerHTML = `
-          <div class="wplace-stat-item">
-            <div class="wplace-stat-label"><i class="fas fa-image"></i> ${Utils.t('progress')}</div>
-            <div>${progress}%</div>
+      <div class="controls">
+        <button class="btn btn-primary init-btn">
+          <i class="fas fa-robot"></i>
+          <span>${l.initBot}</span>
+        </button>
+        <button class="btn btn-upload upload-btn" disabled>
+          <i class="fas fa-upload"></i>
+          <span>${l.uploadImage}</span>
+        </button>
+        <button class="btn btn-load load-progress-btn" disabled>
+          <i class="fas fa-file-import"></i>
+          <span>${l.loadProgress}</span>
+        </button>
+        <button class="btn btn-select select-pos-btn" disabled>
+          <i class="fas fa-crosshairs"></i>
+          <span>${l.selectPosition}</span>
+        </button>
+        <button class="btn btn-start start-btn" disabled>
+          <i class="fas fa-play"></i>
+          <span>${l.startPainting}</span>
+        </button>
+        <button class="btn btn-stop stop-btn" disabled>
+          <i class="fas fa-stop"></i>
+          <span>${l.stopPainting}</span>
+        </button>
+      </div>
+      
+      <div class="progress">
+        <div class="progress-bar"></div>
+      </div>
+      
+      <div class="stats">
+        <div class="stats-area">
+          <div class="stat-item">
+            <div class="stat-label"><i class="fas fa-info-circle"></i> ${l.initMessage}</div>
           </div>
-          ${forceUpdate && pixels > 0 ? `
-          <div class="wplace-stat-item">
-            <div class="wplace-stat-label"><i class="fas fa-paint-brush"></i> ${Utils.t('pixels')}</div>
-            <div>${pixels}</div>
-          </div>
-          ` : ''}
-          <div class="wplace-stat-item">
-            <div class="wplace-stat-label"><i class="fas fa-bolt"></i> ${Utils.t('charges')}</div>
-            <div>${integerCharges}</div>
-          </div>
-          <div class="wplace-stat-item">
-            <div class="wplace-stat-label"><i class="fas fa-layer-group"></i> ${Utils.t('pixelsPerBatch')}</div>
-            <div>${state.pixelsPerBatch}</div>
-          </div>
-          ${state.imageLoaded && estimatedTime > 0 ? `
-          <div class="wplace-stat-item">
-            <div class="wplace-stat-label"><i class="fas fa-clock"></i> ${Utils.t('estimatedTime')}</div>
-            <div>${Utils.formatTime(estimatedTime)}</div>
-          </div>
-          ` : ''}
-          ${cooldownInfo ? `
-          <div class="wplace-stat-item">
-            <div class="wplace-stat-label" style="color: ${CONFIG.THEME.warning};">${cooldownInfo}</div>
-            <div></div>
-          </div>
-          ` : ''}
-          ${state.tileX && state.tileY ? `
-          <div class="wplace-stat-item">
-            <div class="wplace-stat-label"><i class="fas fa-crosshairs"></i> Tile</div>
-            <div>(${state.tileX}, ${state.tileY})</div>
-          </div>
-          ` : ''}
-        `;
-      };    function showResizeDialog(processor) {
-      const { width, height } = processor.getDimensions();
-      const aspectRatio = width / height;
+        </div>
+      </div>
       
-      widthSlider.value = width;
-      heightSlider.value = height;
-      widthValue.textContent = width;
-      heightValue.textContent = height;
-      resizePreview.src = processor.img.src;
-      
-      resizeOverlay.style.display = 'block';
-      resizeContainer.style.display = 'block';
-      
-      const updatePreview = () => {
-        const newWidth = parseInt(widthSlider.value);
-        const newHeight = parseInt(heightSlider.value);
-        
-        widthValue.textContent = newWidth;
-        heightValue.textContent = newHeight;
-        
-        resizePreview.src = processor.generatePreview(newWidth, newHeight);
-      };
-      
-      widthSlider.addEventListener('input', () => {
-        if (keepAspect.checked) {
-          const newWidth = parseInt(widthSlider.value);
-          const newHeight = Math.round(newWidth / aspectRatio);
-          heightSlider.value = newHeight;
-        }
-        updatePreview();
-      });
-      
-      heightSlider.addEventListener('input', () => {
-        if (keepAspect.checked) {
-          const newHeight = parseInt(heightSlider.value);
-          const newWidth = Math.round(newHeight * aspectRatio);
-          widthSlider.value = newWidth;
-        }
-        updatePreview();
-      });
-      
-      confirmResize.onclick = () => {
-        const newWidth = parseInt(widthSlider.value);
-        const newHeight = parseInt(heightSlider.value);
-        
-        const newPixels = processor.resize(newWidth, newHeight);
-        
-        let totalValidPixels = 0;
-        for (let y = 0; y < newHeight; y++) {
-          for (let x = 0; x < newWidth; x++) {
-            const idx = (y * newWidth + x) * 4;
-            const r = newPixels[idx];
-            const g = newPixels[idx + 1];
-            const b = newPixels[idx + 2];
-            const alpha = newPixels[idx + 3];
-            
-            if (alpha < CONFIG.TRANSPARENCY_THRESHOLD) continue;
-            if (Utils.isWhitePixel(r, g, b)) continue;
-            
-            totalValidPixels++;
-          }
-        }
-        
-        state.imageData.pixels = newPixels;
-        state.imageData.width = newWidth;
-        state.imageData.height = newHeight;
-        state.imageData.totalPixels = totalValidPixels;
-        state.totalPixels = totalValidPixels;
-        state.paintedPixels = 0;
-        state.remainingPixels = []; // Resetear cola al redimensionar
-        
-        updateStats(); // Sin forzar, solo actualizar UI
-        updateUI('resizeSuccess', 'success', { width: newWidth, height: newHeight });
-        
-        closeResizeDialog();
-      };
-      
-      cancelResize.onclick = closeResizeDialog;
-    }
-    
-    function closeResizeDialog() {
-      resizeOverlay.style.display = 'none';
-      resizeContainer.style.display = 'none';
-    }
-    
-    initBotBtn.addEventListener('click', async () => {
-      try {
-        updateUI('checkingColors', 'default');
-        
-        state.availableColors = Utils.extractAvailableColors();
-        
-        if (state.availableColors.length === 0) {
-          Utils.showAlert(Utils.t('noColorsFound'), 'error');
-          updateUI('noColorsFound', 'error');
-          return;
-        }
-        
-        state.colorsChecked = true;
-        uploadBtn.disabled = false;
-        loadProgressBtn.disabled = false;
-        selectPosBtn.disabled = false;
-        initBotBtn.style.display = 'none';
-        
-        updateUI('colorsFound', 'success', { count: state.availableColors.length });
-        updateStats(true); // Forzar consulta inicial
-        
-      } catch {
-        updateUI('imageError', 'error');
-      }
-    });
-    
-    uploadBtn.addEventListener('click', async () => {
-      try {
-        updateUI('loadingImage', 'default');
-        const imageSrc = await Utils.createImageUploader();
-        
-        const processor = new ImageProcessor(imageSrc);
-        await processor.load();
-        
-        const { width, height } = processor.getDimensions();
-        const pixels = processor.getPixelData();
-        
-        let totalValidPixels = 0;
-        for (let y = 0; y < height; y++) {
-          for (let x = 0; x < width; x++) {
-            const idx = (y * width + x) * 4;
-            const r = pixels[idx];
-            const g = pixels[idx + 1];
-            const b = pixels[idx + 2];
-            const alpha = pixels[idx + 3];
-            
-            if (alpha < CONFIG.TRANSPARENCY_THRESHOLD) continue;
-            if (Utils.isWhitePixel(r, g, b)) continue;
-            
-            totalValidPixels++;
-          }
-        }
-        
-        state.imageData = {
-          width,
-          height,
-          pixels,
-          totalPixels: totalValidPixels,
-          processor
-        };
-        
-        state.totalPixels = totalValidPixels;
-        state.paintedPixels = 0;
-        state.imageLoaded = true;
-        state.lastPosition = { x: 0, y: 0 };
-        state.remainingPixels = []; // Resetear cola de píxeles
-        
-        resizeBtn.disabled = false;
-        
-        if (state.startPosition) {
-          startBtn.disabled = false;
-        }
-        
-        updateStats(); // Sin forzar, solo actualizar UI
-        updateUI('imageLoaded', 'success', { count: totalValidPixels });
-      } catch {
-        updateUI('imageError', 'error');
-      }
-    });
-    
-    // Event listener para cargar progreso
-    loadProgressBtn.addEventListener('click', () => {
-      // Disparar directamente el input file (debe ser síncrono)
-      loadProgressInput.click();
-    });
-    
-    // Event listener para el input file de cargar progreso
-    loadProgressInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      try {
-        updateUI('loadingImage', 'default');
-        const progressInfo = await Utils.loadProgressFromFile(file);
-        
-        // Habilitar botones apropiados después de cargar progreso
-        uploadBtn.disabled = false;
-        selectPosBtn.disabled = false;
-        resizeBtn.disabled = false;
-        
-        // Debug: verificar el estado antes de habilitar el botón de inicio
-        console.log('Estado después de cargar progreso:', {
-          imageLoaded: state.imageLoaded,
-          startPosition: state.startPosition,
-          region: state.region,
-          colorsChecked: state.colorsChecked
-        });
-        
-        // Si se cargó el progreso correctamente, habilitar inicio de pintura
-        if (state.imageLoaded && state.startPosition && state.region) {
-          startBtn.disabled = false;
-          console.log('✅ Botón de inicio habilitado');
-        } else {
-          console.log('❌ Botón de inicio NO habilitado - faltan condiciones');
-        }
-        
-        updateStats();
-        updateUI('progressLoaded', 'success', {
-          painted: progressInfo.paintedPixels,
-          total: progressInfo.totalPixels
-        });
-        
-      } catch (error) {
-        Utils.showAlert(Utils.t('progressLoadError', { error: error.message }), 'error');
-        updateUI('imageError', 'error');
-      } finally {
-        // Limpiar el input para permitir cargar el mismo archivo de nuevo
-        loadProgressInput.value = '';
-      }
-    });
-    
-    resizeBtn.addEventListener('click', () => {
-      if (state.imageLoaded && state.imageData.processor) {
-        showResizeDialog(state.imageData.processor);
-      }
-    });
-    
-      selectPosBtn.addEventListener('click', async () => {
-        if (state.selectingPosition) return;
-        
-        state.selectingPosition = true;
-        state.startPosition = null;
-        state.region = null;
-        state.tileX = null;
-        state.tileY = null;
-        startBtn.disabled = true;
-        
-        Utils.showAlert(Utils.t('selectPositionAlert'), 'info');
-        updateUI('waitingPosition', 'default');
-        
-        const originalFetch = window.fetch;
-        
-        window.fetch = async (url, options) => {
-          if (typeof url === 'string' && 
-              url.includes('https://backend.wplace.live/s0/pixel/') && 
-              options?.method?.toUpperCase() === 'POST') {
-            
-            try {
-              const response = await originalFetch(url, options);
-              const clonedResponse = response.clone();
-              const data = await clonedResponse.json();
-              
-              if (data?.painted === 1 || (data?.painted > 0)) {
-                // Extraer coordenadas del tile de la URL
-                const regionMatch = url.match(/\/pixel\/(\d+)\/(\d+)/);
-                if (regionMatch && regionMatch.length >= 3) {
-                  const tileX = parseInt(regionMatch[1]);
-                  const tileY = parseInt(regionMatch[2]);
-                  
-                  // Extraer coordenadas del payload
-                  const payload = JSON.parse(options.body);
-                  if (payload?.coords && Array.isArray(payload.coords)) {
-                    const coordX = payload.coords[0];
-                    const coordY = payload.coords[1];
-                    
-                    console.log(`Pixel interceptado: tile(${tileX},${tileY}) coords[${coordX},${coordY}]`);
-                    
-                    // IMPORTANTE: Las coordenadas interceptadas son donde se pintó el píxel
-                    // Estas coordenadas serán la esquina superior izquierda de la imagen
-                    const startLocalX = coordX;
-                    const startLocalY = coordY;
-                    
-                    state.tileX = tileX;
-                    state.tileY = tileY;
-                    
-                    console.log(`Posición seleccionada: tile(${tileX},${tileY}) local(${startLocalX},${startLocalY})`);
-                    console.log(`Esta será la esquina superior izquierda de la imagen`);
-                    
-                    // Verificar que las coordenadas locales estén en rango válido
-                    if (startLocalX < 0 || startLocalX >= CONFIG.TILE_SIZE || 
-                        startLocalY < 0 || startLocalY >= CONFIG.TILE_SIZE) {
-                      console.error(`Error: coordenadas fuera de rango: (${startLocalX},${startLocalY})`);
-                      return response;
-                    }
-                    
-                    state.region = {
-                      x: state.tileX,
-                      y: state.tileY
-                    };
-                    
-                    // Guardar la posición donde debe empezar la imagen (esquina superior izquierda)
-                    state.startPosition = {
-                      x: startLocalX,  // Esquina superior izquierda de la imagen
-                      y: startLocalY   // Esquina superior izquierda de la imagen
-                    };
-                    state.lastPosition = { x: 0, y: 0 };
-                    
-                    console.log(`Posición capturada exitosamente:`);
-                    console.log(`  Tile: (${state.tileX}, ${state.tileY})`);
-                    console.log(`  Inicio de imagen (esquina superior izquierda): (${startLocalX}, ${startLocalY})`);
-                    
-                    // Mostrar información sobre dónde terminará la imagen si está cargada
-                    if (state.imageLoaded && state.imageData) {
-                      const endX = startLocalX + state.imageData.width - 1;
-                      const endY = startLocalY + state.imageData.height - 1;
-                      console.log(`  Final estimado de imagen: (${endX}, ${endY})`);
-                      console.log(`  Tamaño imagen: ${state.imageData.width}x${state.imageData.height}`);
-                    }
-                    
-                    if (state.imageLoaded) {
-                      startBtn.disabled = false;
-                    }
-                    
-                    window.fetch = originalFetch;
-                    state.selectingPosition = false;
-                    updateStats(); // Sin forzar, solo actualizar UI para mostrar tile
-                    updateUI('positionSet', 'success');
-                  }
-                }
-              }
-              
-              return response;
-            } catch (error) {
-              console.error('Error interceptando pixel:', error);
-              return originalFetch(url, options);
-            }
-          }
-          return originalFetch(url, options);
-        };
-        
-        setTimeout(() => {
-          if (state.selectingPosition) {
-            window.fetch = originalFetch;
-            state.selectingPosition = false;
-            updateUI('positionTimeout', 'error');
-            Utils.showAlert(Utils.t('positionTimeout'), 'error');
-          }
-        }, 120000);
-      });
-      
-      startBtn.addEventListener('click', async () => {
-        if (!state.imageLoaded || !state.startPosition || !state.region) {
-          updateUI('missingRequirements', 'error');
-          return;
-        }
-        
-        // Verificar zona segura - simplificado para tiles de gran tamaño
-        const { x: localStartX, y: localStartY } = state.startPosition; // LOCALES
-        const { width, height } = state.imageData;
-        
-        // Verificar que la imagen no sea excesivamente grande para una tile
-        if (width > CONFIG.TILE_SIZE || height > CONFIG.TILE_SIZE) {
-          Utils.showAlert(`⚠️ Imagen demasiado grande (${width}x${height}). Máximo recomendado: ${CONFIG.TILE_SIZE}x${CONFIG.TILE_SIZE}`, 'warning');
-        }
-        
-        console.log(`Imagen ${width}x${height} iniciando en tile(${state.tileX},${state.tileY}) local(${localStartX},${localStartY})`);
-        
-        // Verificar que tenemos cargas suficientes para empezar
-        if (Math.floor(state.currentCharges) < 1) {
-          Utils.showAlert('⚠️ No tienes cargas suficientes para empezar a pintar.', 'warning');
-          updateUI('noCharges', 'warning', { time: Utils.formatTime(state.cooldown) });
-          return;
-        }
-        
-        state.running = true;
-        state.stopFlag = false;
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        uploadBtn.disabled = true;
-        selectPosBtn.disabled = true;
-        resizeBtn.disabled = true;
-        
-        updateUI('startPaintingMsg', 'success');
-        
-        try {
-          await processImage();
-        } catch (error) {
-          console.error('Error en proceso de pintado:', error);
-          updateUI('paintingError', 'error');
-        } finally {
-          state.running = false;
-          state.inCooldown = false;
-          stopBtn.disabled = true;
-          
-          if (!state.stopFlag) {
-            // Si terminó completamente, habilitar nuevos procesos
-            startBtn.disabled = true;
-            uploadBtn.disabled = false;
-            loadProgressBtn.disabled = false;
-            selectPosBtn.disabled = false;
-            resizeBtn.disabled = false;
-          } else {
-            // Si se pausó, permitir continuar
-            if (state.remainingPixels && state.remainingPixels.length > 0) {
-              startBtn.disabled = false;
-            } else {
-              startBtn.disabled = true;
-              uploadBtn.disabled = false;
-              loadProgressBtn.disabled = false;
-              selectPosBtn.disabled = false;
-              resizeBtn.disabled = false;
-            }
-          }
-        }
-      });
-      
-      stopBtn.addEventListener('click', async () => {
-        state.stopFlag = true;
-        state.running = false;
-        state.inCooldown = false;
-        stopBtn.disabled = true;
-        
-        // Si hay progreso que guardar, preguntar al usuario
-        const hasProgress = state.remainingPixels && state.remainingPixels.length > 0 && state.paintedPixels > 0;
-        
-        if (hasProgress) {
-          try {
-            const userChoice = await Utils.showSaveProgressDialog();
-            
-            if (userChoice === 'save') {
-              const filename = await Utils.downloadProgress();
-              Utils.showAlert(Utils.t('progressSaved', { filename }), 'success');
-            } else if (userChoice === 'cancel') {
-              // El usuario canceló, no detener la pintura
-              stopBtn.disabled = false;
-              return;
-            }
-            // Si userChoice === 'discard', continuar sin guardar
-            
-          } catch (error) {
-            Utils.showAlert(Utils.t('progressSaveError', { error: error.message }), 'error');
-          }
-        }
-        
-        // Permitir reanudar desde donde se pausó si hay píxeles pendientes
-        if (state.remainingPixels && state.remainingPixels.length > 0) {
-          startBtn.disabled = false;
-          updateUI('paintingStopped', 'warning');
-        } else {
-          startBtn.disabled = true;
-          uploadBtn.disabled = false;
-          loadProgressBtn.disabled = false;
-          selectPosBtn.disabled = false;
-          resizeBtn.disabled = false;
-        }
-      });
-    }
-
-  async function processImage() {
-    const { width, height } = state.imageData;
-    const { x: localStartX, y: localStartY } = state.startPosition;
-    
-    console.log(`Iniciando pintado: imagen(${width}x${height}) inicio LOCAL(${localStartX},${localStartY}) tile(${state.tileX},${state.tileY})`);
-    
-    // Generar cola de píxeles si no existe o si estamos empezando desde el principio
-    if (!state.remainingPixels || state.remainingPixels.length === 0 || (state.lastPosition.x === 0 && state.lastPosition.y === 0)) {
-      console.log('Generando cola de píxeles...');
-      state.remainingPixels = generatePixelQueue(state.imageData, state.startPosition, state.tileX, state.tileY);
-      
-      // Si hay una posición de continuación, filtrar píxeles ya pintados
-      if (state.lastPosition.x > 0 || state.lastPosition.y > 0) {
-        state.remainingPixels = state.remainingPixels.filter(pixel => {
-          const pixelIndex = pixel.imageY * width + pixel.imageX;
-          const lastIndex = state.lastPosition.y * width + state.lastPosition.x;
-          return pixelIndex >= lastIndex;
-        });
-      }
-      
-      console.log(`Cola generada: ${state.remainingPixels.length} píxeles pendientes`);
-    }
-    
-    while (state.remainingPixels.length > 0 && !state.stopFlag) {
-      // Usar cargas estimadas para evitar consultas constantes a /me
-      const availableCharges = WPlaceService.getEstimatedCharges();
-      const pixelsPerBatch = Math.min(state.pixelsPerBatch, state.remainingPixels.length);
-      
-      if (availableCharges < pixelsPerBatch) {
-        console.log(`Cargas insuficientes: ${availableCharges}/${pixelsPerBatch} necesarias`);
-        await waitForCooldown(pixelsPerBatch - availableCharges);
-        continue;
-      }
-      
-      // Tomar el siguiente lote de píxeles
-      const batch = state.remainingPixels.splice(0, pixelsPerBatch);
-      
-      console.log(`Pintando lote de ${batch.length} píxeles...`);
-      
-      // Pintar el lote
-      const result = await WPlaceService.paintPixelBatch(batch);
-      
-      if (result.success && result.painted > 0) {
-        state.paintedPixels += result.painted;
-        
-        // Actualizar cargas reales después de pintar (única consulta a /me)
-        const chargeUpdate = await WPlaceService.getCharges();
-        state.currentCharges = chargeUpdate.charges;
-        
-        // Actualizar posición para continuar desde aquí si se interrumpe
-        if (batch.length > 0) {
-          const lastPixel = batch[batch.length - 1];
-          state.lastPosition = { x: lastPixel.imageX, y: lastPixel.imageY };
-        }
-        
-        console.log(`Lote exitoso: ${result.painted}/${batch.length} píxeles pintados. Total: ${state.paintedPixels}/${state.totalPixels}`);
-        
-        // Actualizar UI cada ciertos píxeles con datos reales
-        if (state.paintedPixels % CONFIG.LOG_INTERVAL === 0 || state.remainingPixels.length === 0) {
-          updateStats(true); // Forzar actualización con datos reales
-          updateUI('paintingProgress', 'default', { 
-            painted: state.paintedPixels, 
-            total: state.totalPixels 
-          });
-        }
-      } else {
-        // En caso de fallo, devolver el lote a la cola
-        state.remainingPixels.unshift(...batch);
-        console.warn(`Lote falló: reintentando en 5 segundos...`);
-        await Utils.sleep(5000);
-      }
-      
-      // Pausa breve entre lotes
-      await Utils.sleep(500);
-    }
-    
-    if (state.stopFlag) {
-      updateUI('paintingStopped', 'warning');
-      console.log(`Pintado pausado en píxel imagen(${state.lastPosition.x},${state.lastPosition.y})`);
-    } else {
-      updateUI('paintingComplete', 'success', { count: state.paintedPixels });
-      state.lastPosition = { x: 0, y: 0 };
-      state.remainingPixels = [];
-      console.log(`Pintado completado: ${state.paintedPixels} píxeles pintados`);
-    }
-    
-    updateStats(); // Sin forzar, solo actualizar UI final
-  }
-
-  function generatePixelQueue(imageData, startPosition, tileX, tileY) {
-    const { width, height, pixels } = imageData;
-    const { x: localStartX, y: localStartY } = startPosition;
-    const queue = [];
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
-        const r = pixels[idx];
-        const g = pixels[idx + 1];
-        const b = pixels[idx + 2];
-        const alpha = pixels[idx + 3];
-        
-        if (alpha < CONFIG.TRANSPARENCY_THRESHOLD) continue;
-        if (Utils.isWhitePixel(r, g, b)) continue;
-        
-        const rgb = [r, g, b];
-        const colorId = findClosestColor(rgb, state.availableColors);
-        
-        // Calcular posición del pixel en el mundo
-        const imageLocalX = localStartX + x;
-        const imageLocalY = localStartY + y;
-        
-        // Determinar tile y coordenadas locales
-        let targetTileX = tileX;
-        let targetTileY = tileY;
-        let targetLocalX = imageLocalX;
-        let targetLocalY = imageLocalY;
-        
-        // Manejar píxeles que se extienden a otros tiles
-        if (imageLocalX >= CONFIG.TILE_SIZE) {
-          const extraTilesX = Math.floor(imageLocalX / CONFIG.TILE_SIZE);
-          targetTileX = tileX + extraTilesX;
-          targetLocalX = imageLocalX % CONFIG.TILE_SIZE;
-        } else if (imageLocalX < 0) {
-          const extraTilesX = Math.ceil(-imageLocalX / CONFIG.TILE_SIZE);
-          targetTileX = tileX - extraTilesX;
-          targetLocalX = CONFIG.TILE_SIZE + (imageLocalX % CONFIG.TILE_SIZE);
-        }
-        
-        if (imageLocalY >= CONFIG.TILE_SIZE) {
-          const extraTilesY = Math.floor(imageLocalY / CONFIG.TILE_SIZE);
-          targetTileY = tileY + extraTilesY;
-          targetLocalY = imageLocalY % CONFIG.TILE_SIZE;
-        } else if (imageLocalY < 0) {
-          const extraTilesY = Math.ceil(-imageLocalY / CONFIG.TILE_SIZE);
-          targetTileY = tileY - extraTilesY;
-          targetLocalY = CONFIG.TILE_SIZE + (imageLocalY % CONFIG.TILE_SIZE);
-        }
-        
-        queue.push({
-          imageX: x,
-          imageY: y,
-          tileX: targetTileX,
-          tileY: targetTileY,
-          localX: targetLocalX,
-          localY: targetLocalY,
-          color: colorId
-        });
-      }
-    }
-    
-    return queue;
-  }
-
-  async function waitForCooldown(targetCharges) {
-    const cooldownTime = targetCharges * CONFIG.CHARGE_REGEN_MS;
-    state.inCooldown = true;
-    state.cooldownEndTime = Date.now() + cooldownTime;
-    
-    console.log(`Esperando ${targetCharges} cargas (${Utils.formatTime(cooldownTime)}) para continuar...`);
-    
-    while (state.cooldownEndTime > Date.now() && !state.stopFlag) {
-      const remainingMs = state.cooldownEndTime - Date.now();
-      updateUI('cooldownWaiting', 'warning', { time: Utils.formatTime(remainingMs) });
-      updateStats(); // Sin forzar, usar estimaciones durante cooldown
-      await Utils.sleep(1000);
-    }
-    
-    state.inCooldown = false;
-    console.log('Cooldown completado, continuando pintado...');
-  }
-
-  createUI();
-  
-  // Timer para actualizar UI sin consultar /me (solo estimaciones)
-  setInterval(() => {
-    if (state.colorsChecked && state.imageLoaded && !state.processing) {
-      updateStats(); // Sin forzar, solo estimaciones
-    }
-  }, 5000); // Cada 5 segundos
-  
-  // Función de debugging para verificar coordenadas
-  window.debugCoords = () => {
-    console.log('=== DEBUG COORDENADAS ===');
-    console.log('Estado actual:');
-    console.log(`  Tile: (${state.tileX}, ${state.tileY})`);
-    console.log(`  Start Position (local): (${state.startPosition?.x}, ${state.startPosition?.y})`);
-    console.log(`  Imagen cargada: ${state.imageLoaded}`);
-    console.log(`  Píxeles por lote: ${state.pixelsPerBatch}`);
-    console.log(`  Píxeles pendientes: ${state.remainingPixels?.length || 0}`);
-    console.log(`  En cooldown: ${state.inCooldown}`);
-    if (state.imageData) {
-      console.log(`  Tamaño imagen: ${state.imageData.width}x${state.imageData.height}`);
-      console.log(`  Tamaño tile: ${CONFIG.TILE_SIZE}x${CONFIG.TILE_SIZE}`);
-      
-      if (state.startPosition && state.tileX !== null && state.tileY !== null) {
-        const endLocalX = state.startPosition.x + state.imageData.width - 1;
-        const endLocalY = state.startPosition.y + state.imageData.height - 1;
-        
-        console.log(`  Inicio local: (${state.startPosition.x}, ${state.startPosition.y})`);
-        console.log(`  Final local: (${endLocalX}, ${endLocalY})`);
-        console.log(`  ¿Cabe en el tile?: ${endLocalX < CONFIG.TILE_SIZE && endLocalY < CONFIG.TILE_SIZE}`);
-        
-        if (endLocalX >= CONFIG.TILE_SIZE || endLocalY >= CONFIG.TILE_SIZE) {
-          console.log(`  ⚠️ La imagen se extiende a múltiples tiles`);
-        }
-      }
-    }
-    console.log('========================');
-  };
-
-  // Función para configurar píxeles por lote desde consola
-  window.setPixelsPerBatch = (count) => {
-    const value = Math.max(1, Math.min(50, parseInt(count) || CONFIG.PIXELS_PER_BATCH));
-    state.pixelsPerBatch = value;
-    document.querySelector('#pixelsPerBatchInput').value = value;
-    console.log(`Píxeles por lote establecido a: ${value}`);
-    updateStats();
-  };
-
-  // Función de debugging para verificar cálculos de cargas
-  window.debugCharges = () => {
-    console.log('=== DEBUG CARGAS ===');
-    console.log(`Cargas actuales: ${state.currentCharges.toFixed(3)}`);
-    console.log(`Cargas enteras: ${Math.floor(state.currentCharges)}`);
-    console.log(`Parte decimal: ${state.chargeDecimalPart.toFixed(3)} (${(state.chargeDecimalPart * 100).toFixed(1)}%)`);
-    console.log(`Última actualización: ${new Date(state.lastChargeUpdate).toLocaleTimeString()}`);
-    
-    if (state.lastChargeUpdate > 0) {
-      const timeSinceUpdate = Date.now() - state.lastChargeUpdate;
-      const progressSinceUpdate = timeSinceUpdate / CONFIG.CHARGE_REGEN_MS;
-      const currentDecimalPart = state.chargeDecimalPart + progressSinceUpdate;
-      const timeToNext = WPlaceService.getTimeToNextCharge();
-      
-      console.log(`Tiempo desde actualización: ${(timeSinceUpdate / 1000).toFixed(1)}s`);
-      console.log(`Progreso desde actualización: ${(progressSinceUpdate * 100).toFixed(1)}%`);
-      console.log(`Decimal actual estimado: ${currentDecimalPart.toFixed(3)} (${(currentDecimalPart * 100).toFixed(1)}%)`);
-      console.log(`Tiempo a próxima carga: ${Math.ceil(timeToNext / 1000)}s`);
-      console.log(`Cargas estimadas: ${WPlaceService.getEstimatedCharges()}`);
-      
-      // Ejemplo del cálculo correcto
-      const remainingProgress = Math.max(0, 1.0 - currentDecimalPart);
-      console.log(`\n📊 CÁLCULO DETALLADO:`);
-      console.log(`  Progreso hacia próxima carga: ${(currentDecimalPart * 100).toFixed(1)}%`);
-      console.log(`  Progreso restante: ${(remainingProgress * 100).toFixed(1)}%`);
-      console.log(`  Tiempo restante: ${(remainingProgress * 30).toFixed(1)}s`);
-    }
-    console.log('==================');
-  };
-})();
+      <div class="status status-default">
+        ${l.waitingInit}
+      </div>
+    </div>
+  `,n.appendChild(r);let c=document.createElement("input");c.type="file",c.accept="image/png,image/jpeg",c.style.display="none",n.appendChild(c);let p=document.createElement("input");p.type="file",p.accept=".json",p.style.display="none",n.appendChild(p);let i={header:r.querySelector(".header"),configBtn:r.querySelector(".config-btn"),minimizeBtn:r.querySelector(".minimize-btn"),configPanel:r.querySelector(".config-panel"),pixelsPerBatch:r.querySelector(".pixels-per-batch"),initBtn:r.querySelector(".init-btn"),uploadBtn:r.querySelector(".upload-btn"),loadProgressBtn:r.querySelector(".load-progress-btn"),selectPosBtn:r.querySelector(".select-pos-btn"),startBtn:r.querySelector(".start-btn"),stopBtn:r.querySelector(".stop-btn"),progressBar:r.querySelector(".progress-bar"),statsArea:r.querySelector(".stats-area"),status:r.querySelector(".status"),content:r.querySelector(".content")},u={minimized:!1,configVisible:!1};M(i.header,r),i.minimizeBtn.addEventListener("click",()=>{u.minimized=!u.minimized,u.minimized?(r.classList.add("minimized"),i.minimizeBtn.innerHTML='<i class="fas fa-expand"></i>'):(r.classList.remove("minimized"),i.minimizeBtn.innerHTML='<i class="fas fa-minus"></i>')}),i.configBtn.addEventListener("click",()=>{u.configVisible=!u.configVisible,u.configVisible?(i.configPanel.classList.add("visible"),i.configBtn.innerHTML='<i class="fas fa-times"></i>'):(i.configPanel.classList.remove("visible"),i.configBtn.innerHTML='<i class="fas fa-cog"></i>')}),i.initBtn.addEventListener("click",async()=>{i.initBtn.disabled=!0,s.onInitBot&&await s.onInitBot()&&(i.uploadBtn.disabled=!1,i.loadProgressBtn.disabled=!1),i.initBtn.disabled=!1}),i.uploadBtn.addEventListener("click",()=>{c.click()}),c.addEventListener("change",async()=>{c.files.length>0&&s.onUploadImage&&await s.onUploadImage(c.files[0])&&(i.selectPosBtn.disabled=!1)}),i.loadProgressBtn.addEventListener("click",()=>{p.click()}),p.addEventListener("change",async()=>{p.files.length>0&&s.onLoadProgress&&await s.onLoadProgress(p.files[0])&&(i.selectPosBtn.disabled=!1,i.startBtn.disabled=!1)}),i.selectPosBtn.addEventListener("click",async()=>{s.onSelectPosition&&(i.selectPosBtn.disabled=!0,await s.onSelectPosition()&&(i.startBtn.disabled=!1),i.selectPosBtn.disabled=!1)}),i.startBtn.addEventListener("click",async()=>{s.onStartPainting&&(i.startBtn.disabled=!0,i.stopBtn.disabled=!1,await s.onStartPainting()||(i.startBtn.disabled=!1,i.stopBtn.disabled=!0))}),i.stopBtn.addEventListener("click",async()=>{s.onStopPainting&&await s.onStopPainting()&&(i.startBtn.disabled=!1,i.stopBtn.disabled=!0)});function m(h,P="default"){i.status.textContent=h,i.status.className=`status status-${P}`,i.status.style.animation="none",i.status.offsetWidth,i.status.style.animation="slideIn 0.3s ease-out"}function f(h,P){let w=P>0?h/P*100:0;i.progressBar.style.width=`${w}%`,i.statsArea.innerHTML=`
+      <div class="stat-item">
+        <div class="stat-label"><i class="fas fa-palette"></i> ${l.progress}</div>
+        <div>${h}/${P} (${w.toFixed(1)}%)</div>
+      </div>
+    `}function x(){t.remove()}return d("\u2705 Interfaz de Auto-Image creada"),{setStatus:m,updateProgress:f,destroy:x}}function _(l,s,t={}){return new Promise(n=>{let a=document.createElement("div");a.className="modal-overlay",a.style.position="fixed",a.style.top="0",a.style.left="0",a.style.width="100%",a.style.height="100%",a.style.background="rgba(0,0,0,0.7)",a.style.zIndex="10001",a.style.display="flex",a.style.alignItems="center",a.style.justifyContent="center";let o=document.createElement("div");o.style.background="#1a1a1a",o.style.border="2px solid #333",o.style.borderRadius="15px",o.style.padding="25px",o.style.color="#eee",o.style.minWidth="350px",o.style.maxWidth="400px",o.style.boxShadow="0 10px 30px rgba(0,0,0,0.5)",o.style.fontFamily="'Segoe UI', Roboto, sans-serif",o.innerHTML=`
+      <h3 style="margin: 0 0 15px 0; text-align: center; font-size: 18px;">${s}</h3>
+      <p style="margin: 0 0 20px 0; text-align: center; line-height: 1.4;">${l}</p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        ${t.save?`<button class="save-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #10b981; color: white;">${t.save}</button>`:""}
+        ${t.discard?`<button class="discard-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #ef4444; color: white;">${t.discard}</button>`:""}
+        ${t.cancel?`<button class="cancel-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #2d3748; color: white;">${t.cancel}</button>`:""}
+      </div>
+    `,a.appendChild(o),document.body.appendChild(a);let r=o.querySelector(".save-btn"),c=o.querySelector(".discard-btn"),p=o.querySelector(".cancel-btn"),i=()=>{document.body.removeChild(a)};r&&r.addEventListener("click",()=>{i(),n("save")}),c&&c.addEventListener("click",()=>{i(),n("discard")}),p&&p.addEventListener("click",()=>{i(),n("cancel")}),a.addEventListener("click",u=>{u.target===a&&(i(),n("cancel"))})})}async function Y(){var l;if(d("\u{1F680} Iniciando WPlace Auto-Image (versi\xF3n modular)"),(l=window.__wplaceBot)!=null&&l.imageRunning){alert("Auto-Image ya est\xE1 ejecut\xE1ndose.");return}window.__wplaceBot={...window.__wplaceBot,imageRunning:!0};try{let s={...b},t=U();if(e.language=t,!s.SITEKEY){let a=document.querySelector("*[data-sitekey]");a?(s.SITEKEY=a.getAttribute("data-sitekey"),d(`\u{1F4DD} Sitekey encontrada autom\xE1ticamente: ${s.SITEKEY.substring(0,20)}...`)):d("\u26A0\uFE0F No se pudo encontrar la sitekey autom\xE1ticamente")}let n=await z({texts:g[t],onInitBot:async()=>{d("\u{1F916} Inicializando Auto-Image..."),n.setStatus(g[t].checkingColors,"info");let a=C();return a.length===0?(n.setStatus(g[t].noColorsFound,"error"),!1):(e.availableColors=a,e.colorsChecked=!0,n.setStatus(g[t].colorsFound.replace("{count}",a.length),"success"),d(`\u2705 ${a.length} colores disponibles detectados`),!0)},onUploadImage:async a=>{try{n.setStatus(g[t].loadingImage,"info");let o=window.URL.createObjectURL(a),r=new y(o);r.originalName=a.name,await r.load();let c=r.processImage(e.availableColors,s);return e.imageData=c,e.totalPixels=c.validPixelCount,e.paintedPixels=0,e.originalImageName=a.name,e.imageLoaded=!0,n.setStatus(g[t].imageLoaded.replace("{count}",c.validPixelCount),"success"),n.updateProgress(0,c.validPixelCount),d(`\u2705 Imagen cargada: ${c.width}x${c.height}, ${c.validPixelCount} p\xEDxeles v\xE1lidos`),window.URL.revokeObjectURL(o),!0}catch(o){return n.setStatus(g[t].imageError,"error"),d("\u274C Error cargando imagen:",o),!1}},onSelectPosition:async()=>new Promise(a=>{n.setStatus(g[t].selectPositionAlert,"info"),n.setStatus(g[t].waitingPosition,"info"),e.selectingPosition=!0;let o=window.fetch;window.fetch=async(r,c)=>{if(e.selectingPosition&&r.includes("/s0/paint"))try{let p=await o(r,c);if(p.ok&&c.body){let i=JSON.parse(c.body);if(i.coords&&i.coords.length>=2){let u=i.coords[0],m=i.coords[1],f=r.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);f&&(e.tileX=parseInt(f[1]),e.tileY=parseInt(f[2])),e.startPosition={x:u,y:m},e.selectingPosition=!1,window.fetch=o,n.setStatus(g[t].positionSet,"success"),d(`\u2705 Posici\xF3n establecida: tile(${e.tileX},${e.tileY}) local(${u},${m})`),a(!0)}}return p}catch(p){return d("Error interceptando pixel:",p),o(r,c)}return o(r,c)},setTimeout(()=>{e.selectingPosition&&(window.fetch=o,e.selectingPosition=!1,n.setStatus(g[t].positionTimeout,"error"),a(!1))},12e4)}),onStartPainting:async()=>{if(!e.imageLoaded||!e.startPosition)return n.setStatus(g[t].missingRequirements,"error"),!1;e.running=!0,e.stopFlag=!1,n.setStatus(g[t].startPaintingMsg,"success");try{return await L(e.imageData,e.startPosition,(a,o,r)=>{n.updateProgress(a,o),r?n.setStatus(r,"info"):n.setStatus(g[t].paintingProgress.replace("{painted}",a).replace("{total}",o),"info")},(a,o)=>{a?(n.setStatus(g[t].paintingComplete.replace("{count}",o),"success"),D()):n.setStatus(g[t].paintingStopped,"warning"),e.running=!1},a=>{n.setStatus(g[t].paintingError,"error"),d("\u274C Error en proceso de pintado:",a),e.running=!1}),!0}catch(a){return n.setStatus(g[t].paintingError,"error"),d("\u274C Error iniciando pintado:",a),e.running=!1,!1}},onStopPainting:async()=>{if(A().hasProgress){let o=await _(g[t].confirmSaveProgress,g[t].saveProgressTitle,{save:g[t].saveProgress,discard:g[t].discardProgress,cancel:g[t].cancel});if(o==="save"){let r=E();r.success?n.setStatus(g[t].progressSaved.replace("{filename}",r.filename),"success"):n.setStatus(g[t].progressSaveError.replace("{error}",r.error),"error")}else if(o==="cancel")return!1}return S(),n.setStatus(g[t].paintingStopped,"warning"),!0},onSaveProgress:async()=>{let a=E();return a.success?n.setStatus(g[t].progressSaved.replace("{filename}",a.filename),"success"):n.setStatus(g[t].progressSaveError.replace("{error}",a.error),"error"),a.success},onLoadProgress:async a=>{try{let o=await $(a);return o.success?(n.setStatus(g[t].progressLoaded.replace("{painted}",o.painted).replace("{total}",o.total),"success"),n.updateProgress(o.painted,o.total),!0):(n.setStatus(g[t].progressLoadError.replace("{error}",o.error),"error"),!1)}catch(o){return n.setStatus(g[t].progressLoadError.replace("{error}",o.message),"error"),!1}}});window.addEventListener("beforeunload",()=>{S(),n.destroy(),window.__wplaceBot.imageRunning=!1}),d("\u2705 Auto-Image inicializado correctamente")}catch(s){throw d("\u274C Error inicializando Auto-Image:",s),window.__wplaceBot.imageRunning=!1,s}}function U(){return(navigator.language||navigator.userLanguage||"es").startsWith("es"),"es"}(()=>{"use strict";var l;if((l=window.__wplaceBot)!=null&&l.running){alert("WPlace BOT ya est\xE1 corriendo.");return}window.__wplaceBot={running:!0},Y().catch(s=>{console.error("[BOT] Error en Auto-Image:",s),window.__wplaceBot.running=!1,alert("Auto-Image: error inesperado. Revisa consola.")})})();})();

@@ -1,25 +1,51 @@
 let loaded = false;
 
-export async function loadTurnstile(siteKey) {
-  if (loaded) return;
-  await new Promise((res, rej) => {
-    const s = document.createElement("script");
-    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-    s.async = true; s.defer = true;
-    s.onload = () => res();
-    s.onerror = () => rej(new Error("Turnstile load failed"));
+export async function loadTurnstile() {
+  if (loaded || window.turnstile) return;
+  
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.async = true; 
+    s.defer = true;
+    s.onload = () => {
+      loaded = true;
+      resolve();
+    };
+    s.onerror = () => reject(new Error('No se pudo cargar Turnstile'));
     document.head.appendChild(s);
   });
-  loaded = true;
 }
 
-export function executeTurnstile(siteKey, action = "paint") {
-  return new Promise((resolve, reject) => {
-    if (!window.turnstile) return reject(new Error("Turnstile no disponible"));
-    window.turnstile.render(document.createElement("div"), {
-      sitekey: siteKey, action,
-      callback: (token) => resolve(token),
-      "error-callback": () => reject(new Error("Turnstile error"))
+export async function executeTurnstile(siteKey, action = "paint") {
+  await loadTurnstile();
+  
+  if (typeof window.turnstile?.execute === 'function') {
+    try {
+      const token = await window.turnstile.execute(siteKey, { action });
+      if (token && token.length > 20) return token;
+    } catch { 
+      /* fallback abajo */ 
+    }
+  }
+  
+  // Fallback: render oculto
+  return await new Promise((resolve) => {
+    const host = document.createElement('div');
+    host.style.position = 'fixed'; 
+    host.style.left = '-9999px';
+    document.body.appendChild(host);
+    window.turnstile.render(host, { 
+      sitekey: siteKey, 
+      callback: (t) => {
+        document.body.removeChild(host);
+        resolve(t);
+      } 
     });
   });
+}
+
+// Versión original para compatibilidad
+export async function getTurnstileToken(siteKey) {
+  return executeTurnstile(siteKey, 'paint');
 }
