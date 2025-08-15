@@ -101,7 +101,7 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession) 
   setStatus(`🎨 Pintando ${pixelCount} píxeles (${availableCharges} cargas completas) en tile(${cfg.TILE_X},${cfg.TILE_Y}) local(${firstLocalX},${firstLocalY})...`, 'status');
   
   const t = await getTurnstileToken(cfg.SITEKEY);
-  const r = await postPixel(coords, colors, t);
+  const r = await postPixel(coords, colors, t, cfg.TILE_X, cfg.TILE_Y);
 
   state.last = { 
     x: firstLocalX, 

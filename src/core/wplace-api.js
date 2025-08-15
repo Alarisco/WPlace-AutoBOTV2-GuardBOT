@@ -98,17 +98,37 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
   throw new Error(`paint failed: ${msg}`);
 }
 
-// Post píxel para farm (versión original)
-export async function postPixel(coords, colors, turnstileToken) {
+// Post píxel para farm (versión corregida con formato original)
+export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   try {
-    const response = await fetch(`${BASE}/s0/paint`, {
+    const body = JSON.stringify({ 
+      colors: colors, 
+      coords: coords, 
+      t: turnstileToken 
+    });
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // Timeout de 15 segundos
+
+    const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ coords, colors, t: turnstileToken })
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: body,
+      signal: controller.signal
     });
 
-    const responseData = await response.json().catch(() => ({}));
+    clearTimeout(timeoutId);
+
+    let responseData = null;
+    try {
+      const text = await response.text();
+      if (text) {
+        responseData = JSON.parse(text);
+      }
+    } catch {
+      responseData = {}; // Ignorar errores de JSON parse
+    }
 
     return {
       status: response.status,

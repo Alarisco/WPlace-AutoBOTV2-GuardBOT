@@ -3,18 +3,6 @@ import { farmState, FARM_DEFAULTS } from "./config.js";
 import { saveFarmCfg, loadFarmCfg, resetFarmCfg } from "../core/storage.js";
 import { dragHeader, clamp } from "../core/utils.js";
 
-// Temas predefinidos
-const THEMES = {
-  ukraine: ['#0057B7', '#FFD700'],
-  spain: ['#AA151B', '#F1BF00', '#AA151B'],
-  catalonia: ['#FCDD09', '#DA020E', '#FCDD09', '#DA020E'],
-  usa: ['#B22234', '#FFFFFF', '#3C3B6E'],
-  trans: ['#5BCEFA', '#F5A9B8', '#FFFFFF', '#F5A9B8', '#5BCEFA'],
-  rainbow: ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'],
-  random: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
-  custom: [] // Se llenará dinámicamente
-};
-
 export function createFarmUI(config, onStart, onStop, onCalibrate) {
   const shadowHost = document.createElement('div');
   shadowHost.id = 'wplace-farm-ui';
@@ -352,22 +340,6 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
         <div class="wplace-section-title">⚙️ Configuración</div>
         
         <div class="wplace-row">
-          <span class="wplace-label">Tema:</span>
-          <select class="wplace-select" id="theme-select">
-            <option value="random">🎲 Aleatorio</option>
-            <option value="ukraine">🇺🇦 Ucrania</option>
-            <option value="spain">🇪🇸 España</option>
-            <option value="catalonia">🏴󠁥󠁳󠁣󠁴󠁿 Cataluña</option>
-            <option value="usa">🇺🇸 USA</option>
-            <option value="trans">🏳️‍⚧️ Trans</option>
-            <option value="rainbow">🌈 Arcoíris</option>
-            <option value="custom">🎨 Personalizado</option>
-          </select>
-        </div>
-        
-        <div class="wplace-theme-preview" id="theme-preview"></div>
-        
-        <div class="wplace-row">
           <span class="wplace-label">Delay (ms):</span>
           <input type="number" class="wplace-input" id="delay-input" min="1000" max="300000" step="1000">
         </div>
@@ -460,8 +432,6 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     calibrateBtn: shadow.getElementById('calibrate-btn'),
     onceBtn: shadow.getElementById('once-btn'),
     healthStatus: shadow.getElementById('health-status'),
-    themeSelect: shadow.getElementById('theme-select'),
-    themePreview: shadow.getElementById('theme-preview'),
     delayInput: shadow.getElementById('delay-input'),
     pixelsInput: shadow.getElementById('pixels-input'),
     minChargesInput: shadow.getElementById('min-charges-input'),
@@ -483,33 +453,8 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     captureBtn: shadow.getElementById('capture-btn')
   };
   
-  // Función para actualizar la vista previa del tema
-  function updateThemePreview() {
-    const theme = elements.themeSelect.value;
-    const preview = elements.themePreview;
-    preview.innerHTML = '';
-    
-    let colors = [];
-    
-    if (theme === 'custom') {
-      const customStr = elements.customPaletteInput.value;
-      colors = customStr ? customStr.split(',').map(c => c.trim()) : ['#CCCCCC'];
-    } else {
-      colors = THEMES[theme] || THEMES.random;
-    }
-    
-    colors.forEach(color => {
-      const dot = document.createElement('div');
-      dot.className = 'wplace-color-dot';
-      dot.style.backgroundColor = color;
-      dot.title = color;
-      preview.appendChild(dot);
-    });
-  }
-  
   // Función para actualizar los valores de los inputs desde la configuración
   function updateInputsFromConfig() {
-    elements.themeSelect.value = config.THEME || 'random';
     elements.delayInput.value = config.DELAY_MS;
     elements.pixelsInput.value = config.PIXELS_PER_BATCH;
     elements.minChargesInput.value = config.MIN_CHARGES;
@@ -523,13 +468,11 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     
     // Actualizar visibilidad de controles de color
     updateColorModeVisibility();
-    updateThemePreview();
     updateTileDisplay();
   }
   
   // Función para actualizar la configuración desde los inputs
   function updateConfigFromInputs() {
-    config.THEME = elements.themeSelect.value;
     config.DELAY_MS = parseInt(elements.delayInput.value) || FARM_DEFAULTS.DELAY_MS;
     config.PIXELS_PER_BATCH = clamp(parseInt(elements.pixelsInput.value) || FARM_DEFAULTS.PIXELS_PER_BATCH, 1, 50);
     config.MIN_CHARGES = parseFloat(elements.minChargesInput.value) || FARM_DEFAULTS.MIN_CHARGES;
@@ -548,11 +491,6 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     const tileY = parseInt(elements.tileYInput.value);
     if (Number.isFinite(tileX)) config.TILE_X = tileX;
     if (Number.isFinite(tileY)) config.TILE_Y = tileY;
-    
-    if (config.THEME === 'custom') {
-      const customStr = elements.customPaletteInput.value;
-      config.CUSTOM_PALETTE = customStr ? customStr.split(',').map(c => c.trim()) : FARM_DEFAULTS.CUSTOM_PALETTE;
-    }
     
     updateTileDisplay();
   }
@@ -601,21 +539,13 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     }
   });
   
-  elements.themeSelect?.addEventListener('change', () => {
-    updateThemePreview();
-    updateConfigFromInputs();
-  });
-  
   elements.colorModeSelect?.addEventListener('change', () => {
     updateColorModeVisibility();
     updateConfigFromInputs();
   });
   
   elements.customPaletteInput?.addEventListener('input', () => {
-    if (elements.themeSelect.value === 'custom') {
-      updateThemePreview();
-      updateConfigFromInputs();
-    }
+    updateConfigFromInputs();
   });
   
   elements.advancedToggle?.addEventListener('click', () => {
