@@ -1,0 +1,17 @@
+{
+  "name": "wplace-autobot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:dev": "node build.mjs --dev",
+    "watch": "node build.mjs --watch",
+    "lint": "eslint \"src/**/*.{js,jsx}\""
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "eslint": "^9.5.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3"
+  }
+}
