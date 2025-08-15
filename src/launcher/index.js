@@ -12,6 +12,7 @@ export async function runLauncher() {
     return;
   }
   
+  // Inicializar o preservar el estado global
   window.__wplaceBot = { ...window.__wplaceBot, launcherRunning: true };
   
   try {

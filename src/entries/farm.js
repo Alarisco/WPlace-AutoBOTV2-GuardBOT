@@ -10,13 +10,25 @@ import { clamp } from "../core/utils.js";
 (async function() {
   'use strict';
 
-  // Verificar si ya está ejecutándose
-  if (window.__wplaceBot?.running) {
-    alert("WPlace BOT ya está corriendo.");
+  // Verificar si el bot de farm ya está ejecutándose
+  if (window.__wplaceBot?.farmRunning) {
+    alert("Auto-Farm ya está corriendo.");
     return;
   }
   
-  window.__wplaceBot = { running: true };
+  // Verificar si hay otros bots ejecutándose
+  if (window.__wplaceBot?.imageRunning) {
+    alert("Auto-Image está ejecutándose. Ciérralo antes de iniciar Auto-Farm.");
+    return;
+  }
+
+  // Inicializar el estado global si no existe
+  if (!window.__wplaceBot) {
+    window.__wplaceBot = {};
+  }
+  
+  // Marcar que el farm bot está ejecutándose
+  window.__wplaceBot.farmRunning = true;
 
   log('🚀 Iniciando WPlace Farm Bot (versión modular)');
 
@@ -161,7 +173,9 @@ import { clamp } from "../core/utils.js";
     // onStop
     () => {
       farmState.running = false;
-      window.__wplaceBot.running = false;
+      if (window.__wplaceBot) {
+        window.__wplaceBot.farmRunning = false;
+      }
       ui.setStatus('⏹️ Deteniendo bot...', 'status');
       ui.updateButtonStates(false);
     },
@@ -338,7 +352,9 @@ import { clamp } from "../core/utils.js";
   // Cleanup al cerrar la página
   window.addEventListener('beforeunload', () => {
     farmState.running = false;
-    window.__wplaceBot.running = false;
+    if (window.__wplaceBot) {
+      window.__wplaceBot.farmRunning = false;
+    }
     coordinateCapture.disable();
     ui.destroy();
   });
@@ -348,6 +364,8 @@ import { clamp } from "../core/utils.js";
 
 })().catch((e) => {
   console.error("[BOT] Error en Auto-Farm:", e);
-  window.__wplaceBot.running = false;
+  if (window.__wplaceBot) {
+    window.__wplaceBot.farmRunning = false;
+  }
   alert("Auto-Farm: error inesperado. Revisa consola.");
 });

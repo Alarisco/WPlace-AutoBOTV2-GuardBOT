@@ -344,14 +344,18 @@ export async function runImage() {
     window.addEventListener('beforeunload', () => {
       stopPainting();
       ui.destroy();
-      window.__wplaceBot.imageRunning = false;
+      if (window.__wplaceBot) {
+        window.__wplaceBot.imageRunning = false;
+      }
     });
 
     log('✅ Auto-Image inicializado correctamente');
     
   } catch (error) {
     log('❌ Error inicializando Auto-Image:', error);
-    window.__wplaceBot.imageRunning = false;
+    if (window.__wplaceBot) {
+      window.__wplaceBot.imageRunning = false;
+    }
     throw error;
   }
 }
