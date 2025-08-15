@@ -9,12 +9,7 @@ import { getSession } from "../core/wplace-api.js";
 export async function runImage() {
   log('🚀 Iniciando WPlace Auto-Image (versión modular)');
   
-  // Verificar si ya está ejecutándose
-  if (window.__wplaceBot?.imageRunning) {
-    alert("Auto-Image ya está ejecutándose.");
-    return;
-  }
-  
+  // Asegurarse que el estado global existe
   window.__wplaceBot = { ...window.__wplaceBot, imageRunning: true };
 
   let currentUserInfo = null; // Variable global para información del usuario
