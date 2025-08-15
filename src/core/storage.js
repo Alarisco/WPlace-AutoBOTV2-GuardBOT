@@ -6,5 +6,9 @@ export function load(key, fallback) {
 }
 
 export function save(key, value) {
-  try { localStorage.setItem(`${NS}:${key}`, JSON.stringify(value)); } catch {}
+  try { 
+    localStorage.setItem(`${NS}:${key}`, JSON.stringify(value)); 
+  } catch {
+    // Storage not available
+  }
 }

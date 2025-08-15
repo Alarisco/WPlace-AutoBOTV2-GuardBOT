@@ -31,6 +31,11 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
   }
   
   let msg = `HTTP ${r.status}`;
-  try { const j = await r.json(); msg = j?.message || msg; } catch {}
+  try { 
+    const j = await r.json(); 
+    msg = j?.message || msg; 
+  } catch {
+    // Response not JSON
+  }
   throw new Error(`paint failed: ${msg}`);
 }

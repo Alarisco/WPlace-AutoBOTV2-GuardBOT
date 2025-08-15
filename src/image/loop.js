@@ -1,6 +1,5 @@
 import { executeTurnstile, loadTurnstile } from "../core/turnstile.js";
 import { postPixelBatch } from "../core/wplace-api.js";
-import { groupByTile } from "./batcher.js";
 
 export async function paintImageBatches({ batches, siteKey }, onStatus) {
   await loadTurnstile(siteKey);
