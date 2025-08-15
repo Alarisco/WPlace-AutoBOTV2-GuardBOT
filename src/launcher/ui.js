@@ -1,6 +1,6 @@
 import { log } from "../core/logger.js";
 import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
-import { launcherState, LAUNCHER_CONFIG, LAUNCHER_TEXTS } from "./config.js";
+import { launcherState, LAUNCHER_CONFIG, getLauncherTexts } from "./config.js";
 
 export function createLauncherUI({ 
   onSelectBot, 
@@ -18,7 +18,7 @@ export function createLauncherUI({
     log('🗑️ Panel existente removido');
   }
   
-  const texts = LAUNCHER_TEXTS.es;
+  const texts = getLauncherTexts();
   const { host, root } = createShadowRoot('wpl-panel');
   
   // Crear estilos

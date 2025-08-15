@@ -1,13 +1,17 @@
 import { log } from "../core/logger.js";
-import { imageState, IMAGE_DEFAULTS, TEXTS } from "./config.js";
+import { imageState, IMAGE_DEFAULTS } from "./config.js";
 import { ImageProcessor, detectAvailableColors } from "./processor.js";
 import { processImage, stopPainting } from "./painter.js";
 import { saveProgress, loadProgress, clearProgress, getProgressInfo } from "./save-load.js";
 import { createImageUI, showConfirmDialog } from "./ui.js";
 import { getSession } from "../core/wplace-api.js";
+import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
 
 export async function runImage() {
   log('🚀 Iniciando WPlace Auto-Image (versión modular)');
+  
+  // Inicializar sistema de idiomas
+  initializeLanguage();
   
   // Asegurarse que el estado global existe
   window.__wplaceBot = { ...window.__wplaceBot, imageRunning: true };
@@ -18,9 +22,11 @@ export async function runImage() {
     // Inicializar configuración
     const config = { ...IMAGE_DEFAULTS };
     
-    // Detectar idioma
-    const language = detectLanguage();
-    imageState.language = language;
+    // Obtener textos en el idioma actual
+    const texts = getSection('image');
+    
+    // Actualizar estado del idioma
+    imageState.language = getCurrentLanguage();
     
     // Verificar sitekey
     if (!config.SITEKEY) {
@@ -35,16 +41,16 @@ export async function runImage() {
 
     // Crear interfaz de usuario
     const ui = await createImageUI({
-      texts: TEXTS[language],
+      texts: texts,
       onInitBot: async () => {
         log('🤖 Inicializando Auto-Image...');
         
         // Verificar colores disponibles
-        ui.setStatus(TEXTS[language].checkingColors, 'info');
+        ui.setStatus(t('image.checkingColors'), 'info');
         const colors = detectAvailableColors();
         
         if (colors.length === 0) {
-          ui.setStatus(TEXTS[language].noColorsFound, 'error');
+          ui.setStatus(t('image.noColorsFound'), 'error');
           return false;
         }
         
@@ -68,7 +74,7 @@ export async function runImage() {
         imageState.availableColors = colors;
         imageState.colorsChecked = true;
         
-        ui.setStatus(TEXTS[language].colorsFound.replace('{count}', colors.length), 'success');
+        ui.setStatus(t('image.colorsFound', { count: colors.length }), 'success');
         ui.updateProgress(0, 0, userInfo);
         log(`✅ ${colors.length} colores disponibles detectados`);
         
@@ -77,7 +83,7 @@ export async function runImage() {
       
       onUploadImage: async (file) => {
         try {
-          ui.setStatus(TEXTS[language].loadingImage, 'info');
+          ui.setStatus(t('image.loadingImage'), 'info');
           
           const imageUrl = window.URL.createObjectURL(file);
           const processor = new ImageProcessor(imageUrl);
@@ -95,7 +101,7 @@ export async function runImage() {
           imageState.originalImageName = file.name;
           imageState.imageLoaded = true;
           
-          ui.setStatus(TEXTS[language].imageLoaded.replace('{count}', processedData.validPixelCount), 'success');
+          ui.setStatus(t('image.imageLoaded', { count: processedData.validPixelCount }), 'success');
           ui.updateProgress(0, processedData.validPixelCount, currentUserInfo);
           
           log(`✅ Imagen cargada: ${processedData.width}x${processedData.height}, ${processedData.validPixelCount} píxeles válidos`);
@@ -105,7 +111,7 @@ export async function runImage() {
           
           return true;
         } catch (error) {
-          ui.setStatus(TEXTS[language].imageError, 'error');
+          ui.setStatus(t('image.imageError'), 'error');
           log('❌ Error cargando imagen:', error);
           return false;
         }
@@ -113,8 +119,8 @@ export async function runImage() {
       
       onSelectPosition: async () => {
         return new Promise((resolve) => {
-          ui.setStatus(TEXTS[language].selectPositionAlert, 'info');
-          ui.setStatus(TEXTS[language].waitingPosition, 'info');
+          ui.setStatus(t('image.selectPositionAlert'), 'info');
+          ui.setStatus(t('image.waitingPosition'), 'info');
           
           imageState.selectingPosition = true;
           
@@ -143,7 +149,7 @@ export async function runImage() {
                     
                     window.fetch = originalFetch;
                     
-                    ui.setStatus(TEXTS[language].positionSet, 'success');
+                    ui.setStatus(t('image.positionSet'), 'success');
                     log(`✅ Posición establecida: tile(${imageState.tileX},${imageState.tileY}) local(${localX},${localY})`);
                     
                     resolve(true);
@@ -164,7 +170,7 @@ export async function runImage() {
             if (imageState.selectingPosition) {
               window.fetch = originalFetch;
               imageState.selectingPosition = false;
-              ui.setStatus(TEXTS[language].positionTimeout, 'error');
+              ui.setStatus(t('image.positionTimeout'), 'error');
               resolve(false);
             }
           }, 120000); // 2 minutos
@@ -183,7 +189,7 @@ export async function runImage() {
         });
         
         if (!imageState.imageLoaded || !imageState.startPosition) {
-          ui.setStatus(TEXTS[language].missingRequirements, 'error');
+          ui.setStatus(t('image.missingRequirements'), 'error');
           log(`❌ Validación fallida: imageLoaded=${imageState.imageLoaded}, startPosition=${!!imageState.startPosition}`);
           return false;
         }
@@ -191,7 +197,7 @@ export async function runImage() {
         imageState.running = true;
         imageState.stopFlag = false;
         
-        ui.setStatus(TEXTS[language].startPaintingMsg, 'success');
+        ui.setStatus(t('image.startPaintingMsg'), 'success');
         
         try {
           await processImage(
@@ -207,22 +213,22 @@ export async function runImage() {
               if (message) {
                 ui.setStatus(message, 'info');
               } else {
-                ui.setStatus(TEXTS[language].paintingProgress.replace('{painted}', painted).replace('{total}', total), 'info');
+                ui.setStatus(t('image.paintingProgress', { painted, total }), 'info');
               }
             },
             // onComplete
             (completed, pixelsPainted) => {
               if (completed) {
-                ui.setStatus(TEXTS[language].paintingComplete.replace('{count}', pixelsPainted), 'success');
+                ui.setStatus(t('image.paintingComplete', { count: pixelsPainted }), 'success');
                 clearProgress();
               } else {
-                ui.setStatus(TEXTS[language].paintingStopped, 'warning');
+                ui.setStatus(t('image.paintingStopped'), 'warning');
               }
               imageState.running = false;
             },
             // onError
             (error) => {
-              ui.setStatus(TEXTS[language].paintingError, 'error');
+              ui.setStatus(t('image.paintingError'), 'error');
               log('❌ Error en proceso de pintado:', error);
               imageState.running = false;
             }
@@ -230,7 +236,7 @@ export async function runImage() {
           
           return true;
         } catch (error) {
-          ui.setStatus(TEXTS[language].paintingError, 'error');
+          ui.setStatus(t('image.paintingError'), 'error');
           log('❌ Error iniciando pintado:', error);
           imageState.running = false;
           return false;
@@ -242,21 +248,21 @@ export async function runImage() {
         
         if (progressInfo.hasProgress) {
           const shouldSave = await showConfirmDialog(
-            TEXTS[language].confirmSaveProgress,
-            TEXTS[language].saveProgressTitle,
+            t('image.confirmSaveProgress'),
+            t('image.saveProgressTitle'),
             {
-              save: TEXTS[language].saveProgress,
-              discard: TEXTS[language].discardProgress,
-              cancel: TEXTS[language].cancel
+              save: t('image.saveProgress'),
+              discard: t('image.discardProgress'),
+              cancel: t('image.cancel')
             }
           );
           
           if (shouldSave === 'save') {
             const result = saveProgress();
             if (result.success) {
-              ui.setStatus(TEXTS[language].progressSaved.replace('{filename}', result.filename), 'success');
+              ui.setStatus(t('image.progressSaved', { filename: result.filename }), 'success');
             } else {
-              ui.setStatus(TEXTS[language].progressSaveError.replace('{error}', result.error), 'error');
+              ui.setStatus(t('image.progressSaveError', { error: result.error }), 'error');
             }
           } else if (shouldSave === 'cancel') {
             return false; // No detener
@@ -264,16 +270,16 @@ export async function runImage() {
         }
         
         stopPainting();
-        ui.setStatus(TEXTS[language].paintingStopped, 'warning');
+        ui.setStatus(t('image.paintingStopped'), 'warning');
         return true;
       },
       
       onSaveProgress: async () => {
         const result = saveProgress();
         if (result.success) {
-          ui.setStatus(TEXTS[language].progressSaved.replace('{filename}', result.filename), 'success');
+          ui.setStatus(t('image.progressSaved', { filename: result.filename }), 'success');
         } else {
-          ui.setStatus(TEXTS[language].progressSaveError.replace('{error}', result.error), 'error');
+          ui.setStatus(t('image.progressSaveError', { error: result.error }), 'error');
         }
         return result.success;
       },
@@ -282,7 +288,7 @@ export async function runImage() {
         try {
           const result = await loadProgress(file);
           if (result.success) {
-            ui.setStatus(TEXTS[language].progressLoaded.replace('{painted}', result.painted).replace('{total}', result.total), 'success');
+            ui.setStatus(t('image.progressLoaded', { painted: result.painted, total: result.total }), 'success');
             ui.updateProgress(result.painted, result.total, currentUserInfo);
             
             // Habilitar botones después de cargar progreso exitosamente
@@ -291,11 +297,11 @@ export async function runImage() {
             
             return true;
           } else {
-            ui.setStatus(TEXTS[language].progressLoadError.replace('{error}', result.error), 'error');
+            ui.setStatus(t('image.progressLoadError', { error: result.error }), 'error');
             return false;
           }
         } catch (error) {
-          ui.setStatus(TEXTS[language].progressLoadError.replace('{error}', error.message), 'error');
+          ui.setStatus(t('image.progressLoadError', { error: error.message }), 'error');
           return false;
         }
       },
@@ -325,12 +331,12 @@ export async function runImage() {
           
           // Actualizar UI
           ui.updateProgress(0, processedData.validPixelCount, currentUserInfo);
-          ui.setStatus(TEXTS[language].resizeSuccess.replace('{width}', newWidth).replace('{height}', newHeight), 'success');
+          ui.setStatus(t('image.resizeSuccess', { width: newWidth, height: newHeight }), 'success');
           
           log(`✅ Imagen redimensionada: ${processedData.validPixelCount} píxeles válidos`);
         } catch (error) {
           log(`❌ Error redimensionando imagen: ${error.message}`);
-          ui.setStatus(TEXTS[language].imageError, 'error');
+          ui.setStatus(t('image.imageError'), 'error');
         }
       }
     });
@@ -353,9 +359,4 @@ export async function runImage() {
     }
     throw error;
   }
-}
-
-function detectLanguage() {
-  const lang = window.navigator.language || window.navigator.userLanguage || 'es';
-  return lang.startsWith('es') ? 'es' : 'es'; // Por ahora solo español
 }
