@@ -65,7 +65,11 @@ export const TEXTS = {
     saveProgressTitle: "Guardar Progreso",
     discardProgress: "Descartar",
     cancel: "Cancelar",
-    minimize: "Minimizar"
+    minimize: "Minimizar",
+    width: "Ancho",
+    height: "Alto", 
+    keepAspect: "Mantener proporción",
+    apply: "Aplicar"
   }
 };
 

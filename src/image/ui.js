@@ -324,6 +324,71 @@ export async function createImageUI({ texts, ...handlers }) {
     .modal-btn:hover {
       transform: translateY(-2px);
     }
+    
+    /* Resize Dialog Styles */
+    .resize-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      z-index: 9999;
+      display: none;
+    }
+    
+    .resize-container {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #1a1a1a;
+      padding: 20px;
+      border-radius: 8px;
+      z-index: 10000;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      max-width: 90%;
+      max-height: 90%;
+      overflow: auto;
+      color: #ffffff;
+      display: none;
+    }
+    
+    .resize-container h3 {
+      margin: 0 0 15px 0;
+      color: #ffffff;
+    }
+    
+    .resize-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .resize-controls label {
+      color: #ffffff;
+      font-size: 14px;
+    }
+    
+    .resize-slider {
+      width: 100%;
+      margin: 5px 0;
+    }
+    
+    .resize-preview {
+      max-width: 100%;
+      max-height: 300px;
+      margin: 10px 0;
+      border: 1px solid #333;
+      display: block;
+    }
+    
+    .resize-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
   `;
   root.appendChild(style);
   
@@ -365,6 +430,10 @@ export async function createImageUI({ texts, ...handlers }) {
         <button class="btn btn-load load-progress-btn" disabled>
           <i class="fas fa-file-import"></i>
           <span>${texts.loadProgress}</span>
+        </button>
+        <button class="btn btn-primary resize-btn" disabled>
+          <i class="fas fa-expand"></i>
+          <span>${texts.resizeImage}</span>
         </button>
         <button class="btn btn-select select-pos-btn" disabled>
           <i class="fas fa-crosshairs"></i>
@@ -413,6 +482,43 @@ export async function createImageUI({ texts, ...handlers }) {
   progressFileInput.style.display = 'none';
   root.appendChild(progressFileInput);
   
+  // Modal de resize
+  const resizeOverlay = document.createElement('div');
+  resizeOverlay.className = 'resize-overlay';
+  root.appendChild(resizeOverlay);
+  
+  const resizeContainer = document.createElement('div');
+  resizeContainer.className = 'resize-container';
+  resizeContainer.innerHTML = `
+    <h3>${texts.resizeImage}</h3>
+    <div class="resize-controls">
+      <label>
+        ${texts.width}: <span class="width-value">0</span>px
+        <input type="range" class="resize-slider width-slider" min="10" max="500" value="100">
+      </label>
+      <label>
+        ${texts.height}: <span class="height-value">0</span>px
+        <input type="range" class="resize-slider height-slider" min="10" max="500" value="100">
+      </label>
+      <label>
+        <input type="checkbox" class="keep-aspect" checked>
+        ${texts.keepAspect}
+      </label>
+      <img class="resize-preview" src="" alt="Preview">
+      <div class="resize-buttons">
+        <button class="btn btn-primary confirm-resize">
+          <i class="fas fa-check"></i>
+          <span>${texts.apply}</span>
+        </button>
+        <button class="btn btn-stop cancel-resize">
+          <i class="fas fa-times"></i>
+          <span>${texts.cancel}</span>
+        </button>
+      </div>
+    </div>
+  `;
+  root.appendChild(resizeContainer);
+  
   // Referencias a elementos
   const elements = {
     header: container.querySelector('.header'),
@@ -423,6 +529,7 @@ export async function createImageUI({ texts, ...handlers }) {
     initBtn: container.querySelector('.init-btn'),
     uploadBtn: container.querySelector('.upload-btn'),
     loadProgressBtn: container.querySelector('.load-progress-btn'),
+    resizeBtn: container.querySelector('.resize-btn'),
     selectPosBtn: container.querySelector('.select-pos-btn'),
     startBtn: container.querySelector('.start-btn'),
     stopBtn: container.querySelector('.stop-btn'),
@@ -430,6 +537,20 @@ export async function createImageUI({ texts, ...handlers }) {
     statsArea: container.querySelector('.stats-area'),
     status: container.querySelector('.status'),
     content: container.querySelector('.content')
+  };
+  
+  // Referencias a elementos del resize dialog
+  const resizeElements = {
+    overlay: resizeOverlay,
+    container: resizeContainer,
+    widthSlider: resizeContainer.querySelector('.width-slider'),
+    heightSlider: resizeContainer.querySelector('.height-slider'),
+    widthValue: resizeContainer.querySelector('.width-value'),
+    heightValue: resizeContainer.querySelector('.height-value'),
+    keepAspect: resizeContainer.querySelector('.keep-aspect'),
+    preview: resizeContainer.querySelector('.resize-preview'),
+    confirmBtn: resizeContainer.querySelector('.confirm-resize'),
+    cancelBtn: resizeContainer.querySelector('.cancel-resize')
   };
   
   // Estado de la UI
@@ -485,6 +606,7 @@ export async function createImageUI({ texts, ...handlers }) {
       const success = await handlers.onUploadImage(fileInput.files[0]);
       if (success) {
         elements.selectPosBtn.disabled = false;
+        elements.resizeBtn.disabled = false;
       }
     }
   });
@@ -499,7 +621,14 @@ export async function createImageUI({ texts, ...handlers }) {
       if (success) {
         elements.selectPosBtn.disabled = false;
         elements.startBtn.disabled = false;
+        elements.resizeBtn.disabled = false;
       }
+    }
+  });
+  
+  elements.resizeBtn.addEventListener('click', () => {
+    if (handlers.onResizeImage) {
+      handlers.onResizeImage();
     }
   });
   
@@ -543,6 +672,99 @@ export async function createImageUI({ texts, ...handlers }) {
     elements.status.style.animation = 'none';
     void elements.status.offsetWidth;
     elements.status.style.animation = 'slideIn 0.3s ease-out';
+  }
+  
+  function showResizeDialog(processor) {
+    const { width, height } = processor.getDimensions();
+    const aspectRatio = width / height;
+    
+    // Inicializar valores
+    resizeElements.widthSlider.value = width;
+    resizeElements.heightSlider.value = height;
+    resizeElements.widthValue.textContent = width;
+    resizeElements.heightValue.textContent = height;
+    resizeElements.preview.src = processor.img.src;
+    
+    // Mostrar modal
+    resizeElements.overlay.style.display = 'block';
+    resizeElements.container.style.display = 'block';
+    
+    const updatePreview = () => {
+      const newWidth = parseInt(resizeElements.widthSlider.value);
+      const newHeight = parseInt(resizeElements.heightSlider.value);
+      
+      resizeElements.widthValue.textContent = newWidth;
+      resizeElements.heightValue.textContent = newHeight;
+      
+      resizeElements.preview.src = processor.generatePreview(newWidth, newHeight);
+    };
+    
+    // Event listeners para sliders
+    const onWidthChange = () => {
+      if (resizeElements.keepAspect.checked) {
+        const newWidth = parseInt(resizeElements.widthSlider.value);
+        const newHeight = Math.round(newWidth / aspectRatio);
+        resizeElements.heightSlider.value = newHeight;
+      }
+      updatePreview();
+    };
+    
+    const onHeightChange = () => {
+      if (resizeElements.keepAspect.checked) {
+        const newHeight = parseInt(resizeElements.heightSlider.value);
+        const newWidth = Math.round(newHeight * aspectRatio);
+        resizeElements.widthSlider.value = newWidth;
+      }
+      updatePreview();
+    };
+    
+    // Añadir event listeners temporales
+    resizeElements.widthSlider.addEventListener('input', onWidthChange);
+    resizeElements.heightSlider.addEventListener('input', onHeightChange);
+    
+    // Event listener para confirmar
+    const onConfirm = () => {
+      const newWidth = parseInt(resizeElements.widthSlider.value);
+      const newHeight = parseInt(resizeElements.heightSlider.value);
+      
+      if (handlers.onConfirmResize) {
+        handlers.onConfirmResize(processor, newWidth, newHeight);
+      }
+      
+      closeResizeDialog();
+    };
+    
+    // Event listener para cancelar
+    const onCancel = () => {
+      closeResizeDialog();
+    };
+    
+    resizeElements.confirmBtn.addEventListener('click', onConfirm);
+    resizeElements.cancelBtn.addEventListener('click', onCancel);
+    resizeElements.overlay.addEventListener('click', onCancel);
+    
+    // Función para limpiar listeners
+    window.cleanupResizeDialog = () => {
+      resizeElements.widthSlider.removeEventListener('input', onWidthChange);
+      resizeElements.heightSlider.removeEventListener('input', onHeightChange);
+      resizeElements.confirmBtn.removeEventListener('click', onConfirm);
+      resizeElements.cancelBtn.removeEventListener('click', onCancel);
+      resizeElements.overlay.removeEventListener('click', onCancel);
+    };
+    
+    // Generar preview inicial
+    updatePreview();
+  }
+  
+  function closeResizeDialog() {
+    resizeElements.overlay.style.display = 'none';
+    resizeElements.container.style.display = 'none';
+    
+    // Limpiar event listeners
+    if (window.cleanupResizeDialog) {
+      window.cleanupResizeDialog();
+      delete window.cleanupResizeDialog;
+    }
   }
   
   function updateProgress(current, total, userInfo = null) {
@@ -602,6 +824,8 @@ export async function createImageUI({ texts, ...handlers }) {
   return {
     setStatus,
     updateProgress,
+    showResizeDialog,
+    closeResizeDialog,
     destroy
   };
 }

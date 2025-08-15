@@ -94,6 +94,7 @@ export async function runImage() {
           const processedData = processor.processImage(imageState.availableColors, config);
           
           imageState.imageData = processedData;
+          imageState.imageData.processor = processor; // Guardar referencia al processor para resize
           imageState.totalPixels = processedData.validPixelCount;
           imageState.paintedPixels = 0;
           imageState.originalImageName = file.name;
@@ -301,6 +302,40 @@ export async function runImage() {
         } catch (error) {
           ui.setStatus(TEXTS[language].progressLoadError.replace('{error}', error.message), 'error');
           return false;
+        }
+      },
+      
+      onResizeImage: () => {
+        if (imageState.imageLoaded && imageState.imageData && imageState.imageData.processor) {
+          ui.showResizeDialog(imageState.imageData.processor);
+        }
+      },
+      
+      onConfirmResize: (processor, newWidth, newHeight) => {
+        log(`🔄 Redimensionando imagen de ${processor.getDimensions().width}x${processor.getDimensions().height} a ${newWidth}x${newHeight}`);
+        
+        try {
+          // Redimensionar la imagen
+          processor.resize(newWidth, newHeight);
+          
+          // Recalcular píxeles válidos
+          const processedData = processor.processImage(imageState.availableColors, config);
+          
+          // Actualizar imageState
+          imageState.imageData = processedData;
+          imageState.totalPixels = processedData.validPixelCount;
+          imageState.paintedPixels = 0;
+          imageState.remainingPixels = []; // Resetear cola al redimensionar
+          imageState.lastPosition = { x: 0, y: 0 };
+          
+          // Actualizar UI
+          ui.updateProgress(0, processedData.validPixelCount, currentUserInfo);
+          ui.setStatus(TEXTS[language].resizeSuccess.replace('{width}', newWidth).replace('{height}', newHeight), 'success');
+          
+          log(`✅ Imagen redimensionada: ${processedData.validPixelCount} píxeles válidos`);
+        } catch (error) {
+          log(`❌ Error redimensionando imagen: ${error.message}`);
+          ui.setStatus(TEXTS[language].imageError, 'error');
         }
       }
     });
