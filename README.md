@@ -51,36 +51,6 @@
 
 ---
 
-## 🌍 Soporte Multiidioma
-
-**¡WPlace AutoBOT ahora habla tu idioma!** 🗣️
-
-### 🎯 Idiomas Disponibles
-- **🇪🇸 Español** - Idioma por defecto
-- **🇺🇸 English** - Full English support
-- **🇫🇷 Français** - Support complet en français
-
-### ✨ Características del Sistema i18n
-- **🔄 Cambio automático**: Detecta tu idioma del navegador
-- **🎛️ Selector manual**: Cambia idioma cuando quieras
-- **💾 Memoria persistente**: Recuerda tu preferencia
-- **🔗 Sincronización**: Todos los bots usan el mismo idioma
-- **📱 Interfaz completa**: 100% traducido
-
-### 📖 Documentación por Idioma
-- **[🇪🇸 Documentación en Español](README.md)** (este archivo)
-- **[�🇸 Documentación en Español (docs)](docs/README-es.md)**
-- **[�🇺🇸 English Documentation](docs/README-en.md)**
-- **[🇫🇷 Documentation Française](docs/README-fr.md)**
-
-### 🎮 Cómo Cambiar Idioma
-1. Ejecuta cualquier bot (Launcher recomendado)
-2. Busca el selector de idiomas en la esquina superior izquierda 🌐
-3. Haz clic y selecciona tu idioma preferido
-4. ¡Toda la interfaz se actualiza automáticamente! ✨
-
----
-
 ## 🚀 Inicio Rápido
 
 ### Instalación Universal
@@ -361,6 +331,36 @@ Ambos bots incluyen protecciones avanzadas:
 - ❌ **Comercial:** No vendas ni redistribuyas
 - ❌ **Abuso:** No hagas spam ni ataques
 - ⚖️ **Responsabilidad:** Uso bajo tu propio riesgo
+
+---
+
+## 🌍 Soporte Multiidioma
+
+**¡WPlace AutoBOT ahora habla tu idioma!** 🗣️
+
+### 🎯 Idiomas Disponibles
+- **🇪🇸 Español** - Idioma por defecto
+- **🇺🇸 English** - Full English support
+- **🇫🇷 Français** - Support complet en français
+
+### ✨ Características del Sistema i18n
+- **🔄 Cambio automático**: Detecta tu idioma del navegador
+- **🎛️ Selector manual**: Cambia idioma cuando quieras
+- **💾 Memoria persistente**: Recuerda tu preferencia
+- **🔗 Sincronización**: Todos los bots usan el mismo idioma
+- **📱 Interfaz completa**: 100% traducido
+
+### 📖 Documentación por Idioma
+- **[🇪🇸 Documentación en Español](README.md)** (este archivo)
+- **[�🇸 Documentación en Español (docs)](docs/README-es.md)**
+- **[�🇺🇸 English Documentation](docs/README-en.md)**
+- **[🇫🇷 Documentation Française](docs/README-fr.md)**
+
+### 🎮 Cómo Cambiar Idioma
+1. Ejecuta cualquier bot (Launcher recomendado)
+2. Busca el selector de idiomas en la esquina superior izquierda 🌐
+3. Haz clic y selecciona tu idioma preferido
+4. ¡Toda la interfaz se actualiza automáticamente! ✨
 
 ---
 
