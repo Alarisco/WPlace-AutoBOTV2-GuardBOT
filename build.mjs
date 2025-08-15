@@ -1,9 +1,32 @@
 import { build } from "esbuild";
+import { copyFileSync } from "fs";
 
 const args = new Set(process.argv.slice(2));
 const dev = args.has("--dev");
 const watch = args.has("--watch");
 
+// Por ahora, usar archivos originales hasta completar la migración
+const useOriginals = true;
+
+if (useOriginals) {
+  console.log("🔄 Usando archivos originales temporalmente...");
+  
+  try {
+    copyFileSync("Auto-Farm.original.js", "Auto-Farm.js");
+    copyFileSync("Auto-Image.original.js", "Auto-Image.js");
+    copyFileSync("Auto-Launcher.original.js", "Auto-Launcher.js");
+    
+    console.log("✅ Archivos originales copiados exitosamente");
+    console.log("📋 Para completar la migración modular, edita build.mjs y cambia useOriginals = false");
+  } catch (error) {
+    console.error("❌ Error copiando archivos originales:", error.message);
+    process.exit(1);
+  }
+  
+  process.exit(0);
+}
+
+// Código de build modular (para cuando la migración esté completa)
 const common = {
   bundle: true,
   format: "iife",             // ideal para bookmarklet

@@ -7,7 +7,47 @@
 - ✅ **Conventional Commits:** Usa el formato estándar en tus PRs
 - ✅ **Issues primero:** Para cambios grandes, abre un Issue antes del PR
 - ✅ **CI/CD:** El sistema valida automáticamente JS, Markdown y YAML
-- ✅ **Bookmarklets:** Deben apuntar a `raw.githubusercontent.com/.../main/Auto-*.js`
+-### Ideas para Contribuir
+
+#### 🔥 PRIORIDAD ALTA: Completar Migración Modular
+
+El proyecto necesita completar la migración del código monolítico a la arquitectura modular:
+
+**Farm Module (`src/farm/`):**
+- [ ] Migrar configuración y estado desde `Auto-Farm.original.js`
+- [ ] Extraer UI compleja (paneles, controles, configuración)
+- [ ] Separar lógica de pintado y cooldowns
+- [ ] Implementar calibración automática
+- [ ] Sistema de retry y manejo de errores
+
+**Image Module (`src/image/`):**
+- [ ] Migrar procesamiento de imágenes desde `Auto-Image.original.js`
+- [ ] Sistema de progreso y guardado/carga
+- [ ] UI de configuración (redimensionado, paleta, posición)
+- [ ] Optimización de batches por tiles
+- [ ] Validación de colores
+
+**Core Modules (`src/core/`):**
+- [ ] Expandir `wplace-api.js` con todas las llamadas API
+- [ ] Mejorar `turnstile.js` con gestión completa
+- [ ] Sistema robusto de configuración en `storage.js`
+- [ ] Logging completo en `logger.js`
+
+**Cómo Contribuir a la Migración:**
+
+1. **Elige un módulo específico** (ej: `src/farm/coords.js`)
+2. **Estudia el código original** en `Auto-Farm.original.js`
+3. **Extrae la funcionalidad** relacionada
+4. **Mantén la API compatible** 
+5. **Añade tests si es posible**
+6. **Documenta los cambios**
+
+**Cuando la migración esté completa:**
+- Cambiar `useOriginals = false` en `build.mjs`
+- Los archivos se generarán desde `src/`
+- Eliminar archivos `.original.js`
+
+#### Nuevas Funcionalidades**Bookmarklets:** Deben apuntar a `raw.githubusercontent.com/.../main/Auto-*.js`
 
 ---
 
@@ -111,9 +151,30 @@ npm run lint
 
 ## ⚙️ Sistema de Build
 
+### Estado Actual: Migración en Progreso
+
+> ⚠️ **Nota Importante**: Actualmente el proyecto está en **migración gradual** hacia la arquitectura modular. 
+> Los archivos `Auto-*.js` utilizan temporalmente el código original mientras completamos la refactorización.
+
 ### Proceso con esbuild
 
-El sistema usa **esbuild** para generar los 3 archivos finales en la raíz:
+El sistema está configurado para usar **esbuild** para generar los 3 archivos finales en la raíz:
+
+```javascript
+// build.mjs - Estado actual
+const useOriginals = true; // 🔄 Cambiará a false cuando la migración esté completa
+
+if (useOriginals) {
+  // Copia los archivos originales (comportamiento actual)
+  copyFileSync("Auto-Farm.original.js", "Auto-Farm.js");
+  // ...
+} else {
+  // Genera desde módulos en src/ (objetivo final)
+  // ...
+}
+```
+
+### Configuración Final (en desarrollo)
 
 ```javascript
 // build.mjs
