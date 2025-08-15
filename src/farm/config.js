@@ -12,7 +12,9 @@ export const FARM_DEFAULTS = {
   COLOR_MAX: 32,
   COLOR_MODE: 'random',    // 'random' | 'fixed'
   COLOR_FIXED: 1,
-  THEME: {
+  THEME: 'random',         // Tema actual seleccionado
+  CUSTOM_PALETTE: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
+  UI_THEME: {
     primary: '#000000',
     secondary: '#111111',
     accent: '#222222',

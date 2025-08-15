@@ -19,7 +19,9 @@ export async function updateCanvasPixel(localX, localY, color) {
         ctx.fillRect(localX, localY, 1, 1);
         
         // Trigger redraw event si existe
-        canvas.dispatchEvent(new Event('pixel-updated'));
+        if (typeof window !== 'undefined' && window.Event) {
+          canvas.dispatchEvent(new window.Event('pixel-updated'));
+        }
       }
     }
   } catch (error) {
@@ -135,20 +137,22 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession) 
     flashEffect();
     
     // Emitir evento personalizado para notificar que se pintó un lote
-    const event = new CustomEvent('wplace-batch-painted', {
-      detail: { 
-        firstX: firstLocalX, 
-        firstY: firstLocalY, 
-        pixelCount: actualPainted,
-        totalPixels: pixelCount,
-        colors: colors,
-        coords: coords,
-        tileX: cfg.TILE_X,
-        tileY: cfg.TILE_Y,
-        timestamp: Date.now()
-      }
-    });
-    window.dispatchEvent(event);
+    if (typeof window !== 'undefined' && window.CustomEvent) {
+      const event = new window.CustomEvent('wplace-batch-painted', {
+        detail: { 
+          firstX: firstLocalX, 
+          firstY: firstLocalY, 
+          pixelCount: actualPainted,
+          totalPixels: pixelCount,
+          colors: colors,
+          coords: coords,
+          tileX: cfg.TILE_X,
+          tileY: cfg.TILE_Y,
+          timestamp: Date.now()
+        }
+      });
+      window.dispatchEvent(event);
+    }
     
     return true;
   }
@@ -176,7 +180,7 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession) 
       const health = await checkBackendHealth();
       const healthStatus = health?.up ? '🟢 Online' : '🔴 Offline';
       setStatus(`❌ Error ${r.status}: ${r.json?.message || r.json?.error || 'Fallo al pintar'} (Backend: ${healthStatus})`, 'error');
-    } catch (healthError) {
+    } catch {
       setStatus(`❌ Error ${r.status}: ${r.json?.message || r.json?.error || 'Fallo al pintar'} (Health check falló)`, 'error');
     }
   }
@@ -239,9 +243,8 @@ export async function loop(cfg, state, setStatus, flashEffect, getSession, check
         setStatus(`⏳ Esperando cargas: ${state.charges.count.toFixed(1)}/${cfg.MIN_CHARGES} (${Math.round(waitTime/1000)}s)`, 'status');
         
         await sleepWithCountdown(Math.min(waitTime, cfg.DELAY_MS), (remaining) => {
-          const chargesLeft = cfg.MIN_CHARGES - state.charges.count;
           setStatus(`⏳ Esperando cargas: ${state.charges.count.toFixed(1)}/${cfg.MIN_CHARGES} (~${Math.round(remaining/1000)}s)`, 'status');
-        });
+        }, state);
         
         continue;
       }

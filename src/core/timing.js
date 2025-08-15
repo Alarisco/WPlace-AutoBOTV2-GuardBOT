@@ -12,11 +12,11 @@ export async function retry(fn, { tries = 3, base = 500 } = {}) {
 export const randInt = (n) => Math.floor(Math.random() * n);
 
 // Sleep with countdown (from farm)
-export async function sleepWithCountdown(ms, onUpdate) {
+export async function sleepWithCountdown(ms, onUpdate, state) {
   const startTime = Date.now();
   const endTime = startTime + ms;
   
-  while (Date.now() < endTime) {
+  while (Date.now() < endTime && (!state || state.running)) {
     const remaining = endTime - Date.now();
     
     if (onUpdate) {

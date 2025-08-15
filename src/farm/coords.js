@@ -1,5 +1,6 @@
-import { randInt } from "../core/timing.js";
 import { log } from "../core/logger.js";
+
+const randInt = (n) => Math.floor(Math.random() * n);
 
 export function randomCoordInTile(tileX, tileY, margin = 0.05) {
   const size = 3000;
@@ -36,7 +37,8 @@ export function randomCoords(cfg) {
 export function generateMultipleCoords(count, cfg) {
   const coords = [];
   for (let i = 0; i < count; i++) {
-    coords.push(randomCoords(cfg));
+    const singleCoord = randomCoords(cfg);
+    coords.push(...singleCoord); // Flatten the array
   }
   return coords;
 }
@@ -54,7 +56,8 @@ export function nextColor(cfg) {
     return cfg.COLOR_FIXED;
   } else {
     // Modo random: color entre COLOR_MIN y COLOR_MAX (inclusivo)
-    return cfg.COLOR_MIN + randInt(cfg.COLOR_MAX - cfg.COLOR_MIN + 1);
+    const span = cfg.COLOR_MAX - cfg.COLOR_MIN + 1;
+    return cfg.COLOR_MIN + randInt(span);
   }
 }
 
