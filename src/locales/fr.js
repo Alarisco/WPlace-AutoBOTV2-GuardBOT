@@ -86,6 +86,8 @@ export const fr = {
     height: "Hauteur", 
     keepAspect: "Garder les proportions",
     apply: "Appliquer",
+  overlayOn: "Overlay : ON",
+  overlayOff: "Overlay : OFF",
     passCompleted: "✅ Passage terminé: {painted} pixels peints | Progrès: {percent}% ({current}/{total})",
     waitingChargesRegen: "⏳ Attente de régénération des charges: {current}/{needed} - Temps: {time}",
     waitingChargesCountdown: "⏳ Attente des charges: {current}/{needed} - Restant: {time}",

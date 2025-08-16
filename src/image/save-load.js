@@ -40,6 +40,26 @@ export function saveProgress(filename = null) {
       })),
       remainingPixels: imageState.remainingPixels || []
     };
+
+    // (Opcional) Persistencia del overlay
+    try {
+      if (window.__WPA_OVERLAY__ && window.__WPA_OVERLAY__.state) {
+        const ov = window.__WPA_OVERLAY__.state;
+        progressData.overlay = {
+          enabled: !!ov.enabled,
+          // Ojo: src puede ser grande; se guarda por conveniencia si es dataURL corto
+          src: typeof ov.src === 'string' && ov.src.length < 2_000_000 ? ov.src : null,
+          cssX: ov.cssX,
+          cssY: ov.cssY,
+          tileX: ov.tileX,
+          tileY: ov.tileY,
+          pxX: ov.pxX,
+          pxY: ov.pxY,
+        };
+      }
+    } catch (e) {
+      log('Overlay: no se pudo serializar estado', e);
+    }
     
     const dataStr = JSON.stringify(progressData, null, 2);
     const blob = new window.Blob([dataStr], { type: 'application/json' });
@@ -139,6 +159,21 @@ export async function loadProgress(file) {
           // Marcar como imagen cargada y listo para continuar
           imageState.imageLoaded = true;
           imageState.colorsChecked = true;
+
+          // Restaurar overlay si existe
+          try {
+            if (progressData.overlay && window.__WPA_OVERLAY__) {
+              window.__WPA_OVERLAY__.injectOverlayStyles();
+              if (progressData.overlay.src) {
+                window.__WPA_OVERLAY__.setOverlayImageSrc(progressData.overlay.src);
+              }
+              window.__WPA_OVERLAY__.setAnchorCss(progressData.overlay.cssX ?? 0, progressData.overlay.cssY ?? 0);
+              window.__WPA_OVERLAY__.setLogicalCoords(progressData.overlay);
+              window.__WPA_OVERLAY__.setOverlayEnabled(!!progressData.overlay.enabled);
+            }
+          } catch (e) {
+            log('Overlay: no se pudo restaurar estado', e);
+          }
           
           log(`✅ Progreso cargado: ${imageState.paintedPixels}/${imageState.totalPixels} píxeles`);
           

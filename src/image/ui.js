@@ -475,6 +475,10 @@ export async function createImageUI({ texts, ...handlers }) {
           🤖
           <span>${texts.initBot}</span>
         </button>
+        <button class="btn btn-primary overlay-toggle-btn" disabled>
+          🖼️
+          <span>${texts.overlayOff || 'Overlay: OFF'}</span>
+        </button>
         <button class="btn btn-upload upload-btn" disabled>
           📤
           <span>${texts.uploadImage}</span>
@@ -588,6 +592,7 @@ export async function createImageUI({ texts, ...handlers }) {
     selectPosBtn: container.querySelector('.select-pos-btn'),
     startBtn: container.querySelector('.start-btn'),
     stopBtn: container.querySelector('.stop-btn'),
+  overlayToggleBtn: container.querySelector('.overlay-toggle-btn'),
     progressBar: container.querySelector('.progress-bar'),
     statsArea: container.querySelector('.stats-area'),
     status: container.querySelector('.status'),
@@ -661,6 +666,7 @@ export async function createImageUI({ texts, ...handlers }) {
   function enableButtonsAfterInit() {
     elements.uploadBtn.disabled = false;
     elements.loadProgressBtn.disabled = false;
+  elements.overlayToggleBtn.disabled = false;
   }
   
   elements.initBtn.addEventListener('click', async () => {
@@ -718,6 +724,15 @@ export async function createImageUI({ texts, ...handlers }) {
       }
       elements.selectPosBtn.disabled = false;
     }
+  });
+
+  // Botón Overlay: ON/OFF
+  elements.overlayToggleBtn.addEventListener('click', () => {
+    if (!window.__WPA_OVERLAY__) return;
+    const next = !window.__WPA_OVERLAY__.state.enabled;
+    window.__WPA_OVERLAY__.setOverlayEnabled(next);
+    const label = next ? (texts.overlayOn || 'Overlay: ON') : (texts.overlayOff || 'Overlay: OFF');
+    elements.overlayToggleBtn.querySelector('span').textContent = label;
   });
   
   elements.startBtn.addEventListener('click', async () => {

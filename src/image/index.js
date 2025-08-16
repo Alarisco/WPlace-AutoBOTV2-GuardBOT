@@ -8,6 +8,7 @@ import { getSession } from "../core/wplace-api.js";
 import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
 import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
 import { sleep } from "../core/timing.js";
+import "./overlay.js";
 
 export async function runImage() {
   log('🚀 Iniciando WPlace Auto-Image (versión modular)');
@@ -169,6 +170,17 @@ export async function runImage() {
           processor.originalName = file.name;
           
           await processor.load();
+          // Overlay: inyectar estilos y establecer imagen de plantilla (dataURL)
+          try {
+            const dims = processor.getDimensions();
+            const dataURL = processor.generatePreview(dims.width, dims.height);
+            if (window.__WPA_OVERLAY__) {
+              window.__WPA_OVERLAY__.injectOverlayStyles();
+              window.__WPA_OVERLAY__.setOverlayImageSrc(dataURL);
+            }
+          } catch (e) {
+            log('Overlay: no se pudo preparar la imagen de plantilla', e);
+          }
           
           // Procesar imagen con colores disponibles
           const processedData = processor.processImage(imageState.availableColors, config);
@@ -185,7 +197,7 @@ export async function runImage() {
           
           log(`✅ Imagen cargada: ${processedData.width}x${processedData.height}, ${processedData.validPixelCount} píxeles válidos`);
           
-          // Limpiar URL temporal
+          // Limpiar URL temporal (el overlay usa un dataURL separado)
           window.URL.revokeObjectURL(imageUrl);
           
           return true;
@@ -242,6 +254,20 @@ export async function runImage() {
                         
                         imageState.startPosition = { x: localX, y: localY };
                         imageState.selectingPosition = false;
+                        // Actualizar coords lógicas en overlay
+                        try {
+                          if (window.__WPA_OVERLAY__) {
+                            window.__WPA_OVERLAY__.setLogicalCoords({
+                              tileX: imageState.tileX,
+                              tileY: imageState.tileY,
+                              pxX: localX,
+                              pxY: localY,
+                            });
+                            window.__WPA_OVERLAY__.applyOverlayPosition();
+                          }
+                        } catch (e) {
+                          log('Overlay: error actualizando coords lógicas', e);
+                        }
                         
                         // Restaurar fetch original inmediatamente
                         restoreFetch();
@@ -290,6 +316,21 @@ export async function runImage() {
               const target = event.target;
               if (target && target.tagName === 'CANVAS') {
                 log('🖱️ Click detectado en canvas durante selección');
+                // Calcular coordenadas CSS relativas al contenedor del board y fijar ancla del overlay
+                try {
+                  const board = (window.__WPA_OVERLAY__ && window.__WPA_OVERLAY__.state.board)
+                    || document.querySelector('canvas')?.parentElement
+                    || document.body;
+                  const rect = board.getBoundingClientRect();
+                  const cssX = event.clientX - rect.left;
+                  const cssY = event.clientY - rect.top;
+                  if (window.__WPA_OVERLAY__) {
+                    window.__WPA_OVERLAY__.setAnchorCss(cssX, cssY);
+                    window.__WPA_OVERLAY__.applyOverlayPosition();
+                  }
+                } catch (e) {
+                  log('Overlay: error calculando ancla CSS', e);
+                }
                 
                 // Dar tiempo para que se procese el pintado
                 setTimeout(() => {
