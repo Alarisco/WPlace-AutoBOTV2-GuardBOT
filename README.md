@@ -5,7 +5,7 @@
   <strong>🌍 Idiomas disponibles / Available Languages / Langues disponibles:</strong><br>
   <a href="README.md">🇪🇸 Español</a> |
   <a href="docs/README-en.md">🇺🇸 English</a> |
-  <a href="docs/README-fr.md">🇫🇷 Français</a>
+  <a href="docs/README-fr.md">🇫🇷 Français</a> |
   <a href="docs/README-ru.md">🇷🇺 Русский</a>
 </p>
 
