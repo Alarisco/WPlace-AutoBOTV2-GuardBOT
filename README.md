@@ -2,7 +2,7 @@
 
 <!-- Selector de idiomas -->
 <p align="center">
-  <strong>🌍 Idiomas disponibles / Available Languages / Langues disponibles:</strong><br>
+  <strong>🌍 Idiomas disponibles / Available Languages / Langues disponibles / Доступные языки:</strong><br>
   <a href="README.md">🇪🇸 Español</a> |
   <a href="docs/README-en.md">🇺🇸 English</a> |
   <a href="docs/README-fr.md">🇫🇷 Français</a> |
