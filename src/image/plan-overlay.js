@@ -8,6 +8,7 @@
     enabled: false,
     boardLayer: null, // La capa transformada del mapa
   mainCanvas: null, // Canvas principal (sólo para elegir host)
+  transformHost: null, // Elemento cuyo style.transform cambia con pan/zoom
     canvas: null,
     ctx: null,
     // Lista normalizada: { globalX, globalY, r, g, b }
@@ -150,6 +151,51 @@
     return state.boardLayer || document.body;
   }
 
+  function findTransformHost(root) {
+    if (!root) return null;
+    // Preferidos conocidos de MapLibre/Mapbox
+    const preferred = root.querySelector('.maplibregl-canvas-container')
+                     || root.querySelector('.mapboxgl-canvas-container')
+                     || root.querySelector('.maplibregl-transform')
+                     || root.querySelector('.mapboxgl-transform');
+    const candidates = [];
+    if (preferred) candidates.push(preferred);
+    // Escanear hijos directos en busca de transform activo
+    const all = root.querySelectorAll('*');
+    for (const el of all) {
+      try {
+        const cs = window.getComputedStyle(el);
+        if (cs && cs.transform && cs.transform !== 'none') {
+          candidates.push(el);
+        }
+      } catch (e) { void e; }
+    }
+    // Si no hay candidatos con transform, probar el propio root
+    if (candidates.length === 0) {
+      const csr = window.getComputedStyle(root);
+      if (csr.transform && csr.transform !== 'none') return root;
+      return null;
+    }
+    // Elegir el más profundo (último encontrado suele ser más específico)
+    return candidates[candidates.length - 1];
+  }
+
+  function syncOverlayTransformFromHost(reason = 'init') {
+    if (!state.canvas) return;
+    const host = state.transformHost || findTransformHost(state.boardLayer);
+    if (host) {
+      state.transformHost = host;
+      const tx = host.style?.transform || window.getComputedStyle(host).transform;
+      if (tx && tx !== 'none') {
+        state.canvas.style.transform = tx;
+        console.log('[PLAN OVERLAY] Transform copied from host:', tx, `(${reason})`);
+        return;
+      }
+    }
+    // Fallback sin transform
+    state.canvas.style.transform = 'none';
+  }
+
   function ensureOverlayCanvas() {
     if (state.canvas && state.canvas.isConnected) return state.canvas;
     
@@ -171,6 +217,9 @@
     state.canvas = c;
     state.ctx = c.getContext('2d', { willReadFrequently: false });
     host.appendChild(c);
+  // Sincronizar transform de inicio
+  state.transformHost = findTransformHost(state.boardLayer);
+  syncOverlayTransformFromHost('ensureOverlayCanvas');
 
     // Sincronizar tamaño con DPR del canvas principal (como BlueMarble)
     try {
@@ -199,18 +248,28 @@
     
   // (Pan/zoom desactivado temporalmente)
 
-    // Observer para re-adherir si el DOM cambia
+    // Observer para re-adherir si el DOM cambia y para cambios de estilo del host
     if (!state.observer) {
-      state.observer = new window.MutationObserver(() => {
+      state.observer = new window.MutationObserver((mutations) => {
         if (!state.canvas?.isConnected) {
           console.log('[PLAN OVERLAY] Canvas disconnected, re-attaching...');
           const h = ensureBoardLayer();
           h.appendChild(state.canvas);
           applyOverlayPosition();
         }
+        // Si cambió el style del host transformado, re-sincronizar
+        for (const m of mutations) {
+          if (m.type === 'attributes' && m.target === state.transformHost && m.attributeName === 'style') {
+            syncOverlayTransformFromHost('mutation');
+          }
+        }
       });
       // Observar el body para re-anclajes
       state.observer.observe(document.body, { childList: true, subtree: true });
+      // Observar cambios de estilo en el host si existe
+      if (state.transformHost) {
+        state.observer.observe(state.transformHost, { attributes: true, attributeFilter: ['style'] });
+      }
     }
     
     return c;
@@ -279,7 +338,7 @@
       state.canvas.style.position = 'fixed';
       state.canvas.style.left = `${state.cssAnchorX}px`;
       state.canvas.style.top = `${state.cssAnchorY}px`;
-      state.canvas.style.transform = 'none';
+      state.canvas.style.transform = 'none'; // fixed no usa transform del host
     } else {
       // Posicionamiento absoluto en el host del mapa
       const host = ensureBoardLayer();
@@ -289,7 +348,9 @@
       state.canvas.style.position = 'absolute';
       state.canvas.style.left = `${ax}px`;
       state.canvas.style.top = `${ay}px`;
-      state.canvas.style.transform = 'none';
+      // Copiar transform del host para seguir pan/zoom
+      state.transformHost = findTransformHost(state.boardLayer);
+      syncOverlayTransformFromHost('applyOverlayPosition');
     }
     // Debug opcional
     // state.canvas.style.border = '1px dashed #ff0';
