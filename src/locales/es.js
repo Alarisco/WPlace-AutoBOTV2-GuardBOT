@@ -58,6 +58,7 @@ export const es = {
     paintingError: "❌ Error durante la pintura",
     missingRequirements: "❌ Carga una imagen y selecciona una posición primero",
     progress: "Progreso",
+    userName: "Usuario",
     pixels: "Píxeles",
     charges: "Cargas",
     estimatedTime: "Tiempo estimado",

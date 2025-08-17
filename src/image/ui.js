@@ -862,7 +862,7 @@ export async function createImageUI({ texts, ...handlers }) {
       if (userInfo.username) {
         statsHTML += `
           <div class="stat-item">
-            <div class="stat-label">👤 Usuario</div>
+            <div class="stat-label">👤 ${texts.userName}</div>
             <div>${userInfo.username}</div>
           </div>
         `;
