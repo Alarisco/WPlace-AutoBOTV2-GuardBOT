@@ -308,6 +308,8 @@ export async function runImage() {
                               window.__WPA_PLAN_OVERLAY__.setPlan(pixelQueue, {
                                 enabled: true,
                                 nextBatchCount: imageState.pixelsPerBatch,
+                                imageWidth: imageState.imageData.width,
+                                imageHeight: imageState.imageData.height,
                                 anchor: {
                                   tileX: imageState.tileX,
                                   tileY: imageState.tileY,
@@ -601,6 +603,45 @@ export async function runImage() {
           ui.setStatus(t('image.resizeSuccess', { width: newWidth, height: newHeight }), 'success');
           
           log(`✅ Imagen redimensionada: ${processedData.validPixelCount} píxeles válidos`);
+
+          // Actualizar overlay si ya hay posición seleccionada
+          try {
+            if (window.__WPA_PLAN_OVERLAY__ && imageState.startPosition && imageState.tileX != null && imageState.tileY != null) {
+              const localX = imageState.startPosition.x;
+              const localY = imageState.startPosition.y;
+              const pixelQueue = [];
+              for (const pixelData of processedData.pixels) {
+                const globalX = localX + pixelData.x;
+                const globalY = localY + pixelData.y;
+                pixelQueue.push({
+                  imageX: pixelData.x,
+                  imageY: pixelData.y,
+                  localX: globalX,
+                  localY: globalY,
+                  tileX: imageState.tileX,
+                  tileY: imageState.tileY,
+                  color: pixelData.targetColor,
+                  originalColor: pixelData.originalColor
+                });
+              }
+              imageState.remainingPixels = pixelQueue;
+              imageState.totalPixels = pixelQueue.length;
+              window.__WPA_PLAN_OVERLAY__.setPlan(pixelQueue, {
+                enabled: true,
+                nextBatchCount: imageState.pixelsPerBatch,
+                imageWidth: processedData.width,
+                imageHeight: processedData.height,
+                anchor: {
+                  tileX: imageState.tileX,
+                  tileY: imageState.tileY,
+                  pxX: localX,
+                  pxY: localY
+                }
+              });
+            }
+          } catch (e) {
+            log('⚠️ Error actualizando overlay tras redimensionar:', e);
+          }
         } catch (error) {
           log(`❌ Error redimensionando imagen: ${error.message}`);
           ui.setStatus(t('image.imageError'), 'error');

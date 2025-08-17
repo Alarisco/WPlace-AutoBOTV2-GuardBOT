@@ -16,6 +16,9 @@
     minX: 0, minY: 0, maxX: -1, maxY: -1,
     // Resaltado de siguiente batch
     nextBatchCount: 0,
+  // Dimensiones explícitas de la imagen (si se proporcionan)
+  imageWidth: null,
+  imageHeight: null,
     // Observador para reanclar si el DOM cambia
   observer: null,
   // Ancla lógica y ancla CSS (para fijar el pin exactamente donde el usuario clicó)
@@ -155,7 +158,7 @@
   // Replicar atributos de BlueMarble para heredar estilos de MapLibre
   c.id = 'bm-canvas';
   c.className = `maplibregl-canvas ${OVERLAY_CLASS}`;
-    c.style.position = 'absolute';
+  c.style.position = 'absolute';
     c.style.pointerEvents = 'none';
     c.style.imageRendering = 'pixelated';
   c.style.transformOrigin = 'top left';
@@ -241,7 +244,11 @@
     if (!state.canvas) return;
     // Dimensionar el canvas según el área a dibujar relativa al ancla
   let w = 2, h = 2; // mínimo visible
-    if (state.anchor) {
+    if (state.anchor && (state.imageWidth && state.imageHeight)) {
+      // Si tenemos dimensiones de imagen, usar exactamente esas
+      w = Math.max(1, state.imageWidth|0);
+      h = Math.max(1, state.imageHeight|0);
+    } else if (state.anchor) {
       const ax = state.anchor.tileX * TILE_SIZE + (state.anchor.pxX || 0);
       const ay = state.anchor.tileY * TILE_SIZE + (state.anchor.pxY || 0);
       w = Math.max(1, (state.maxX - ax + 1) | 0);
@@ -262,14 +269,28 @@
     // Posicionar el canvas en el sistema de coordenadas de WPlace usando el ancla (pin)
     const ax = state.anchor.tileX * TILE_SIZE + (state.anchor.pxX || 0);
     const ay = state.anchor.tileY * TILE_SIZE + (state.anchor.pxY || 0);
-  // Si existe ancla CSS (coordenadas de clic en pantalla), usarla para que sea visible
-  const cssX = (state.cssAnchorX || state.cssAnchorY) ? state.cssAnchorX : null;
-  const cssY = (state.cssAnchorX || state.cssAnchorY) ? state.cssAnchorY : null;
-  const left = cssX != null ? cssX : ax;
-  const top = cssY != null ? cssY : ay;
-  state.canvas.style.left = `${left}px`;
-  state.canvas.style.top = `${top}px`;
-  state.canvas.style.transform = 'none';
+    // Si existe ancla CSS (coordenadas de clic en pantalla), usarla para que sea visible
+    const hasCss = (state.cssAnchorX || state.cssAnchorY);
+    if (hasCss) {
+      // Reparentar al body para que position:fixed no quede atrapado por transforms
+      if (state.canvas.parentElement !== document.body) {
+        document.body.appendChild(state.canvas);
+      }
+      state.canvas.style.position = 'fixed';
+      state.canvas.style.left = `${state.cssAnchorX}px`;
+      state.canvas.style.top = `${state.cssAnchorY}px`;
+      state.canvas.style.transform = 'none';
+    } else {
+      // Posicionamiento absoluto en el host del mapa
+      const host = ensureBoardLayer();
+      if (state.canvas.parentElement !== host) {
+        host.appendChild(state.canvas);
+      }
+      state.canvas.style.position = 'absolute';
+      state.canvas.style.left = `${ax}px`;
+      state.canvas.style.top = `${ay}px`;
+      state.canvas.style.transform = 'none';
+    }
     // Debug opcional
     // state.canvas.style.border = '1px dashed #ff0';
     console.log('[PLAN OVERLAY] Positioned at anchor (global coords):', { left: ax, top: ay });
@@ -377,6 +398,14 @@
     if (typeof opts.nextBatchCount === 'number') {
       state.nextBatchCount = Math.max(0, opts.nextBatchCount | 0);
     }
+    if (typeof opts.imageWidth === 'number' && typeof opts.imageHeight === 'number') {
+      state.imageWidth = Math.max(1, opts.imageWidth|0);
+      state.imageHeight = Math.max(1, opts.imageHeight|0);
+      console.log('[PLAN OVERLAY] Image dimensions set for overlay:', state.imageWidth, 'x', state.imageHeight);
+    } else {
+      state.imageWidth = null;
+      state.imageHeight = null;
+    }
     if (typeof opts.enabled === 'boolean') {
       setEnabled(opts.enabled);
     }
@@ -420,7 +449,7 @@ function setAnchorCss(x, y) {
   state.cssAnchorY = Math.round(Number(y) || 0);
   console.log('[PLAN OVERLAY] CSS anchor set:', { x: state.cssAnchorX, y: state.cssAnchorY });
   if (state.enabled) {
-    applyOverlayPosition();
+  applyOverlayPosition();
   }
 }
 
