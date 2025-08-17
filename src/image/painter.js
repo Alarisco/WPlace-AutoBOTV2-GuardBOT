@@ -26,6 +26,32 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
     }
     
     log(`Cola generada: ${imageState.remainingPixels.length} píxeles pendientes`);
+    // Actualizar overlay del plan al (re)generar la cola
+    try {
+      if (window.__WPA_PLAN_OVERLAY__) {
+        window.__WPA_PLAN_OVERLAY__.injectStyles();
+        window.__WPA_PLAN_OVERLAY__.setEnabled(true); // Asegurar que esté activado
+        
+        // Configurar ancla con la posición de inicio si está disponible
+        if (imageState.startPosition && imageState.tileX !== undefined && imageState.tileY !== undefined) {
+          window.__WPA_PLAN_OVERLAY__.setAnchor({
+            tileX: imageState.tileX,
+            tileY: imageState.tileY,
+            pxX: imageState.startPosition.x,
+            pxY: imageState.startPosition.y
+          });
+        }
+        
+        window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
+          enabled: true,
+          nextBatchCount: imageState.pixelsPerBatch
+        });
+        
+        log(`✅ Plan overlay actualizado con ${imageState.remainingPixels.length} píxeles en cola`);
+      }
+    } catch (e) {
+      log('⚠️ Error actualizando plan overlay:', e);
+    }
   }
   
   try {
@@ -57,11 +83,23 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
         continue;
       }
       
-      // Tomar el siguiente lote de píxeles
+  // Tomar el siguiente lote de píxeles
       const batch = imageState.remainingPixels.splice(0, pixelsPerBatch);
       
       log(`Pintando lote de ${batch.length} píxeles...`);
       
+      // Actualizar overlay del plan para reflejar el lote siguiente resaltado
+      try {
+        if (window.__WPA_PLAN_OVERLAY__) {
+          window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
+            enabled: true, // Mantener habilitado
+            nextBatchCount: imageState.pixelsPerBatch
+          });
+        }
+      } catch (e) {
+        log('⚠️ Error actualizando plan overlay durante pintado:', e);
+      }
+
       // Pintar el lote con sistema de reintentos
       const result = await paintPixelBatchWithRetry(batch, onProgress);
       
@@ -97,7 +135,7 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
           onProgress(imageState.paintedPixels, imageState.totalPixels, successMessage, estimatedTime);
         }
         
-        // Pausa para que el usuario vea el mensaje de éxito antes del cooldown
+  // Pausa para que el usuario vea el mensaje de éxito antes del cooldown
         await sleep(2000);
       } else if (result.shouldContinue) {
         // Si el sistema de reintentos falló pero debe continuar
@@ -109,7 +147,7 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
         await sleep(5000);
       }
       
-      // Pausa breve entre lotes
+  // Pausa breve entre lotes
       await sleep(500);
     }
     
@@ -122,6 +160,18 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
       log(`Pintado completado: ${imageState.paintedPixels} píxeles pintados`);
       imageState.lastPosition = { x: 0, y: 0 };
       imageState.remainingPixels = [];
+      // Limpiar overlay del plan al completar
+      try {
+        if (window.__WPA_PLAN_OVERLAY__) {
+          window.__WPA_PLAN_OVERLAY__.setPlan([], { 
+            enabled: true, // Mantener habilitado pero sin píxeles
+            nextBatchCount: 0 
+          });
+          log('✅ Plan overlay limpiado al completar pintado');
+        }
+      } catch (e) {
+        log('⚠️ Error limpiando plan overlay:', e);
+      }
       if (onComplete) {
         onComplete(true, imageState.paintedPixels);
       }

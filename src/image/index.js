@@ -8,7 +8,7 @@ import { getSession } from "../core/wplace-api.js";
 import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
 import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
 import { sleep } from "../core/timing.js";
-import "./overlay.js";
+import "./plan-overlay.js";
 
 export async function runImage() {
   log('🚀 Iniciando WPlace Auto-Image (versión modular)');
@@ -141,6 +141,16 @@ export async function runImage() {
       // Habilitar botones de upload y load progress
       ui.enableButtonsAfterInit();
       
+      // Actualizar estado del botón overlay después de la inicialización
+      ui.updateOverlayButtonState();
+
+      // Inicializar plan overlay si ya hay cola previa (p.ej. reanudación)
+      try {
+    // Removed references to __WPA_PLAN_OVERLAY__
+      } catch {
+        // noop
+      }
+      
       return true;
     }
 
@@ -170,17 +180,6 @@ export async function runImage() {
           processor.originalName = file.name;
           
           await processor.load();
-          // Overlay: inyectar estilos y establecer imagen de plantilla (dataURL)
-          try {
-            const dims = processor.getDimensions();
-            const dataURL = processor.generatePreview(dims.width, dims.height);
-            if (window.__WPA_OVERLAY__) {
-              window.__WPA_OVERLAY__.injectOverlayStyles();
-              window.__WPA_OVERLAY__.setOverlayImageSrc(dataURL);
-            }
-          } catch (e) {
-            log('Overlay: no se pudo preparar la imagen de plantilla', e);
-          }
           
           // Procesar imagen con colores disponibles
           const processedData = processor.processImage(imageState.availableColors, config);
@@ -199,6 +198,22 @@ export async function runImage() {
           
           // Limpiar URL temporal (el overlay usa un dataURL separado)
           window.URL.revokeObjectURL(imageUrl);
+
+          // Activar overlay de plan automáticamente cuando se carga imagen
+          try {
+            if (window.__WPA_PLAN_OVERLAY__) {
+              window.__WPA_PLAN_OVERLAY__.injectStyles();
+              window.__WPA_PLAN_OVERLAY__.setEnabled(true); // Activar automáticamente
+              // Configurar ancla base con la posición del tile (será ajustada al seleccionar posición)
+              window.__WPA_PLAN_OVERLAY__.setPlan([], {
+                enabled: true,
+                nextBatchCount: 0
+              });
+              log('✅ Plan overlay activado automáticamente al cargar imagen');
+            }
+          } catch (e) {
+            log('⚠️ Error activando plan overlay:', e);
+          }
           
           return true;
         } catch (error) {
@@ -254,19 +269,60 @@ export async function runImage() {
                         
                         imageState.startPosition = { x: localX, y: localY };
                         imageState.selectingPosition = false;
-                        // Actualizar coords lógicas en overlay
+                        // Configurar ancla del overlay del plan con la posición seleccionada
                         try {
-                          if (window.__WPA_OVERLAY__) {
-                            window.__WPA_OVERLAY__.setLogicalCoords({
+                          if (window.__WPA_PLAN_OVERLAY__) {
+                            window.__WPA_PLAN_OVERLAY__.injectStyles();
+                            window.__WPA_PLAN_OVERLAY__.setEnabled(true); // Asegurar que esté habilitado
+                            // Configurar ancla lógica (tile/local) para posicionamiento
+                            window.__WPA_PLAN_OVERLAY__.setAnchor({
                               tileX: imageState.tileX,
                               tileY: imageState.tileY,
                               pxX: localX,
-                              pxY: localY,
+                              pxY: localY
                             });
-                            window.__WPA_OVERLAY__.applyOverlayPosition();
+                            
+                            // Generar la cola de píxeles inmediatamente para mostrar el overlay
+                            if (imageState.imageData && imageState.imageData.pixels) {
+                              const pixelQueue = [];
+                              for (const pixelData of imageState.imageData.pixels) {
+                                const globalX = localX + pixelData.x;
+                                const globalY = localY + pixelData.y;
+                                
+                                pixelQueue.push({
+                                  imageX: pixelData.x,
+                                  imageY: pixelData.y,
+                                  localX: globalX,
+                                  localY: globalY,
+                                  tileX: imageState.tileX,
+                                  tileY: imageState.tileY,
+                                  color: pixelData.targetColor,
+                                  originalColor: pixelData.originalColor
+                                });
+                              }
+                              
+                              // Actualizar cola y overlay
+                              imageState.remainingPixels = pixelQueue;
+                              imageState.totalPixels = pixelQueue.length;
+                              
+                              window.__WPA_PLAN_OVERLAY__.setPlan(pixelQueue, {
+                                enabled: true,
+                                nextBatchCount: imageState.pixelsPerBatch,
+                                anchor: {
+                                  tileX: imageState.tileX,
+                                  tileY: imageState.tileY,
+                                  pxX: localX,
+                                  pxY: localY
+                                }
+                              });
+                              
+                              log(`✅ Cola de píxeles generada: ${pixelQueue.length} píxeles para overlay`);
+                            }
+                            
+                            log(`✅ Plan overlay anclado en tile(${imageState.tileX},${imageState.tileY}) local(${localX},${localY})`);
                           }
                         } catch (e) {
-                          log('Overlay: error actualizando coords lógicas', e);
+                          log('Plan Overlay: error configurando ancla', e);
                         }
                         
                         // Restaurar fetch original inmediatamente
@@ -316,20 +372,18 @@ export async function runImage() {
               const target = event.target;
               if (target && target.tagName === 'CANVAS') {
                 log('🖱️ Click detectado en canvas durante selección');
-                // Calcular coordenadas CSS relativas al contenedor del board y fijar ancla del overlay
+                // Calcular coordenadas CSS relativas al contenedor del board para ancla CSS
                 try {
-                  const board = (window.__WPA_OVERLAY__ && window.__WPA_OVERLAY__.state.board)
-                    || document.querySelector('canvas')?.parentElement
-                    || document.body;
+                  const board = document.querySelector('canvas')?.parentElement || document.body;
                   const rect = board.getBoundingClientRect();
                   const cssX = event.clientX - rect.left;
                   const cssY = event.clientY - rect.top;
-                  if (window.__WPA_OVERLAY__) {
-                    window.__WPA_OVERLAY__.setAnchorCss(cssX, cssY);
-                    window.__WPA_OVERLAY__.applyOverlayPosition();
+                  if (window.__WPA_PLAN_OVERLAY__) {
+                    window.__WPA_PLAN_OVERLAY__.setAnchorCss(cssX, cssY);
+                    log(`Plan overlay: ancla CSS establecida en (${cssX}, ${cssY})`);
                   }
                 } catch (e) {
-                  log('Overlay: error calculando ancla CSS', e);
+                  log('Plan Overlay: error calculando ancla CSS', e);
                 }
                 
                 // Dar tiempo para que se procese el pintado
