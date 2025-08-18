@@ -28,31 +28,56 @@ export function randomCoords(cfg) {
     return [localX, localY];
   }
   
-  // Generar coordenadas dentro del radio especificado desde la posición base
+  // Convertir coordenadas base locales a absolutas
+  const baseAbsX = cfg.TILE_X * cfg.TILE_SIZE + cfg.BASE_X;
+  const baseAbsY = cfg.TILE_Y * cfg.TILE_SIZE + cfg.BASE_Y;
+  
+  // Generar coordenadas dentro del radio especificado desde la posición base ABSOLUTA
   const radius = cfg.FARM_RADIUS;
   
   // Generar un ángulo aleatorio y una distancia aleatoria dentro del radio
   const angle = Math.random() * 2 * Math.PI;
   const distance = Math.random() * radius;
   
-  // Calcular offset desde la posición base
+  // Calcular offset desde la posición base absoluta
   const offsetX = Math.round(distance * Math.cos(angle));
   const offsetY = Math.round(distance * Math.sin(angle));
   
-  // Calcular coordenadas finales
-  let localX = cfg.BASE_X + offsetX;
-  let localY = cfg.BASE_Y + offsetY;
+  // Calcular coordenadas absolutas finales
+  const targetAbsX = baseAbsX + offsetX;
+  const targetAbsY = baseAbsY + offsetY;
+  
+  // Calcular el tile de destino
+  const targetTileX = Math.floor(targetAbsX / cfg.TILE_SIZE);
+  const targetTileY = Math.floor(targetAbsY / cfg.TILE_SIZE);
+  
+  // Si las coordenadas generadas están fuera del tile actual, generar dentro del tile
+  if (targetTileX !== cfg.TILE_X || targetTileY !== cfg.TILE_Y) {
+    // Forzar coordenadas dentro del tile actual
+    const localX = Math.max(0, Math.min(cfg.TILE_SIZE - 1, cfg.BASE_X + offsetX));
+    const localY = Math.max(0, Math.min(cfg.TILE_SIZE - 1, cfg.BASE_Y + offsetY));
+    
+    if (Math.random() < 0.1) {
+      log(`🎯 Coordenadas ajustadas al tile: base(${cfg.BASE_X},${cfg.BASE_Y}) offset(${offsetX},${offsetY}) final(${localX},${localY})`);
+    }
+    
+    return [localX, localY];
+  }
+  
+  // Convertir de coordenadas absolutas a locales del tile
+  const localX = targetAbsX - (targetTileX * cfg.TILE_SIZE);
+  const localY = targetAbsY - (targetTileY * cfg.TILE_SIZE);
   
   // Asegurar que las coordenadas estén dentro del tile (0 a TILE_SIZE-1)
-  localX = Math.max(0, Math.min(cfg.TILE_SIZE - 1, localX));
-  localY = Math.max(0, Math.min(cfg.TILE_SIZE - 1, localY));
+  const finalLocalX = Math.max(0, Math.min(cfg.TILE_SIZE - 1, localX));
+  const finalLocalY = Math.max(0, Math.min(cfg.TILE_SIZE - 1, localY));
   
   // Log ocasional para debugging
   if (Math.random() < 0.1) {
-    log(`🎯 Coordenadas en radio: base(${cfg.BASE_X},${cfg.BASE_Y}) radio(${radius}) offset(${offsetX},${offsetY}) final(${localX},${localY})`);
+    log(`🎯 Coordenadas en radio: baseAbs(${baseAbsX},${baseAbsY}) targetAbs(${targetAbsX},${targetAbsY}) final(${finalLocalX},${finalLocalY}) tile(${cfg.TILE_X},${cfg.TILE_Y})`);
   }
   
-  return [localX, localY];
+  return [finalLocalX, finalLocalY];
 }
 
 // Función para verificar si una posición está dentro del radio de farming
@@ -61,8 +86,17 @@ export function isWithinFarmRadius(x, y, cfg) {
     return false;
   }
   
-  const deltaX = x - cfg.BASE_X;
-  const deltaY = y - cfg.BASE_Y;
+  // Convertir coordenadas base locales a absolutas
+  const baseAbsX = cfg.TILE_X * cfg.TILE_SIZE + cfg.BASE_X;
+  const baseAbsY = cfg.TILE_Y * cfg.TILE_SIZE + cfg.BASE_Y;
+  
+  // Convertir coordenadas de verificación (asumiendo que son locales) a absolutas
+  const targetAbsX = cfg.TILE_X * cfg.TILE_SIZE + x;
+  const targetAbsY = cfg.TILE_Y * cfg.TILE_SIZE + y;
+  
+  // Calcular distancia en coordenadas absolutas
+  const deltaX = targetAbsX - baseAbsX;
+  const deltaY = targetAbsY - baseAbsY;
   const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
   
   return distance <= cfg.FARM_RADIUS;
