@@ -4,7 +4,7 @@ import { guardState, GUARD_DEFAULTS } from "./config.js";
 import { detectAvailableColors, analyzeAreaPixels, checkForChanges } from "./processor.js";
 import { createGuardUI, showConfirmDialog } from "./ui.js";
 import { saveProgress, loadProgress, hasProgress } from "./save-load.js";
-import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
+import { initializeLanguage, getSection, t } from "../locales/index.js";
 import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
 import { sleep } from "../core/timing.js";
 
@@ -38,37 +38,48 @@ export async function runGuard() {
     // Configurar event listeners
     setupEventListeners();
     
-    // Función para auto-inicio del bot
+    // Función para auto-inicio del bot (robusta): valida colores reales y hace fallback a clic de Paint
     async function tryAutoInit() {
       log('🤖 Intentando auto-inicio del Guard...');
-      
-      // Verificar si la paleta ya está abierta
+      guardState.ui.updateStatus(t('guard.paletteNotFound'), 'info');
+
+      // 1) Si parece abierta, validar que haya colores reales
       if (isPaletteOpen()) {
-        log('🎨 Paleta de colores ya está abierta');
-        return true;
+        log('🎨 Paleta parece abierta. Validando colores...');
+        const colorsNow = detectAvailableColors();
+        if (colorsNow.length > 0) {
+          guardState.ui.updateStatus(t('guard.paletteDetected'), 'success');
+          return true;
+        }
+        log('⚠️ Paleta "abierta" pero sin colores detectados. Intentando presionar Paint...');
       }
-      
-      log('🔍 Paleta no encontrada, buscando botón Paint...');
-      
-      // Intentar hacer clic en el botón Paint
+
+      // 2) Intentar hacer clic en el botón Paint
+      log('🔍 Buscando botón Paint...');
+      guardState.ui.updateStatus(t('guard.clickingPaintButton'), 'info');
       if (findAndClickPaintButton()) {
         log('👆 Botón Paint encontrado y presionado');
-        
-        // Esperar un momento para que la paleta se abra
-        await sleep(2000);
-        
-        // Verificar si la paleta se abrió
-        if (isPaletteOpen()) {
-          log('✅ Paleta abierta exitosamente');
+        await sleep(3000); // Esperar a que cargue
+
+        // Revalidar: primero colores reales, luego fallback a heurística de paleta
+        const colorsAfter = detectAvailableColors();
+        if (colorsAfter.length > 0) {
+          log('✅ Colores detectados tras presionar Paint');
+          guardState.ui.updateStatus(t('guard.paletteDetected'), 'success');
           return true;
+        }
+        if (isPaletteOpen()) {
+          log('✅ Paleta abierta, pero sin colores accesibles aún');
+          // Aún consideramos fallido para forzar inicio manual
         } else {
           log('❌ La paleta no se abrió después de hacer clic');
-          return false;
         }
       } else {
         log('❌ Botón Paint no encontrado');
-        return false;
       }
+
+      guardState.ui.updateStatus(t('guard.autoInitFailed'), 'warning');
+      return false;
     }
     
     // Intentar auto-inicio después de que la UI esté lista
@@ -94,13 +105,14 @@ export async function runGuard() {
         } else {
           guardState.ui.updateStatus(t('guard.autoInitFailed'), 'warning');
           log('⚠️ Auto-inicio falló, se requiere inicio manual');
-          // El botón de inicio manual permanece visible
+          // Asegurar que el botón de inicio manual esté visible
+          guardState.ui.setInitButtonVisible(true);
         }
       } catch (error) {
         log('❌ Error en auto-inicio:', error);
         guardState.ui.updateStatus(t('guard.manualInitRequired'), 'warning');
       }
-    }, 1000); // Esperar 1 segundo para que la UI esté completamente cargada
+  }, 1000); // 1s, consistente con Auto-Image
     
     // Cleanup al cerrar
     window.addEventListener('beforeunload', () => {
@@ -154,10 +166,10 @@ function setupEventListeners() {
     if (elements.areaFileInput.files.length > 0) {
       const result = await loadProgress(elements.areaFileInput.files[0]);
       if (result.success) {
-        guardState.ui.updateStatus(`✅ Progreso cargado: ${result.protectedPixels} píxeles protegidos`, 'success');
+        guardState.ui.updateStatus(`✅ Protección cargada: ${result.protectedPixels} píxeles protegidos`, 'success');
         log(`✅ Área de protección cargada desde archivo`);
       } else {
-        guardState.ui.updateStatus(`❌ Error al cargar progreso: ${result.error}`, 'error');
+        guardState.ui.updateStatus(`❌ Error al cargar protección: ${result.error}`, 'error');
         log(`❌ Error cargando archivo: ${result.error}`);
       }
     }
@@ -165,32 +177,63 @@ function setupEventListeners() {
   
   elements.startBtn.addEventListener('click', startGuard);
   elements.stopBtn.addEventListener('click', async () => {
-    // Implementar el mismo patrón de confirmación que Auto-Image
-    if (hasProgress()) {
-      const result = await showConfirmDialog(
-        "¿Deseas guardar el área de protección actual antes de detener?",
-        "Guardar Progreso",
-        {
-          save: "Guardar Progreso",
-          discard: "Descartar", 
-          cancel: "Cancelar"
-        }
-      );
-      
-      if (result === 'save') {
-        const saveResult = saveProgress();
-        if (saveResult.success) {
-          guardState.ui.updateStatus(`✅ Progreso guardado como ${saveResult.filename}`, 'success');
-        } else {
-          guardState.ui.updateStatus(`❌ Error al guardar progreso: ${saveResult.error}`, 'error');
-        }
-      } else if (result === 'cancel') {
-        return; // No detener si cancela
-      }
+    // Simplemente detener la protección sin opciones de guardado
+    guardState.running = false;
+    guardState.loopId = null;
+    guardState.ui.setRunningState(false);
+    guardState.ui.updateStatus('⏹️ Protección detenida', 'warning');
+    
+    if (guardState.checkInterval) {
+      clearInterval(guardState.checkInterval);
+      guardState.checkInterval = null;
+    }
+  });
+  
+  // Eventos para save/load/delete
+  elements.saveBtn.addEventListener('click', async () => {
+    if (!hasProgress()) {
+      guardState.ui.updateStatus('❌ No hay área protegida para guardar', 'error');
+      return;
     }
     
-    stopGuard();
+    // Mostrar diálogo de split
+    const splitConfirm = await showConfirmDialog(
+      '¿Deseas dividir el área protegida en partes para múltiples usuarios?<br><br>' +
+      '<label for="splitCountInput">Número de partes (1 = sin dividir):</label><br>' +
+      '<input type="number" id="splitCountInput" min="1" max="20" value="1" style="margin: 5px 0; padding: 5px; width: 100px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db;">',
+      'Opciones de Guardado',
+      {
+        save: "Guardar",
+        cancel: "Cancelar"
+      }
+    );
+    
+    if (splitConfirm === 'save') {
+      const splitInput = document.querySelector('#splitCountInput');
+      const splitCount = parseInt(splitInput?.value) || 1;
+      const result = await saveProgress(null, splitCount);
+      if (result.success) {
+        guardState.ui.updateStatus(`✅ Protección guardada${splitCount > 1 ? ` (dividida en ${splitCount} partes)` : ''}`, 'success');
+      } else {
+        guardState.ui.updateStatus(`❌ Error al guardar: ${result.error}`, 'error');
+      }
+    }
   });
+
+  // Eventos para configuración editable
+  elements.pixelsPerBatchInput.addEventListener('change', (e) => {
+    guardState.pixelsPerBatch = Math.max(1, Math.min(50, parseInt(e.target.value) || 10));
+    e.target.value = guardState.pixelsPerBatch;
+  });
+
+  elements.minChargesInput.addEventListener('change', (e) => {
+    guardState.minChargesToWait = Math.max(1, Math.min(100, parseInt(e.target.value) || 20));
+    e.target.value = guardState.minChargesToWait;
+  });
+
+  // Actualizar inputs con valores del estado
+  elements.pixelsPerBatchInput.value = guardState.pixelsPerBatch;
+  elements.minChargesInput.value = guardState.minChargesToWait;
 }
 
 async function initializeGuard(isAutoInit = false) {
@@ -198,7 +241,16 @@ async function initializeGuard(isAutoInit = false) {
     guardState.ui.updateStatus(t('guard.checkingColors'), 'info');
     
     // Detectar colores disponibles
-    const colors = detectAvailableColors();
+    let colors = detectAvailableColors();
+    if (colors.length === 0) {
+      // Fallback: intentar abrir la paleta automáticamente si aún no hay colores
+      log('⚠️ 0 colores detectados. Intentando abrir paleta (fallback)...');
+      guardState.ui.updateStatus(t('guard.clickingPaintButton'), 'info');
+      if (findAndClickPaintButton()) {
+        await sleep(2500);
+        colors = detectAvailableColors();
+      }
+    }
     if (colors.length === 0) {
       guardState.ui.updateStatus(t('guard.noColorsFound'), 'error');
       return false;

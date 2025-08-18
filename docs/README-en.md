@@ -43,6 +43,7 @@
 - [🌍 Multi-language Support](#-multi-language-support)
 - [🚀 Quick Start](#-quick-start)
 - [🔧 Available Bots](#-available-bots)
+- [🛡️ Auto-Guard Bot](#️-auto-guard-bot)
 - [🌾 Auto-Farm Bot](#-auto-farm-bot)
 - [🎨 Auto-Image Bot](#-auto-image-bot)
 - [📖 Detailed Guides](#-detailed-guides)
@@ -98,14 +99,41 @@
 
 ## 🔧 Available Bots
 
-### 🧭 Launcher (recommended)
-A single bookmark that lets you choose between Auto-Farm or Auto-Image on each run.
+### 🚀 NEW! 🛡️ Auto-Guard Bot
+**The new automatic protection system for your artwork**
+
+🛡️ **Is your pixel art being vandalized?** Auto-Guard is the solution! 
+
+✨ **Main features:**
+- 🎯 **Selective protection:** Define specific areas to protect
+- 🔍 **Continuous monitoring:** Watch for unauthorized changes 24/7
+- ⚡ **Automatic repair:** Restore altered pixels instantly
+- � **Smart detection:** Distinguish between legitimate updates and vandalism
+- 🔋 **Efficient management:** Use charges only when necessary
+
+### �🧭 Launcher (recommended)
+A single bookmark that lets you choose between Auto-Farm, Auto-Image, or **Auto-Guard** on each run.
 
 ```javascript
 javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Launcher.js").then(r=>r.text()).then(eval)
 ```
 
 — Or use the bots separately —
+
+### 🛡️ Auto-Guard Bot
+**Automatic protection for your artwork**
+
+```javascript
+javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Guard.js").then(t=>t.text()).then(eval);
+```
+
+**Features:**
+- ✅ Specific area protection
+- ✅ 24/7 continuous monitoring
+- ✅ Automatic vandalism repair
+- ✅ Smart change detection
+- ✅ Efficient charge management
+- ✅ Visual area selection
 
 ### 🌾 Auto-Farm Bot
 **Automatic experience and charges farming**
@@ -141,6 +169,132 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 ---
 
 ## 📖 Detailed Guides
+
+## 🛡️ Auto-Guard Bot - Complete Manual
+
+### 🎯 What is Auto-Guard?
+
+Auto-Guard is the most advanced protection system for WPlace that keeps your pixel art safe from vandalism. Define specific areas you want to protect and the bot takes care of the rest.
+
+### ✨ Main Features
+
+- **🎯 Precise selection:** Define rectangular areas to protect
+- **🔍 Smart monitoring:** Checks for changes every 30 seconds
+- **⚡ Immediate response:** Repairs vandalism automatically
+- **🔋 Energy efficient:** Only uses charges when necessary
+- **📊 Real-time statistics:** Protected pixels, detected changes, repairs
+- **🌍 Translated interface:** 100% in your language
+
+### 🚀 Step-by-Step Usage
+
+#### 1️⃣ **Initialization**
+```text
+1. Run the Auto-Guard bookmarklet on WPlace
+2. Click "Initialize Guard-BOT"
+3. Wait for available colors verification
+```
+
+#### 2️⃣ **Select Area to Protect**
+```text
+1. Click "Select Area"
+2. Paint a pixel at the UPPER LEFT corner
+3. Paint a pixel at the LOWER RIGHT corner
+4. The system automatically calculates the rectangular area
+5. Confirm the displayed coordinates
+```
+
+#### 3️⃣ **Capture Original State**
+```text
+1. Click "Capture Area"
+2. The bot takes a "photo" of the current state
+3. This will be the reference state to detect changes
+4. Verify the number of pixels under protection
+```
+
+#### 4️⃣ **Start Protection**
+```text
+1. Click "Start Protection"
+2. The bot begins continuous monitoring
+3. Every 30 seconds it checks for changes in the area
+4. If it detects alterations, it repairs them automatically
+```
+
+### 🔧 Control Panel
+
+#### 📊 **Real-time Information**
+- **Protected Pixels:** Total pixels under surveillance
+- **Detected Changes:** Number of alterations found
+- **Repaired Pixels:** Amount of successful repairs
+- **Charges:** Available charges for repairs
+- **Status:** Active, paused, or repairing
+
+#### ⚡ **Main Controls**
+- **🛡️ Initialize:** Prepares the protection system
+- **📐 Select Area:** Defines zone to protect
+- **📸 Capture Area:** Saves reference state
+- **▶️ Start Protection:** Activates continuous monitoring
+- **⏹️ Stop Protection:** Pauses the system
+
+### 🎯 Use Cases
+
+#### 🖼️ **Art Protection**
+- **Finished works:** Keep your pixel art intact
+- **Work in progress:** Protect already completed areas
+- **Collaborative art:** Watch for unwanted contributions
+
+#### 🏰 **Territory Protection**
+- **Community logos:** Defend group symbols
+- **Flags:** Maintain correct national colors
+- **Important texts:** Protect key messages
+
+#### 🛡️ **Preventive Defense**
+- **Conflict zones:** Anticipate raids
+- **Inactive hours:** Protection while you sleep
+- **Special events:** Maintain structures during pixel wars
+
+### ⚙️ Advanced Configuration
+
+#### 🔍 **System Limits**
+- **Maximum area:** 10,000 pixels per zone
+- **Verification:** Every 30 seconds
+- **Response:** Repair in <5 seconds
+- **Accuracy:** 100% change detection
+
+#### 🔋 **Charge Management**
+- **Smart usage:** Only spends charges on real repairs
+- **Prioritization:** Repairs most critical changes first
+- **Optimization:** Groups repairs for efficiency
+- **Monitoring:** Checks charges before each action
+
+### 🛠️ Console Functions
+
+```javascript
+// View current protection state
+console.log(guardState)
+
+// Protected area information
+debugProtectedArea()
+
+// Repair statistics
+getRepairStats()
+
+// Force manual verification
+checkForChanges()
+```
+
+### ⚠️ Tips and Best Practices
+
+#### ✅ **Recommendations**
+- **Small areas:** Start with zones of 100-500 pixels
+- **Coordination:** Inform your team about protected areas
+- **Key hours:** Activate during sleep or work hours
+- **Pre-verification:** Make sure the area is complete before capturing
+
+#### ❌ **Avoid**
+- **Very large areas:** Consumes many charges unnecessarily
+- **Edge protection:** Avoid coordinates near 0 or canvas limits
+- **Multiple instances:** Only run one Auto-Guard per tab
+- **Incomplete capture:** Don't capture areas you're still editing
 
 ## 🌾 Auto-Farm Bot - Complete Manual
 
@@ -374,6 +528,9 @@ Both bots include advanced protections:
 | **"Error loading progress"** | Invalid JSON file | Check file integrity |
 | **"Color incompatibility"** | Different palette | Restart bot and check colors |
 | **Progress doesn't save** | Download permissions | Allow downloads in browser |
+| **"Area too large"** | Excessive protection zone | Reduce size to <10,000 pixels |
+| **"No area captured"** | No protection zone defined | Use "Select Area" and "Capture Area" |
+| **Guard doesn't repair** | No charges or detection error | Check charges and recapture area |
 
 ### 📞 Contact
 

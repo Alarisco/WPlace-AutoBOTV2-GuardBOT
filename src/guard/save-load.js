@@ -1,59 +1,138 @@
-import { log } from "../core/logger.js";
-import { guardState } from "./config.js";
+import { guardState } from './config.js';
+import { log } from '../core/logger.js';
 
-export function saveProgress(filename = null) {
+// Función para dividir el área de protección en múltiples partes
+function splitProtectionArea(area, splitCount) {
+  const { x1, y1, x2, y2 } = area;
+  const width = x2 - x1;
+  const height = y2 - y1;
+  const areas = [];
+  
+  if (splitCount <= 1) {
+    return [area];
+  }
+  
+  // Determinar si dividir horizontal o verticalmente basado en las dimensiones
+  const divideHorizontally = width >= height;
+  
+  if (divideHorizontally) {
+    const segmentWidth = Math.floor(width / splitCount);
+    for (let i = 0; i < splitCount; i++) {
+      const startX = x1 + (i * segmentWidth);
+      const endX = i === splitCount - 1 ? x2 : startX + segmentWidth;
+      areas.push({
+        x1: startX,
+        y1: y1,
+        x2: endX,
+        y2: y2
+      });
+    }
+  } else {
+    const segmentHeight = Math.floor(height / splitCount);
+    for (let i = 0; i < splitCount; i++) {
+      const startY = y1 + (i * segmentHeight);
+      const endY = i === splitCount - 1 ? y2 : startY + segmentHeight;
+      areas.push({
+        x1: x1,
+        y1: startY,
+        x2: x2,
+        y2: endY
+      });
+    }
+  }
+  
+  return areas;
+}
+
+// Función para obtener píxeles dentro de un área específica
+function getPixelsInArea(area, pixelsMap) {
+  const pixels = [];
+  const { x1, y1, x2, y2 } = area;
+  
+  for (const [key, value] of pixelsMap.entries()) {
+    const [x, y] = key.split(',').map(Number);
+    if (x >= x1 && x <= x2 && y >= y1 && y <= y2) {
+      pixels.push({ key, ...value });
+    }
+  }
+  
+  return pixels;
+}
+
+export function saveProgress(filename = null, splitCount = null) {
   try {
     if (!guardState.protectionArea || !guardState.originalPixels.size) {
       throw new Error('No hay progreso para guardar');
     }
     
-    const progressData = {
-      version: "1.0",
-      timestamp: Date.now(),
-      protectionData: {
-        area: { ...guardState.protectionArea },
-        protectedPixels: guardState.originalPixels.size
-      },
-      progress: {
-        totalRepaired: guardState.totalRepaired,
-        lastCheck: guardState.lastCheck
-      },
-      config: {
-        maxProtectionSize: 100000,
-        pixelsPerBatch: 10,
-        checkInterval: 10000
-      },
-      // Filtrar solo los datos serializables de los colores (sin elementos DOM)
-      colors: guardState.availableColors.map(color => ({
-        id: color.id,
-        r: color.r,
-        g: color.g,
-        b: color.b
-      })),
-      // Convertir Map a array para serialización
-      originalPixels: Array.from(guardState.originalPixels.entries()).map(([key, value]) => ({
-        key,
-        ...value
-      }))
+    const areas = splitCount && splitCount > 1 ? 
+      splitProtectionArea(guardState.protectionArea, splitCount) : 
+      [guardState.protectionArea];
+    
+    const results = [];
+    
+    for (let i = 0; i < areas.length; i++) {
+      const area = areas[i];
+      const areaPixels = getPixelsInArea(area, guardState.originalPixels);
+      
+      const progressData = {
+        version: "1.0",
+        timestamp: Date.now(),
+        protectionData: {
+          area: { ...area },
+          protectedPixels: areaPixels.length,
+          splitInfo: splitCount > 1 ? { 
+            total: splitCount, 
+            current: i + 1,
+            originalArea: { ...guardState.protectionArea }
+          } : null
+        },
+        progress: {
+          totalRepaired: guardState.totalRepaired,
+          lastCheck: guardState.lastCheck
+        },
+        config: {
+          maxProtectionSize: 100000,
+          pixelsPerBatch: 10,
+          checkInterval: 10000
+        },
+        // Filtrar solo los datos serializables de los colores (sin elementos DOM)
+        colors: guardState.availableColors.map(color => ({
+          id: color.id,
+          r: color.r,
+          g: color.g,
+          b: color.b
+        })),
+        // Convertir Map a array para serialización - solo píxeles del área
+        originalPixels: areaPixels
+      };
+      
+      const dataStr = JSON.stringify(progressData, null, 2);
+      const blob = new window.Blob([dataStr], { type: 'application/json' });
+      
+      const suffix = splitCount > 1 ? `_parte${i + 1}de${splitCount}` : '';
+      const finalFilename = filename || 
+        `wplace_progress_guard_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}${suffix}.json`;
+      
+      // Crear y disparar descarga
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = finalFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      results.push({ success: true, filename: finalFilename });
+      log(`✅ Progreso guardado: ${finalFilename}`);
+    }
+    
+    return { 
+      success: true, 
+      filename: results.length === 1 ? results[0].filename : `${results.length} archivos`,
+      files: results
     };
-    
-    const dataStr = JSON.stringify(progressData, null, 2);
-    const blob = new window.Blob([dataStr], { type: 'application/json' });
-    
-    const finalFilename = filename || `wplace_progress_guard_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-    
-    // Crear y disparar descarga
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = finalFilename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
-    log(`✅ Progreso guardado: ${finalFilename}`);
-    return { success: true, filename: finalFilename };
     
   } catch (error) {
     log('❌ Error guardando progreso:', error);

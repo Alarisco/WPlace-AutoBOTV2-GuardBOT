@@ -72,9 +72,18 @@ export async function downloadAndExecuteBot(botType, rawBase) {
   log(`📥 Descargando bot: ${botType}`);
   
   try {
-    const url = botType === 'farm' 
-      ? `${rawBase}/Auto-Farm.js` 
-      : `${rawBase}/Auto-Image.js`;
+    const botFiles = {
+      'farm': 'Auto-Farm.js',
+      'image': 'Auto-Image.js',
+      'guard': 'Auto-Guard.js'
+    };
+    
+    const fileName = botFiles[botType];
+    if (!fileName) {
+      throw new Error(`Tipo de bot desconocido: ${botType}`);
+    }
+    
+    const url = `${rawBase}/${fileName}`;
     
     log(`🌐 URL: ${url}`);
     

@@ -91,6 +91,29 @@ export function createGuardUI(texts) {
         </div>
       </div>
       
+      <!-- Controles de configuración -->
+      <div id="configSection" style="background: #2d3748; padding: 10px; border-radius: 6px; margin-top: 10px;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #cbd5e0;">⚙️ Configuración</h4>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+          <div style="flex: 1;">
+            <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #cbd5e0;">Píxeles por lote:</label>
+            <input id="pixelsPerBatchInput" type="number" min="1" max="50" style="width: 100%; padding: 5px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db; font-size: 13px;">
+          </div>
+          <div style="flex: 1;">
+            <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #cbd5e0;">Cargas mínimas:</label>
+            <input id="minChargesInput" type="number" min="1" max="100" style="width: 100%; padding: 5px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db; font-size: 13px;">
+          </div>
+        </div>
+        
+        <!-- Controles de save/load -->
+        <div style="display: flex; gap: 10px;">
+          <button id="saveBtn" style="width: 100%; padding: 8px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
+            💾 Guardar Protección
+          </button>
+        </div>
+      </div>
+      
       <!-- Estado -->
       <div id="statusBar" style="background: #2d3748; padding: 8px; border-radius: 4px; text-align: center; font-size: 13px; margin-top: 10px;">
         ⏳ ${texts.waitingInit}
@@ -129,7 +152,10 @@ export function createGuardUI(texts) {
     chargesCount: container.querySelector('#chargesCount'),
     repairedCount: container.querySelector('#repairedCount'),
     statusBar: container.querySelector('#statusBar'),
-    areaFileInput: areaFileInput
+    areaFileInput: areaFileInput,
+    pixelsPerBatchInput: container.querySelector('#pixelsPerBatchInput'),
+    minChargesInput: container.querySelector('#minChargesInput'),
+    saveBtn: container.querySelector('#saveBtn')
   };
 
   // API de la UI

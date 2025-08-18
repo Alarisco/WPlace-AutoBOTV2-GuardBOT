@@ -151,6 +151,9 @@ export function createLauncherUI({
         <button class="btn primary farm-btn">${texts.autoFarm}</button>
         <button class="btn ghost image-btn">${texts.autoImage}</button>
       </div>
+      <div class="row">
+        <button class="btn ghost guard-btn">${texts.autoGuard}</button>
+      </div>
       <div class="card">
         <div class="stat">
           <span>${texts.selection}</span>
@@ -196,6 +199,7 @@ export function createLauncherUI({
     header: panel.querySelector('.header'),
     farmBtn: panel.querySelector('.farm-btn'),
     imageBtn: panel.querySelector('.image-btn'),
+    guardBtn: panel.querySelector('.guard-btn'),
     launchBtn: panel.querySelector('.launch-btn'),
     cancelBtn: panel.querySelector('.cancel-btn'),
     closeBtn: panel.querySelector('.close-btn'),
@@ -219,20 +223,28 @@ export function createLauncherUI({
     selectedBot = botType;
     launcherState.selectedBot = botType;
     
-    elements.choice.textContent = botType === 'farm' ? t('launcher.autoFarm') : t('launcher.autoImage');
+    elements.choice.textContent = botType === 'farm' ? t('launcher.autoFarm') : 
+                                  botType === 'image' ? t('launcher.autoImage') : 
+                                  t('launcher.autoGuard');
     elements.launchBtn.disabled = false;
     
     // Actualizar estilos de botones
+    elements.farmBtn.classList.remove('primary');
+    elements.farmBtn.classList.add('ghost');
+    elements.imageBtn.classList.remove('primary');
+    elements.imageBtn.classList.add('ghost');
+    elements.guardBtn.classList.remove('primary');
+    elements.guardBtn.classList.add('ghost');
+    
     if (botType === 'farm') {
       elements.farmBtn.classList.add('primary');
       elements.farmBtn.classList.remove('ghost');
-      elements.imageBtn.classList.add('ghost');
-      elements.imageBtn.classList.remove('primary');
-    } else {
+    } else if (botType === 'image') {
       elements.imageBtn.classList.add('primary');
       elements.imageBtn.classList.remove('ghost');
-      elements.farmBtn.classList.add('ghost');
-      elements.farmBtn.classList.remove('primary');
+    } else if (botType === 'guard') {
+      elements.guardBtn.classList.add('primary');
+      elements.guardBtn.classList.remove('ghost');
     }
     
     elements.statusText.textContent = t('launcher.readyToLaunch');
@@ -245,6 +257,7 @@ export function createLauncherUI({
   // Event listeners
   elements.farmBtn.addEventListener('click', () => selectBot('farm'));
   elements.imageBtn.addEventListener('click', () => selectBot('image'));
+  elements.guardBtn.addEventListener('click', () => selectBot('guard'));
   
   elements.launchBtn.addEventListener('click', async () => {
     if (!selectedBot) return;
@@ -352,6 +365,10 @@ export function createLauncherUI({
       elements.imageBtn.textContent = newTexts.autoImage;
     }
     
+    if (elements.guardBtn) {
+      elements.guardBtn.textContent = newTexts.autoGuard;
+    }
+    
     if (elements.launchBtn) {
       elements.launchBtn.textContent = newTexts.launch;
     }
@@ -431,7 +448,9 @@ export function createLauncherUI({
     
     // Actualizar la selección actual si hay alguna
     if (selectedBot && elements.choice) {
-      elements.choice.textContent = selectedBot === 'farm' ? newTexts.autoFarm : newTexts.autoImage;
+      elements.choice.textContent = selectedBot === 'farm' ? newTexts.autoFarm : 
+                                    selectedBot === 'image' ? newTexts.autoImage : 
+                                    newTexts.autoGuard;
     }
     
     // Actualizar textos de referencia local

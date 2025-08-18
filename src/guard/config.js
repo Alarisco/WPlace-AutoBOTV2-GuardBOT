@@ -6,6 +6,7 @@ export const GUARD_DEFAULTS = {
   CHECK_INTERVAL: 10000, // Revisar cada 10 segundos
   MAX_PROTECTION_SIZE: 100000, // Máximo 100k píxeles protegidos
   PIXELS_PER_BATCH: 10, // Menos que Image para ser más sutil
+  MIN_CHARGES_TO_WAIT: 20, // Cargas mínimas a esperar antes de continuar
   BACKEND_URL: "https://backend.wplace.live"
 };
 
@@ -23,5 +24,8 @@ export const guardState = {
   availableColors: [],
   colorsChecked: false,
   ui: null,
-  totalRepaired: 0
+  totalRepaired: 0,
+  // Configuración editable
+  pixelsPerBatch: GUARD_DEFAULTS.PIXELS_PER_BATCH,
+  minChargesToWait: GUARD_DEFAULTS.MIN_CHARGES_TO_WAIT
 };
