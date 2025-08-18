@@ -2,8 +2,8 @@ import { log } from "../core/logger.js";
 import { getSession } from "../core/wplace-api.js";
 import { guardState, GUARD_DEFAULTS } from "./config.js";
 import { detectAvailableColors, analyzeAreaPixels, checkForChanges } from "./processor.js";
-import { createGuardUI } from "./ui.js";
-import { saveGuardData, loadGuardData } from "./save-load.js";
+import { createGuardUI, showConfirmDialog } from "./ui.js";
+import { saveProgress, loadProgress, hasProgress } from "./save-load.js";
 import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
 import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
 import { sleep } from "../core/timing.js";
@@ -152,33 +152,43 @@ function setupEventListeners() {
   
   elements.areaFileInput.addEventListener('change', async () => {
     if (elements.areaFileInput.files.length > 0) {
-      const result = await loadGuardData(elements.areaFileInput.files[0]);
+      const result = await loadProgress(elements.areaFileInput.files[0]);
       if (result.success) {
-        guardState.ui.updateStatus(`✅ Área cargada: ${result.protectedPixels} píxeles protegidos`, 'success');
+        guardState.ui.updateStatus(`✅ Progreso cargado: ${result.protectedPixels} píxeles protegidos`, 'success');
         log(`✅ Área de protección cargada desde archivo`);
       } else {
-        guardState.ui.updateStatus(`❌ Error cargando archivo: ${result.error}`, 'error');
+        guardState.ui.updateStatus(`❌ Error al cargar progreso: ${result.error}`, 'error');
         log(`❌ Error cargando archivo: ${result.error}`);
       }
     }
   });
   
   elements.startBtn.addEventListener('click', startGuard);
-  elements.stopBtn.addEventListener('click', () => {
-    // Preguntar al usuario si quiere guardar el área antes de detener
-    if (guardState.protectionArea && guardState.originalPixels.size > 0) {
-      const shouldSave = window.confirm('¿Deseas guardar el área de protección antes de detener?');
-      if (shouldSave) {
-        const saveResult = saveGuardData();
-        if (saveResult.success) {
-          guardState.ui.updateStatus(`✅ Área guardada como ${saveResult.filename}`, 'success');
-          log(`✅ Área guardada automáticamente: ${saveResult.filename}`);
-        } else {
-          guardState.ui.updateStatus(`❌ Error guardando: ${saveResult.error}`, 'error');
-          log(`❌ Error guardando área: ${saveResult.error}`);
+  elements.stopBtn.addEventListener('click', async () => {
+    // Implementar el mismo patrón de confirmación que Auto-Image
+    if (hasProgress()) {
+      const result = await showConfirmDialog(
+        "¿Deseas guardar el área de protección actual antes de detener?",
+        "Guardar Progreso",
+        {
+          save: "Guardar Progreso",
+          discard: "Descartar", 
+          cancel: "Cancelar"
         }
+      );
+      
+      if (result === 'save') {
+        const saveResult = saveProgress();
+        if (saveResult.success) {
+          guardState.ui.updateStatus(`✅ Progreso guardado como ${saveResult.filename}`, 'success');
+        } else {
+          guardState.ui.updateStatus(`❌ Error al guardar progreso: ${saveResult.error}`, 'error');
+        }
+      } else if (result === 'cancel') {
+        return; // No detener si cancela
       }
     }
+    
     stopGuard();
   });
 }

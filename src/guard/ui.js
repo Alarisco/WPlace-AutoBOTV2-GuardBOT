@@ -201,6 +201,85 @@ export function createGuardUI(texts) {
   return ui;
 }
 
+export function showConfirmDialog(message, title, buttons = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.background = 'rgba(0,0,0,0.7)';
+    overlay.style.zIndex = '10001';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    
+    const modal = document.createElement('div');
+    modal.style.background = '#1a1a1a';
+    modal.style.border = '2px solid #333';
+    modal.style.borderRadius = '15px';
+    modal.style.padding = '25px';
+    modal.style.color = '#eee';
+    modal.style.minWidth = '350px';
+    modal.style.maxWidth = '400px';
+    modal.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+    modal.style.fontFamily = "'Segoe UI', Roboto, sans-serif";
+    
+    modal.innerHTML = `
+      <h3 style="margin: 0 0 15px 0; text-align: center; font-size: 18px;">${title}</h3>
+      <p style="margin: 0 0 20px 0; text-align: center; line-height: 1.4;">${message}</p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        ${buttons.save ? `<button class="save-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #10b981; color: white;">${buttons.save}</button>` : ''}
+        ${buttons.discard ? `<button class="discard-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #ef4444; color: white;">${buttons.discard}</button>` : ''}
+        ${buttons.cancel ? `<button class="cancel-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #2d3748; color: white;">${buttons.cancel}</button>` : ''}
+      </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Event listeners
+    const saveBtn = modal.querySelector('.save-btn');
+    const discardBtn = modal.querySelector('.discard-btn');
+    const cancelBtn = modal.querySelector('.cancel-btn');
+    
+    const cleanup = () => {
+      document.body.removeChild(overlay);
+    };
+    
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => {
+        cleanup();
+        resolve('save');
+      });
+    }
+    
+    if (discardBtn) {
+      discardBtn.addEventListener('click', () => {
+        cleanup();
+        resolve('discard');
+      });
+    }
+    
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        cleanup();
+        resolve('cancel');
+      });
+    }
+    
+    // Cerrar con overlay
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        resolve('cancel');
+      }
+    });
+  });
+}
+
 function makeDraggable(element) {
   let isDragging = false;
   let startX, startY, startLeft, startTop;

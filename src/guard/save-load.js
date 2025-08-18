@@ -1,18 +1,20 @@
 import { log } from "../core/logger.js";
 import { guardState } from "./config.js";
 
-export function saveGuardData(filename = null) {
+export function saveProgress(filename = null) {
   try {
     if (!guardState.protectionArea || !guardState.originalPixels.size) {
-      throw new Error('No hay área de protección para guardar');
+      throw new Error('No hay progreso para guardar');
     }
     
-    const guardData = {
+    const progressData = {
       version: "1.0",
       timestamp: Date.now(),
-      protectionArea: { ...guardState.protectionArea },
-      statistics: {
-        protectedPixels: guardState.originalPixels.size,
+      protectionData: {
+        area: { ...guardState.protectionArea },
+        protectedPixels: guardState.originalPixels.size
+      },
+      progress: {
         totalRepaired: guardState.totalRepaired,
         lastCheck: guardState.lastCheck
       },
@@ -35,10 +37,10 @@ export function saveGuardData(filename = null) {
       }))
     };
     
-    const dataStr = JSON.stringify(guardData, null, 2);
+    const dataStr = JSON.stringify(progressData, null, 2);
     const blob = new window.Blob([dataStr], { type: 'application/json' });
     
-    const finalFilename = filename || `wplace_guard_area_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+    const finalFilename = filename || `wplace_progress_guard_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
     
     // Crear y disparar descarga
     const url = window.URL.createObjectURL(blob);
@@ -50,27 +52,27 @@ export function saveGuardData(filename = null) {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
     
-    log(`✅ Área de protección guardada: ${finalFilename}`);
+    log(`✅ Progreso guardado: ${finalFilename}`);
     return { success: true, filename: finalFilename };
     
   } catch (error) {
-    log('❌ Error guardando área de protección:', error);
+    log('❌ Error guardando progreso:', error);
     return { success: false, error: error.message };
   }
 }
 
-export async function loadGuardData(file) {
+export async function loadProgress(file) {
   return new Promise((resolve) => {
     try {
       const reader = new window.FileReader();
       
       reader.onload = async (e) => {
         try {
-          const guardData = JSON.parse(e.target.result);
+          const progressData = JSON.parse(e.target.result);
           
           // Validar estructura del archivo
-          const requiredFields = ['protectionArea', 'originalPixels', 'colors'];
-          const missingFields = requiredFields.filter(field => !(field in guardData));
+          const requiredFields = ['protectionData', 'originalPixels', 'colors'];
+          const missingFields = requiredFields.filter(field => !(field in progressData));
           
           if (missingFields.length > 0) {
             throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
@@ -78,7 +80,7 @@ export async function loadGuardData(file) {
           
           // Verificar compatibilidad de colores
           if (guardState.availableColors.length > 0) {
-            const savedColorIds = guardData.colors.map(c => c.id);
+            const savedColorIds = progressData.colors.map(c => c.id);
             const currentColorIds = guardState.availableColors.map(c => c.id);
             const commonColors = savedColorIds.filter(id => currentColorIds.includes(id));
             
@@ -88,19 +90,28 @@ export async function loadGuardData(file) {
           }
           
           // Restaurar estado
-          guardState.protectionArea = guardData.protectionArea;
+          if (progressData.protectionData) {
+            guardState.protectionArea = progressData.protectionData.area;
+          } else if (progressData.protectionArea) {
+            // Compatibilidad con formato anterior
+            guardState.protectionArea = progressData.protectionArea;
+          }
           
           // Convertir array de píxeles de vuelta a Map
           guardState.originalPixels = new Map();
-          for (const pixelData of guardData.originalPixels) {
+          for (const pixelData of progressData.originalPixels) {
             const { key, ...pixelInfo } = pixelData;
             guardState.originalPixels.set(key, pixelInfo);
           }
           
           // Restaurar estadísticas si están disponibles
-          if (guardData.statistics) {
-            guardState.totalRepaired = guardData.statistics.totalRepaired || 0;
-            guardState.lastCheck = guardData.statistics.lastCheck || 0;
+          if (progressData.progress) {
+            guardState.totalRepaired = progressData.progress.totalRepaired || 0;
+            guardState.lastCheck = progressData.progress.lastCheck || 0;
+          } else if (progressData.statistics) {
+            // Compatibilidad con formato anterior
+            guardState.totalRepaired = progressData.statistics.totalRepaired || 0;
+            guardState.lastCheck = progressData.statistics.lastCheck || 0;
           }
           
           // Limpiar cambios previos
@@ -123,17 +134,17 @@ export async function loadGuardData(file) {
             guardState.ui.enableStartBtn();
           }
           
-          log(`✅ Área de protección cargada: ${guardState.originalPixels.size} píxeles protegidos`);
+          log(`✅ Progreso cargado: ${guardState.originalPixels.size} píxeles protegidos`);
           
           resolve({ 
             success: true, 
-            data: guardData,
+            data: progressData,
             protectedPixels: guardState.originalPixels.size,
             area: guardState.protectionArea
           });
           
         } catch (parseError) {
-          log('❌ Error parseando archivo de área de protección:', parseError);
+          log('❌ Error parseando archivo de progreso:', parseError);
           resolve({ success: false, error: parseError.message });
         }
       };
@@ -147,13 +158,13 @@ export async function loadGuardData(file) {
       reader.readAsText(file);
       
     } catch (error) {
-      log('❌ Error cargando área de protección:', error);
+      log('❌ Error cargando progreso:', error);
       resolve({ success: false, error: error.message });
     }
   });
 }
 
-export function clearGuardData() {
+export function clearProgress() {
   guardState.protectionArea = null;
   guardState.originalPixels.clear();
   guardState.changes.clear();
@@ -166,17 +177,17 @@ export function clearGuardData() {
     guardState.ui.updateStats({ repaired: 0 });
   }
   
-  log('🧹 Datos de protección limpiados');
+  log('🧹 Progreso limpiado');
 }
 
-export function hasGuardData() {
+export function hasProgress() {
   return guardState.protectionArea && 
          guardState.originalPixels.size > 0;
 }
 
-export function getGuardDataInfo() {
+export function getProgressInfo() {
   return {
-    hasData: hasGuardData(),
+    hasProgress: hasProgress(),
     protectedPixels: guardState.originalPixels.size,
     totalRepaired: guardState.totalRepaired,
     area: guardState.protectionArea ? {
@@ -189,3 +200,10 @@ export function getGuardDataInfo() {
     } : null
   };
 }
+
+// Alias para compatibilidad
+export const saveGuardData = saveProgress;
+export const loadGuardData = loadProgress;
+export const clearGuardData = clearProgress;
+export const hasGuardData = hasProgress;
+export const getGuardDataInfo = getProgressInfo;
