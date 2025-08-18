@@ -1,19 +1,22 @@
 import { es } from './es.js';
 import { en } from './en.js';
 import { fr } from './fr.js';
+import { ru } from './ru.js';
 
 // Idiomas disponibles
 export const AVAILABLE_LANGUAGES = {
   es: { name: 'Español', flag: '🇪🇸', code: 'es' },
   en: { name: 'English', flag: '🇺🇸', code: 'en' },
-  fr: { name: 'Français', flag: '🇫🇷', code: 'fr' }
+  fr: { name: 'Français', flag: '🇫🇷', code: 'fr' },
+  ru: { name: 'Русский', flag: '🇷🇺', code: 'ru' }
 };
 
 // Todas las traducciones
 const translations = {
   es,
   en,
-  fr
+  fr,
+  ru
 };
 
 // Estado del idioma actual
