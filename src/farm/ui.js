@@ -586,6 +586,8 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
   });
   
   elements.onceBtn?.addEventListener('click', () => {
+    // Asegurar que inputs reflejan la última captura/calibración
+    updateInputsFromConfig();
     updateConfigFromInputs();
     // Llamar a la función de pintar una vez si existe
     if (window.WPAUI && window.WPAUI.once) {
@@ -816,9 +818,12 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
                 config.selectingPosition = false;
                 window.fetch = originalFetch;
                 
-                // Actualizar displays
+                // Actualizar displays y sincronizar inputs con la nueva config
                 updateZoneDisplay();
                 updateTileDisplay();
+                // MUY IMPORTANTE: sincronizar los inputs para que 'updateConfigFromInputs()'
+                // no sobreescriba el TILE_X/TILE_Y con valores antiguos al pulsar "Una vez"/"Iniciar"
+                updateInputsFromConfig();
                 
                 setStatus(t('farm.positionSet'), 'success');
                 log(`✅ Zona de farming establecida: tile(${config.TILE_X},${config.TILE_Y}) base(${localX},${localY}) radio(${config.FARM_RADIUS}px)`);
@@ -874,6 +879,12 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
 export async function autoCalibrateTile(config) {
   try {
     log('🎯 Iniciando auto-calibración del tile...');
+    // Si ya hay una zona seleccionada y un tile definido, no forzar nueva calibración
+    if (config.POSITION_SELECTED && config.BASE_X != null && config.BASE_Y != null && Number.isFinite(config.TILE_X) && Number.isFinite(config.TILE_Y)) {
+      log(`ℹ️ Ya existe zona seleccionada. Se mantiene tile actual: (${config.TILE_X}, ${config.TILE_Y})`);
+      saveFarmCfg(config);
+      return { tileX: config.TILE_X, tileY: config.TILE_Y, success: true };
+    }
     
     // Buscar elementos que indiquen la posición actual
     const urlParams = new window.URLSearchParams(window.location.search);

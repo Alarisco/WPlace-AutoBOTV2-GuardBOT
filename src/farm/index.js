@@ -115,6 +115,8 @@ export async function runFarm() {
         if (result.success) {
           ui.setStatus(`✅ Tile calibrado: (${result.tileX}, ${result.tileY})`, 'success');
           ui.updateConfig(); // Refrescar la UI con los nuevos valores
+          // Alinear inputs inmediatamente para evitar sobrescritura por valores antiguos
+          ui.updateConfig();
           saveFarmCfg(config);
         } else {
           ui.setStatus(`❌ Error en calibración: ${result.error || 'No se pudo detectar tile'}`, 'error');

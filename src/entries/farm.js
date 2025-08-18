@@ -45,17 +45,18 @@ import { initializeLanguage, t } from "../locales/index.js";
 
   // Verificar si necesita calibración inicial
   function needsCalibrationCheck(cfg) {
-    // Verificar si las coordenadas son las por defecto
-    const hasDefaultCoords = cfg.TILE_X === FARM_DEFAULTS.TILE_X && cfg.TILE_Y === FARM_DEFAULTS.TILE_Y;
-    // Sin localStorage, siempre consideramos que no hay configuración guardada
-    const hasNoSavedConfig = true;
-    // Verificar que las coordenadas sean números válidos
-    const hasInvalidCoords = !Number.isFinite(cfg.TILE_X) || !Number.isFinite(cfg.TILE_Y);
-    
-    const needsCalib = hasDefaultCoords || hasNoSavedConfig || hasInvalidCoords;
-    log(`Verificación calibración: defaults=${hasDefaultCoords}, noConfig=${hasNoSavedConfig}, invalid=${hasInvalidCoords}, coords=(${cfg.TILE_X},${cfg.TILE_Y})`);
-    
-    return needsCalib;
+  // Si el usuario ya seleccionó una zona válida, NO recalibrar
+  const hasSelectedZone = !!cfg.POSITION_SELECTED && cfg.BASE_X != null && cfg.BASE_Y != null;
+  // Verificar si las coordenadas son las por defecto
+  const hasDefaultCoords = cfg.TILE_X === FARM_DEFAULTS.TILE_X && cfg.TILE_Y === FARM_DEFAULTS.TILE_Y;
+  // Verificar que las coordenadas sean números válidos
+  const hasInvalidCoords = !Number.isFinite(cfg.TILE_X) || !Number.isFinite(cfg.TILE_Y);
+
+  // Solo calibrar si NO hay zona seleccionada aún y además las coords son default o inválidas
+  const needsCalib = !hasSelectedZone && (hasDefaultCoords || hasInvalidCoords);
+  log(`Verificación calibración: defaults=${hasDefaultCoords}, selected=${hasSelectedZone}, invalid=${hasInvalidCoords}, coords=(${cfg.TILE_X},${cfg.TILE_Y})`);
+
+  return needsCalib;
   }
 
   // Función para habilitar captura de coordenadas
@@ -159,7 +160,7 @@ import { initializeLanguage, t } from "../locales/index.js";
         return;
       }
       
-      // Verificar si necesita calibración
+      // Verificar si necesita calibración (solo si no hay zona seleccionada)
       if (needsCalibrationCheck(cfg)) {
         ui.setStatus('🎯 Calibrando automáticamente...', 'status');
         const calibration = await autoCalibrateTile(cfg);

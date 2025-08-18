@@ -1,5 +1,5 @@
 import { getTurnstileToken } from "../core/turnstile.js";
-import { postPixel } from "../core/wplace-api.js";
+import { postPixelBatchImage } from "../core/wplace-api.js";
 import { generateMultipleCoords, generateMultipleColors } from "./coords.js";
 import { sleep, sleepWithCountdown } from "../core/timing.js";
 import { log } from "../core/logger.js";
@@ -105,10 +105,11 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
   const firstLocalX = coords[0];
   const firstLocalY = coords[1];
   
-  setStatus(`� Farming ${pixelCount} píxeles en radio ${cfg.FARM_RADIUS}px desde (${cfg.BASE_X},${cfg.BASE_Y}) tile(${cfg.TILE_X},${cfg.TILE_Y})...`, 'status');
+  setStatus(`🌾 Farmeando ${pixelCount} píxeles en radio ${cfg.FARM_RADIUS}px desde (${cfg.BASE_X},${cfg.BASE_Y}) tile(${cfg.TILE_X},${cfg.TILE_Y})...`, 'status');
   
   const t = await getTurnstileToken(cfg.SITEKEY);
-  const r = await postPixel(coords, colors, t, cfg.TILE_X, cfg.TILE_Y);
+  // Usar el mismo formato que Auto-Image: text/plain con { colors, coords, t }
+  const r = await postPixelBatchImage(cfg.TILE_X, cfg.TILE_Y, coords, colors, t);
 
   state.last = { 
     x: firstLocalX, 
@@ -120,7 +121,7 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
     json: r.json 
   };
   
-  if (r.status === 200 && r.json && (r.json.painted > 0 || r.json.painted === pixelCount)) {
+  if (r.status === 200 && r.json && (r.json.painted > 0 || r.json.painted === pixelCount || r.json.ok)) {
     const actualPainted = r.json.painted || pixelCount;
     state.painted += actualPainted;
     state.retryCount = 0; // Resetear contador de reintentos al éxito
