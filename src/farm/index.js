@@ -1,10 +1,10 @@
 import { log } from "../core/logger.js";
 import { FARM_DEFAULTS, farmState } from "./config.js";
-import { createFarmUI, autoCalibrateTile } from "./ui.js";
+import { createFarmUI } from "./ui.js";
 import { loop, paintOnce } from "./loop.js";
 import { getSession, checkHealth } from "../core/wplace-api.js";
 import { initializeLanguage, t } from "../locales/index.js";
-import { loadFarmCfg, saveFarmCfg } from "../core/storage.js";
+import { loadFarmCfg } from "../core/storage.js";
 
 export async function runFarm() {
   log('🚀 Iniciando WPlace Auto-Farm (versión con selección de zona)');
@@ -106,23 +106,6 @@ export async function runFarm() {
           ui.setStatus(t('farm.stopped'), 'status');
         }, 500);
         return true;
-      },
-      // onCalibrate
-      async () => {
-        ui.setStatus(t('farm.calibrating'), 'info');
-        const result = await autoCalibrateTile(config);
-        
-        if (result.success) {
-          ui.setStatus(`✅ Tile calibrado: (${result.tileX}, ${result.tileY})`, 'success');
-          ui.updateConfig(); // Refrescar la UI con los nuevos valores
-          // Alinear inputs inmediatamente para evitar sobrescritura por valores antiguos
-          ui.updateConfig();
-          saveFarmCfg(config);
-        } else {
-          ui.setStatus(`❌ Error en calibración: ${result.error || 'No se pudo detectar tile'}`, 'error');
-        }
-        
-        return result.success;
       }
     );
 

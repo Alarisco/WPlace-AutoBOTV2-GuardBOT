@@ -4,7 +4,7 @@ import { saveFarmCfg, loadFarmCfg, resetFarmCfg } from "../core/storage.js";
 import { dragHeader, clamp } from "../core/utils.js";
 import { t } from "../locales/index.js";
 
-export function createFarmUI(config, onStart, onStop, onCalibrate) {
+export function createFarmUI(config, onStart, onStop) {
   const shadowHost = document.createElement('div');
   shadowHost.id = 'wplace-farm-ui';
   shadowHost.style.cssText = `
@@ -172,14 +172,6 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     
     .wplace-button.stop:hover:not(:disabled) {
       background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
-    }
-    
-    .wplace-button.calibrate {
-      background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
-    }
-    
-    .wplace-button.calibrate:hover {
-      background: linear-gradient(135deg, #dd6b20 0%, #c05621 100%);
     }
     
     .wplace-button.small {
@@ -353,7 +345,6 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
         <div class="wplace-buttons">
           <button class="wplace-button start" id="start-btn">▶️ ${t('farm.start')}</button>
           <button class="wplace-button stop" id="stop-btn" disabled>⏹️ ${t('farm.stop')}</button>
-          <button class="wplace-button calibrate" id="calibrate-btn">🎯 ${t('farm.calibrate')}</button>
           <button class="wplace-button small" id="select-position-btn">🌍 ${t('farm.selectPosition')}</button>
           <button class="wplace-button small" id="once-btn">🎨 ${t('farm.paintOnce')}</button>
         </div>
@@ -461,7 +452,6 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     tilePos: shadow.getElementById('tile-pos'),
     startBtn: shadow.getElementById('start-btn'),
     stopBtn: shadow.getElementById('stop-btn'),
-    calibrateBtn: shadow.getElementById('calibrate-btn'),
     selectPositionBtn: shadow.getElementById('select-position-btn'),
     onceBtn: shadow.getElementById('once-btn'),
     zoneInfo: shadow.getElementById('zone-info'),
@@ -579,10 +569,6 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
   elements.stopBtn?.addEventListener('click', () => {
     onStop();
     updateButtonStates(false);
-  });
-  
-  elements.calibrateBtn?.addEventListener('click', () => {
-    onCalibrate();
   });
   
   elements.onceBtn?.addEventListener('click', () => {
@@ -714,7 +700,6 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     // Actualizar botones
     if (elements.startBtn) elements.startBtn.innerHTML = `▶️ ${t('farm.start')}`;
     if (elements.stopBtn) elements.stopBtn.innerHTML = `⏹️ ${t('farm.stop')}`;
-    if (elements.calibrateBtn) elements.calibrateBtn.innerHTML = `🎯 ${t('farm.calibrate')}`;
     if (elements.selectPositionBtn) elements.selectPositionBtn.innerHTML = `🌍 ${t('farm.selectPosition')}`;
     if (elements.onceBtn) elements.onceBtn.innerHTML = `🎨 ${t('farm.paintOnce')}`;
     
