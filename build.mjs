@@ -45,7 +45,8 @@ const common = {
 const jobs = [
   { in: "src/entries/farm.js",     out: "Auto-Farm.js" },
   { in: "src/entries/image.js",    out: "Auto-Image.js" },
-  { in: "src/entries/launcher.js", out: "Auto-Launcher.js" }
+  { in: "src/entries/launcher.js", out: "Auto-Launcher.js" },
+  { in: "src/entries/guard.js",    out: "Auto-Guard.js" }
 ].map(({ in: entry, out: outfile }) => {
   const buildOptions = {
     entryPoints: [entry],
@@ -69,5 +70,5 @@ const jobs = [
 
 await Promise.all(jobs);
 console.log(
-  `✨ Build ${dev ? "DEV" : "PROD"} listo. Archivos en raíz: Auto-Farm.js, Auto-Image.js, Auto-Launcher.js`
+  `✨ Build ${dev ? "DEV" : "PROD"} listo. Archivos en raíz: Auto-Farm.js, Auto-Image.js, Auto-Launcher.js, Auto-Guard.js`
 );
