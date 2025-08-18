@@ -1,14 +1,292 @@
-// === [Overlay del plan de pintado - Nueva implementación] ==================
+// === [Sistema de overlay basado en Blue Marble - Intercepción de tiles] ===
 (() => {
+  const TILE_SIZE = 3000; // Tamaño de tile en WPlace
+  const DRAW_MULT = 3; // Factor de escalado para píxeles (como Blue Marble)
+
+  const state = {
+    enabled: false,
+    templates: [], // Plantillas estilo Blue Marble
+    templatesShouldBeDrawn: true,
+    tileSize: 1000, // Tamaño de tile (como Blue Marble)
+    drawMult: 3, // Multiplicador de dibujo
+    // Plan de píxeles actual
+    pixelPlan: null,
+    nextBatchCount: 0,
+    anchor: null, // { tileX, tileY, pxX, pxY }
+    imageWidth: null,
+    imageHeight: null,
+    // Sistema de intercepción
+    originalFetch: null,
+    fetchedBlobQueue: new Map(),
+    isIntercepting: false
+  };
+
+  function injectStyles() {
+    // No necesitamos estilos CSS adicionales - Blue Marble usa el sistema de tiles nativo
+    console.log('[PLAN OVERLAY] Blue Marble tile system initialized');
+  }
+
+  // === SISTEMA DE INTERCEPCIÓN DE FETCH (como Blue Marble) ===
+  function startFetchInterception() {
+    if (state.isIntercepting) return;
+
+    state.originalFetch = window.fetch;
+    state.isIntercepting = true;
+
+    window.fetch = async function(...args) {
+      const response = await state.originalFetch.apply(this, args);
+      const cloned = response.clone();
+
+      const endpointName = ((args[0] instanceof Request) ? args[0]?.url : args[0]) || 'ignore';
+      const contentType = cloned.headers.get('content-type') || '';
+
+      // Interceptar solo tiles de imagen (como Blue Marble)
+      if (contentType.includes('image/') && 
+          endpointName.includes('/tiles/') && 
+          !endpointName.includes('openfreemap') && 
+          !endpointName.includes('maps')) {
+
+        console.log('[PLAN OVERLAY] Intercepting tile request:', endpointName);
+
+        try {
+          const blob = await cloned.blob();
+          const processedBlob = await drawPlanOnTile(blob, endpointName);
+          
+          return new Response(processedBlob, {
+            headers: cloned.headers,
+            status: cloned.status,
+            statusText: cloned.statusText
+          });
+        } catch (error) {
+          console.error('[PLAN OVERLAY] Error processing tile:', error);
+          return response;
+        }
+      }
+
+      return response;
+    };
+
+    console.log('[PLAN OVERLAY] Fetch interception started');
+  }
+
+  function stopFetchInterception() {
+    if (!state.isIntercepting || !state.originalFetch) return;
+
+    window.fetch = state.originalFetch;
+    state.isIntercepting = false;
+
+    console.log('[PLAN OVERLAY] Fetch interception stopped');
+  }
+
+  // === PROCESAMIENTO DE TILES (como Blue Marble) ===
+  async function drawPlanOnTile(tileBlob, endpointUrl) {
+    if (!state.enabled || !state.templatesShouldBeDrawn || !state.pixelPlan) {
+      return tileBlob;
+    }
+
+    // Extraer coordenadas del tile desde la URL
+    // Formato: ".../tiles/tileX/tileY/zoom.png"
+    const urlParts = endpointUrl.split('/');
+    const tileY = parseInt(urlParts[urlParts.length - 1].replace('.png', ''));
+    const tileX = parseInt(urlParts[urlParts.length - 2]);
+
+    if (isNaN(tileX) || isNaN(tileY)) {
+      console.warn('[PLAN OVERLAY] Could not extract tile coordinates from URL:', endpointUrl);
+      return tileBlob;
+    }
+
+    console.log(`[PLAN OVERLAY] Processing tile: ${tileX},${tileY}`);
+
+    // Verificar si este tile contiene píxeles de nuestro plan
+    const tilePixels = getPixelsForTile(tileX, tileY);
+    if (tilePixels.length === 0) {
+      return tileBlob; // No hay píxeles en este tile
+    }
+
+    console.log(`[PLAN OVERLAY] Found ${tilePixels.length} pixels for tile ${tileX},${tileY}`);
+
+    // Procesar el tile (como Blue Marble)
+    const drawSize = state.tileSize * state.drawMult;
+    const tileBitmap = await createImageBitmap(tileBlob);
+    
+    const canvas = new OffscreenCanvas(drawSize, drawSize);
+    const context = canvas.getContext('2d');
+    
+    context.imageSmoothingEnabled = false;
+    context.clearRect(0, 0, drawSize, drawSize);
+    context.drawImage(tileBitmap, 0, 0, drawSize, drawSize);
+
+    // Dibujar píxeles del plan (como Blue Marble dibuja templates)
+    drawPixelsOnTile(context, tilePixels, tileX, tileY);
+
+    return await canvas.convertToBlob({ type: 'image/png' });
+  }
+
+  function getPixelsForTile(tileX, tileY) {
+    if (!state.pixelPlan || !state.pixelPlan.pixels) return [];
+
+    return state.pixelPlan.pixels.filter(pixel => {
+      // Calcular en qué tile está este píxel
+      const pixelTileX = Math.floor(pixel.globalX / TILE_SIZE);
+      const pixelTileY = Math.floor(pixel.globalY / TILE_SIZE);
+      return pixelTileX === tileX && pixelTileY === tileY;
+    });
+  }
+
+  function drawPixelsOnTile(context, pixels, tileX, tileY) {
+    const tileStartX = tileX * TILE_SIZE;
+    const tileStartY = tileY * TILE_SIZE;
+
+    // Configurar transparencia del overlay
+    context.globalAlpha = 0.7;
+
+    for (const pixel of pixels) {
+      // Convertir coordenadas globales a coordenadas locales del tile
+      const localX = (pixel.globalX - tileStartX) * state.drawMult + 1; // +1 para centrar como Blue Marble
+      const localY = (pixel.globalY - tileStartY) * state.drawMult + 1;
+
+      // Solo dibujar si está dentro del tile
+      if (localX >= 0 && localX < state.tileSize * state.drawMult && 
+          localY >= 0 && localY < state.tileSize * state.drawMult) {
+        
+        context.fillStyle = `rgb(${pixel.r},${pixel.g},${pixel.b})`;
+        context.fillRect(localX, localY, 1, 1);
+      }
+    }
+
+    // Resaltar próximo batch con mayor opacidad
+    if (state.nextBatchCount > 0) {
+      context.globalAlpha = 1.0;
+      const batchPixels = pixels.slice(0, state.nextBatchCount);
+      
+      for (const pixel of batchPixels) {
+        const localX = (pixel.globalX - tileStartX) * state.drawMult + 1;
+        const localY = (pixel.globalY - tileStartY) * state.drawMult + 1;
+
+        if (localX >= 0 && localX < state.tileSize * state.drawMult && 
+            localY >= 0 && localY < state.tileSize * state.drawMult) {
+          
+          context.fillStyle = `rgb(${pixel.r},${pixel.g},${pixel.b})`;
+          context.fillRect(localX, localY, 1, 1);
+        }
+      }
+    }
+  }
+
+  // === API PÚBLICA (compatible con la anterior) ===
+  function setEnabled(enabled) {
+    state.enabled = !!enabled;
+    
+    if (state.enabled) {
+      startFetchInterception();
+    } else {
+      stopFetchInterception();
+    }
+    
+    console.log(`[PLAN OVERLAY] setEnabled: ${state.enabled}`);
+  }
+
+  function setPlan(planItems, opts = {}) {
+    if (!planItems || planItems.length === 0) {
+      state.pixelPlan = null;
+      console.log('[PLAN OVERLAY] Plan cleared');
+      return;
+    }
+
+    // Convertir formato Auto-Image a formato interno
+    const pixels = [];
+    for (const item of planItems) {
+      let globalX, globalY;
+      
+      if (typeof item.tileX === 'number' && typeof item.localX === 'number') {
+        // Formato tile/local
+        globalX = item.tileX * TILE_SIZE + item.localX;
+        globalY = item.tileY * TILE_SIZE + item.localY;
+      } else if (opts.anchor && typeof item.imageX === 'number') {
+        // Formato imageX/Y con ancla
+        const baseX = opts.anchor.tileX * TILE_SIZE + (opts.anchor.pxX || 0);
+        const baseY = opts.anchor.tileY * TILE_SIZE + (opts.anchor.pxY || 0);
+        globalX = baseX + item.imageX;
+        globalY = baseY + item.imageY;
+      } else {
+        continue;
+      }
+
+      pixels.push({
+        globalX: globalX,
+        globalY: globalY,
+        r: item.color?.r || 0,
+        g: item.color?.g || 0,
+        b: item.color?.b || 0
+      });
+    }
+
+    state.pixelPlan = { pixels };
+    state.nextBatchCount = opts.nextBatchCount || 0;
+    state.anchor = opts.anchor || null;
+    state.imageWidth = opts.imageWidth || null;
+    state.imageHeight = opts.imageHeight || null;
+
+    console.log(`[PLAN OVERLAY] Plan set: ${pixels.length} pixels`);
+    
+    if (typeof opts.enabled === 'boolean') {
+      setEnabled(opts.enabled);
+    }
+  }
+
+  function setNextBatchCount(count) {
+    state.nextBatchCount = Math.max(0, Number(count || 0));
+    console.log(`[PLAN OVERLAY] Next batch count: ${state.nextBatchCount}`);
+  }
+
+  function setAnchor(anchor) {
+    state.anchor = anchor;
+    console.log('[PLAN OVERLAY] Anchor set:', anchor);
+  }
+
+  function setAnchorCss(x, y) {
+    // En el sistema de tiles no necesitamos ancla CSS - es solo para compatibilidad
+    console.log('[PLAN OVERLAY] CSS anchor set (ignored in tile system):', { x, y });
+  }
+
+  function endSelectionMode() {
+    // En el sistema de tiles no hay modo selección - es solo para compatibilidad
+    console.log('[PLAN OVERLAY] Selection mode ended (ignored in tile system)');
+  }
+
+  function cleanup() {
+    stopFetchInterception();
+    state.pixelPlan = null;
+    state.fetchedBlobQueue.clear();
+    console.log('[PLAN OVERLAY] Cleanup completed');
+  }
+
+  // === API GLOBAL (compatible con la anterior) ===
+  window.__WPA_PLAN_OVERLAY__ = {
+    injectStyles,
+    setEnabled,
+    setPlan,
+    setPlanItemsFromTileList: setPlan, // Alias
+    setNextBatchCount,
+    setAnchor,
+    setAnchorCss,
+    endSelectionMode,
+    render: () => {}, // No-op en sistema de tiles
+    cleanup,
+    get state() { return state; }
+  };
+
+    console.log('[PLAN OVERLAY] Blue Marble tile system ready');
+})();
+})();
   const OVERLAY_STYLE_ID = 'wpa-plan-overlay-style';
   const OVERLAY_CLASS = 'wpa-plan-overlay';
   const TILE_SIZE = 3000; // Mantener en sincronía con IMAGE_DEFAULTS.TILE_SIZE
 
   const state = {
     enabled: false,
-    boardLayer: null, // La capa transformada del mapa
-  mainCanvas: null, // Canvas principal (sólo para elegir host)
-  transformHost: null, // Elemento cuyo style.transform cambia con pan/zoom
+    boardLayer: null, // El contenedor padre del canvas principal (hereda transformaciones)
+    mainCanvas: null, // Canvas principal de MapLibre
     canvas: null,
     ctx: null,
     // Lista normalizada: { globalX, globalY, r, g, b }
@@ -17,15 +295,17 @@
     minX: 0, minY: 0, maxX: -1, maxY: -1,
     // Resaltado de siguiente batch
     nextBatchCount: 0,
-  // Dimensiones explícitas de la imagen (si se proporcionan)
-  imageWidth: null,
-  imageHeight: null,
+    // Dimensiones explícitas de la imagen (si se proporcionan)
+    imageWidth: null,
+    imageHeight: null,
+    // Modo selección: mientras sea true, se usa ancla CSS (position: fixed)
+    selectingMode: false,
     // Observador para reanclar si el DOM cambia
-  observer: null,
-  // Ancla lógica y ancla CSS (para fijar el pin exactamente donde el usuario clicó)
-  anchor: null, // { tileX, tileY, pxX, pxY }
-  cssAnchorX: 0,
-  cssAnchorY: 0,
+    observer: null,
+    // Ancla lógica y ancla CSS (para fijar el pin exactamente donde el usuario clicó)
+    anchor: null, // { tileX, tileY, pxX, pxY }
+    cssAnchorX: 0,
+    cssAnchorY: 0,
   };
 
   function injectStyles() {
@@ -46,230 +326,107 @@
     console.log('[PLAN OVERLAY] Styles injected');
   }
 
-  // == Board Layer Finder (pan/zoom layer) ==
-  function findTransformedBoardLayer() {
-    console.log('[PLAN OVERLAY] Searching for MapLibre GL transformed layer...');
-    
-    // 1) Buscar específicamente contenedores de MapLibre GL
-    const maplibreSelectors = [
-      '.maplibregl-map',
-      '.maplibregl-canvas-container', 
-      '.mapboxgl-map',
-      '.mapboxgl-canvas-container'
-    ];
-    
-    for (const selector of maplibreSelectors) {
-      const elements = document.querySelectorAll(selector);
-      for (const el of elements) {
-        const cs = window.getComputedStyle(el);
-        console.log(`[PLAN OVERLAY] Checking MapLibre container: ${selector}`, el, 'transform:', cs.transform);
-        
-        // Buscar un elemento padre o hijo con transform
-        if (cs.transform && cs.transform !== 'none') {
-          console.log('[PLAN OVERLAY] ✅ Found transformed MapLibre container:', el);
-          return el;
-        }
-        
-        // También buscar en el padre inmediato
-        if (el.parentElement) {
-          const parentCs = window.getComputedStyle(el.parentElement);
-          if (parentCs.transform && parentCs.transform !== 'none') {
-            console.log('[PLAN OVERLAY] ✅ Found transformed MapLibre parent:', el.parentElement);
-            return el.parentElement;
-          }
-        }
-        
-        // Y en los hijos directos
-        for (const child of el.children) {
-          const childCs = window.getComputedStyle(child);
-          if (childCs.transform && childCs.transform !== 'none') {
-            console.log('[PLAN OVERLAY] ✅ Found transformed MapLibre child:', child);
-            return child;
-          }
-        }
-      }
-    }
-    
-    // 2) Buscar el canvas principal y subir por TODOS los ancestros
-    const canvases = document.querySelectorAll('canvas');
-    console.log('[PLAN OVERLAY] Found canvases:', canvases.length);
-    
-    for (const cv of canvases) {
-      console.log('[PLAN OVERLAY] Checking canvas:', cv, 'rect:', cv.getBoundingClientRect());
-      
-      let el = cv.parentElement;
-      while (el && el !== document.body) {
-        const cs = window.getComputedStyle(el);
-        console.log('[PLAN OVERLAY] Checking parent:', el.tagName, el.className, el.id, 'transform:', cs.transform);
-        
-        if (cs.transform && cs.transform !== 'none') {
-          console.log('[PLAN OVERLAY] ✅ Found transformed ancestor:', el, 'transform:', cs.transform);
-          return el;
-        }
-        el = el.parentElement;
-      }
-    }
-    
-    // 3) Como último recurso, usar el contenedor MapLibre sin transform
-    const mapContainer = document.querySelector('.maplibregl-map') || 
-                        document.querySelector('.maplibregl-canvas-container') ||
-                        document.querySelector('.mapboxgl-map') ||
-                        document.querySelector('.mapboxgl-canvas-container');
-    
-    if (mapContainer) {
-      console.log('[PLAN OVERLAY] Using MapLibre container without transform:', mapContainer);
-      return mapContainer;
-    }
-    
-    // 4) Fallback final: padre del canvas
-    const firstCanvas = document.querySelector('canvas');
-    if (firstCanvas && firstCanvas.parentElement) {
-      const parent = firstCanvas.parentElement;
-      console.log('[PLAN OVERLAY] Using canvas parent as final fallback:', parent);
-      return parent;
-    }
-    
-    console.log('[PLAN OVERLAY] Using document.body as absolute final fallback');
-    return document.body;
+  // == Blue Marble Pattern: Canvas Sibling Insertion ==
+  function findMainCanvas() {
+    // Usar exactamente el mismo selector que Blue Marble
+    return document.querySelector('div#map canvas.maplibregl-canvas')
+      || document.querySelector('canvas.maplibregl-canvas')
+      || document.querySelector('canvas');
   }
 
   function ensureBoardLayer() {
-    // Preferir el contenedor raíz del mapa para evitar recortes de tamaño 0
-    const mapRoot = document.querySelector('.maplibregl-map') || document.querySelector('.mapboxgl-map');
-    // Intentar el selector exacto del canvas principal
-    const mainCanvas = document.querySelector('div#map canvas.maplibregl-canvas')
-      || document.querySelector('canvas.maplibregl-canvas')
-      || document.querySelector('canvas');
+    // Aplicar el patrón exacto de Blue Marble:
+    // 1. Encontrar el canvas principal de MapLibre
+    const mainCanvas = findMainCanvas();
     if (mainCanvas && state.mainCanvas !== mainCanvas) {
       state.mainCanvas = mainCanvas;
+      console.log('[PLAN OVERLAY] Main canvas found:', mainCanvas);
     }
-    const layer = mapRoot || (state.mainCanvas && state.mainCanvas.parentElement) || findTransformedBoardLayer();
-    if (layer && state.boardLayer !== layer) {
-      state.boardLayer = layer;
-      console.log('[PLAN OVERLAY] Board layer updated (mainCanvas.parentElement):', layer);
+    
+    // 2. Obtener el padre del canvas principal
+    // Este padre es el que recibe las transformaciones de pan/zoom
+    const canvasParent = state.mainCanvas?.parentElement;
+    if (canvasParent && state.boardLayer !== canvasParent) {
+      state.boardLayer = canvasParent;
+      console.log('[PLAN OVERLAY] Board layer set to canvas parent:', canvasParent);
     }
+    
     return state.boardLayer || document.body;
   }
 
-  function findTransformHost(root) {
-    if (!root) return null;
-    // Preferidos conocidos de MapLibre/Mapbox
-    const preferred = root.querySelector('.maplibregl-canvas-container')
-                     || root.querySelector('.mapboxgl-canvas-container')
-                     || root.querySelector('.maplibregl-transform')
-                     || root.querySelector('.mapboxgl-transform');
-    const candidates = [];
-    if (preferred) candidates.push(preferred);
-    // Escanear hijos directos en busca de transform activo
-    const all = root.querySelectorAll('*');
-    for (const el of all) {
-      try {
-        const cs = window.getComputedStyle(el);
-        if (cs && cs.transform && cs.transform !== 'none') {
-          candidates.push(el);
-        }
-      } catch (e) { void e; }
-    }
-    // Si no hay candidatos con transform, probar el propio root
-    if (candidates.length === 0) {
-      const csr = window.getComputedStyle(root);
-      if (csr.transform && csr.transform !== 'none') return root;
-      return null;
-    }
-    // Elegir el más profundo (último encontrado suele ser más específico)
-    return candidates[candidates.length - 1];
-  }
-
-  function syncOverlayTransformFromHost(reason = 'init') {
-    if (!state.canvas) return;
-    const host = state.transformHost || findTransformHost(state.boardLayer);
-    if (host) {
-      state.transformHost = host;
-      const tx = host.style?.transform || window.getComputedStyle(host).transform;
-      if (tx && tx !== 'none') {
-        state.canvas.style.transform = tx;
-        console.log('[PLAN OVERLAY] Transform copied from host:', tx, `(${reason})`);
-        return;
-      }
-    }
-    // Fallback sin transform
-    state.canvas.style.transform = 'none';
-  }
+  // Ya no copiamos transform; el overlay hereda al ser hijo del host.
 
   function ensureOverlayCanvas() {
     if (state.canvas && state.canvas.isConnected) return state.canvas;
     
-    const host = ensureBoardLayer();
-  const c = document.createElement('canvas');
-  // Replicar atributos de BlueMarble para heredar estilos de MapLibre
-  c.id = 'bm-canvas';
-  c.className = `maplibregl-canvas ${OVERLAY_CLASS}`;
-  c.style.position = 'absolute';
+    const boardLayer = ensureBoardLayer();
+    if (!boardLayer) {
+      console.error('[PLAN OVERLAY] No board layer found!');
+      return null;
+    }
+    
+    const c = document.createElement('canvas');
+    
+    // === APLICAR PATRÓN EXACTO DE BLUE MARBLE ===
+    // 1. Usar mismo ID y clase que Blue Marble para heredar estilos
+    c.id = 'bm-canvas';
+    c.className = 'maplibregl-canvas';
+    
+    // 2. Configuración de posicionamiento absoluto (como Blue Marble)
+    c.style.position = 'absolute';
+    c.style.top = '0';
+    c.style.left = '0';
     c.style.pointerEvents = 'none';
     c.style.imageRendering = 'pixelated';
-  c.style.transformOrigin = 'top left';
-    c.style.zIndex = '2147483646';
-  // DEBUG visual (se puede retirar cuando esté estable)
-  // c.style.border = '1px dashed #ff0';
-  // c.style.backgroundColor = 'rgba(255, 0, 0, 0.15)';
+    c.style.zIndex = '8999'; // Z-index de Blue Marble
+    
+    // 3. Dimensionamiento con DPR (Device Pixel Ratio) como Blue Marble
+    if (state.mainCanvas) {
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, state.mainCanvas.clientWidth);
+      const h = Math.max(1, state.mainCanvas.clientHeight);
+      
+      // Tamaño del canvas interno (con DPR)
+      c.width = w * dpr;
+      c.height = h * dpr;
+      
+      // Tamaño visual en CSS
+      c.style.width = `${w}px`;
+      c.style.height = `${h}px`;
+      
+      console.log('[PLAN OVERLAY] Canvas sized with DPR:', { 
+        cssSize: `${w}x${h}`, 
+        internalSize: `${c.width}x${c.height}`, 
+        dpr 
+      });
+    }
+    
     c.hidden = !state.enabled;
 
     state.canvas = c;
     state.ctx = c.getContext('2d', { willReadFrequently: false });
-    host.appendChild(c);
-  // Sincronizar transform de inicio
-  state.transformHost = findTransformHost(state.boardLayer);
-  syncOverlayTransformFromHost('ensureOverlayCanvas');
-
-    // Sincronizar tamaño con DPR del canvas principal (como BlueMarble)
-    try {
-      const mainCanvas = state.mainCanvas || document.querySelector('div#map canvas.maplibregl-canvas')
-        || document.querySelector('canvas.maplibregl-canvas')
-        || document.querySelector('canvas');
-      if (mainCanvas) {
-        state.mainCanvas = mainCanvas;
-        const dpr = window.devicePixelRatio || 1;
-        const w = Math.max(1, mainCanvas.clientWidth);
-        const h = Math.max(1, mainCanvas.clientHeight);
-        state.canvas.width = w * dpr; // tamaño interno
-        state.canvas.height = h * dpr;
-        state.canvas.style.width = `${w}px`;
-        state.canvas.style.height = `${h}px`;
-        // Nota: nuestra lógica de render usa coordenadas absolutas con left/top por bounds,
-        // si se posiciona por bounds, actualizaremos tamaño después de recomputeBounds.
-      }
-    } catch (e) {
-      console.log('[PLAN OVERLAY] Error syncing DPR size:', e);
-    }
     
-    console.log('[PLAN OVERLAY] Canvas created and added to transformed layer:', host);
-    console.log('[PLAN OVERLAY] Canvas element:', c);
-    console.log('[PLAN OVERLAY] Host element rect:', host.getBoundingClientRect());
+    // 4. INSERCIÓN COMO HERMANO DEL CANVAS PRINCIPAL (patrón Blue Marble)
+    boardLayer.appendChild(c);
     
-  // (Pan/zoom desactivado temporalmente)
-
-    // Observer para re-adherir si el DOM cambia y para cambios de estilo del host
+    console.log('[PLAN OVERLAY] Canvas created with Blue Marble pattern');
+    console.log('[PLAN OVERLAY] - Canvas element:', c);
+    console.log('[PLAN OVERLAY] - Parent (board layer):', boardLayer);
+    console.log('[PLAN OVERLAY] - Main canvas:', state.mainCanvas);
+    
+    // Observer para re-adherir si el DOM cambia
     if (!state.observer) {
-      state.observer = new window.MutationObserver((mutations) => {
+      state.observer = new window.MutationObserver(() => {
         if (!state.canvas?.isConnected) {
           console.log('[PLAN OVERLAY] Canvas disconnected, re-attaching...');
-          const h = ensureBoardLayer();
-          h.appendChild(state.canvas);
-          applyOverlayPosition();
-        }
-        // Si cambió el style del host transformado, re-sincronizar
-        for (const m of mutations) {
-          if (m.type === 'attributes' && m.target === state.transformHost && m.attributeName === 'style') {
-            syncOverlayTransformFromHost('mutation');
+          const layer = ensureBoardLayer();
+          if (layer && state.canvas) {
+            layer.appendChild(state.canvas);
+            applyOverlayPosition();
           }
         }
       });
-      // Observar el body para re-anclajes
       state.observer.observe(document.body, { childList: true, subtree: true });
-      // Observar cambios de estilo en el host si existe
-      if (state.transformHost) {
-        state.observer.observe(state.transformHost, { attributes: true, attributeFilter: ['style'] });
-      }
     }
     
     return c;
@@ -301,60 +458,97 @@
 
   function resizeCanvasToBounds() {
     if (!state.canvas) return;
-    // Dimensionar el canvas según el área a dibujar relativa al ancla
-  let w = 2, h = 2; // mínimo visible
-    if (state.anchor && (state.imageWidth && state.imageHeight)) {
-      // Si tenemos dimensiones de imagen, usar exactamente esas
-      w = Math.max(1, state.imageWidth|0);
-      h = Math.max(1, state.imageHeight|0);
-    } else if (state.anchor) {
-      const ax = state.anchor.tileX * TILE_SIZE + (state.anchor.pxX || 0);
-      const ay = state.anchor.tileY * TILE_SIZE + (state.anchor.pxY || 0);
-      w = Math.max(1, (state.maxX - ax + 1) | 0);
-      h = Math.max(1, (state.maxY - ay + 1) | 0);
+    
+    if (state.selectingMode || !state.mainCanvas) {
+      // === MODO SELECCIÓN O SIN CANVAS PRINCIPAL ===
+      // Usar el tamaño de la imagen o del área de píxeles
+      let w = 2, h = 2;
+      
+      if (state.anchor && (state.imageWidth && state.imageHeight)) {
+        // Si tenemos dimensiones de imagen, usar exactamente esas
+        w = Math.max(1, state.imageWidth|0);
+        h = Math.max(1, state.imageHeight|0);
+      } else if (state.anchor) {
+        // Calcular tamaño del área de píxeles relativa al ancla
+        const ax = state.anchor.tileX * TILE_SIZE + (state.anchor.pxX || 0);
+        const ay = state.anchor.tileY * TILE_SIZE + (state.anchor.pxY || 0);
+        w = Math.max(1, (state.maxX - ax + 1) | 0);
+        h = Math.max(1, (state.maxY - ay + 1) | 0);
+      } else {
+        // Tamaño total del área de píxeles
+        w = Math.max(1, (state.maxX - state.minX + 1) | 0);
+        h = Math.max(1, (state.maxY - state.minY + 1) | 0);
+      }
+      
+      state.canvas.width = Math.max(2, w);
+      state.canvas.height = Math.max(2, h);
+      state.canvas.style.width = `${Math.max(2, w)}px`;
+      state.canvas.style.height = `${Math.max(2, h)}px`;
+      
+      console.log('[PLAN OVERLAY] Canvas sized for selection/fallback mode:', {
+        size: `${w}x${h}`,
+        reason: state.selectingMode ? 'selection mode' : 'no main canvas'
+      });
     } else {
-      w = Math.max(1, (state.maxX - state.minX + 1) | 0);
-      h = Math.max(1, (state.maxY - state.minY + 1) | 0);
+      // === MODO NORMAL: TAMAÑO DEL VIEWPORT ===
+      // Mantener el canvas del tamaño del viewport para herencia de transformaciones
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, state.mainCanvas.clientWidth);
+      const h = Math.max(1, state.mainCanvas.clientHeight);
+      
+      // Solo redimensionar si cambió el tamaño
+      if (state.canvas.style.width !== `${w}px` || state.canvas.style.height !== `${h}px`) {
+        state.canvas.width = w * dpr;
+        state.canvas.height = h * dpr;
+        state.canvas.style.width = `${w}px`;
+        state.canvas.style.height = `${h}px`;
+        
+        console.log('[PLAN OVERLAY] Canvas resized to match main canvas:', { 
+          cssSize: `${w}x${h}`, 
+          internalSize: `${state.canvas.width}x${state.canvas.height}` 
+        });
+      }
     }
-  state.canvas.width = Math.max(2, w);
-  state.canvas.height = Math.max(2, h);
-    // Mantener estilo igual al contenido (CSS px)
-  state.canvas.style.width = `${Math.max(2, w)}px`;
-  state.canvas.style.height = `${Math.max(2, h)}px`;
   }
 
   function applyOverlayPosition() {
     if (!state.canvas || !state.anchor) return;
-    // Posicionar el canvas en el sistema de coordenadas de WPlace usando el ancla (pin)
-    const ax = state.anchor.tileX * TILE_SIZE + (state.anchor.pxX || 0);
-    const ay = state.anchor.tileY * TILE_SIZE + (state.anchor.pxY || 0);
-    // Si existe ancla CSS (coordenadas de clic en pantalla), usarla para que sea visible
-    const hasCss = (state.cssAnchorX || state.cssAnchorY);
-    if (hasCss) {
-      // Reparentar al body para que position:fixed no quede atrapado por transforms
+    
+    // === APLICAR PATRÓN BLUE MARBLE: POSICIONAMIENTO ABSOLUTO ===
+    // Blue Marble usa posición absoluta con coordenadas del sistema de tiles
+    // y deja que el contenedor padre maneje las transformaciones de pan/zoom
+    
+    const boardLayer = ensureBoardLayer();
+    
+    if (state.selectingMode && (state.cssAnchorX || state.cssAnchorY)) {
+      // Durante selección: usar position fixed en el body para visibilidad inmediata
       if (state.canvas.parentElement !== document.body) {
         document.body.appendChild(state.canvas);
       }
       state.canvas.style.position = 'fixed';
       state.canvas.style.left = `${state.cssAnchorX}px`;
       state.canvas.style.top = `${state.cssAnchorY}px`;
-      state.canvas.style.transform = 'none'; // fixed no usa transform del host
+      state.canvas.style.transform = 'none';
+      console.log('[PLAN OVERLAY] Selection mode: fixed positioning at CSS coords:', {
+        x: state.cssAnchorX, 
+        y: state.cssAnchorY
+      });
     } else {
-      // Posicionamiento absoluto en el host del mapa
-      const host = ensureBoardLayer();
-      if (state.canvas.parentElement !== host) {
-        host.appendChild(state.canvas);
+      // Modo normal: usar patrón Blue Marble con posición absoluta
+      if (state.canvas.parentElement !== boardLayer) {
+        boardLayer.appendChild(state.canvas);
       }
+      
+      // === POSICIONAMIENTO EXACTO COMO BLUE MARBLE ===
       state.canvas.style.position = 'absolute';
-      state.canvas.style.left = `${ax}px`;
-      state.canvas.style.top = `${ay}px`;
-      // Copiar transform del host para seguir pan/zoom
-      state.transformHost = findTransformHost(state.boardLayer);
-      syncOverlayTransformFromHost('applyOverlayPosition');
+      state.canvas.style.top = '0';
+      state.canvas.style.left = '0';
+      // NO aplicar transform manual - se hereda del contenedor padre
+      state.canvas.style.transform = 'none';
+      
+      console.log('[PLAN OVERLAY] Blue Marble mode: absolute positioning at origin');
+      console.log('[PLAN OVERLAY] - Canvas will inherit transform from parent:', boardLayer);
     }
-    // Debug opcional
-    // state.canvas.style.border = '1px dashed #ff0';
-    console.log('[PLAN OVERLAY] Positioned at anchor (global coords):', { left: ax, top: ay });
   }
 
   function clearCanvas() {
@@ -371,35 +565,58 @@
     const { ctx, items, canvas } = state;
     clearCanvas();
 
-    console.log(`[PLAN OVERLAY] Rendering ${items.length} items in ${canvas.width}x${canvas.height} canvas (anchored)`);
+    console.log(`[PLAN OVERLAY] Rendering ${items.length} items in ${canvas.width}x${canvas.height} canvas`);
 
-    if (items.length === 0) return;
+    if (items.length === 0 || !state.anchor) return;
 
-    // Pintado base relativo al ancla (pin) -> top-left del canvas es el ancla
-    const ax = state.anchor.tileX * TILE_SIZE + (state.anchor.pxX || 0);
-    const ay = state.anchor.tileY * TILE_SIZE + (state.anchor.pxY || 0);
+    const anchorGlobalX = state.anchor.tileX * TILE_SIZE + (state.anchor.pxX || 0);
+    const anchorGlobalY = state.anchor.tileY * TILE_SIZE + (state.anchor.pxY || 0);
+    
+    console.log('[PLAN OVERLAY] Rendering with anchor at global coords:', {
+      x: anchorGlobalX, 
+      y: anchorGlobalY
+    });
+
+    // === RENDERIZADO CORREGIDO: COORDENADAS RELATIVAS ===
+    // Todas las coordenadas se dibujan relativas al ancla
     ctx.globalAlpha = 0.7;
+    let pixelsDrawn = 0;
+    
     for (const p of items) {
-      const x = (p.globalX - ax) | 0;
-      const y = (p.globalY - ay) | 0;
-      if (x < 0 || y < 0) continue; // fuera del canvas anclado
-      ctx.fillStyle = `rgb(${p.r|0},${p.g|0},${p.b|0})`;
-      ctx.fillRect(x, y, 1, 1);
+      // Convertir coordenadas globales a relativas al ancla
+      const x = p.globalX - anchorGlobalX;
+      const y = p.globalY - anchorGlobalY;
+      
+      // Solo dibujar si está dentro del canvas
+      if (x >= 0 && y >= 0 && x < canvas.width && y < canvas.height) {
+        ctx.fillStyle = `rgb(${p.r|0},${p.g|0},${p.b|0})`;
+        ctx.fillRect(x, y, 1, 1);
+        pixelsDrawn++;
+      }
     }
 
     // Resaltado del siguiente batch
     if (state.nextBatchCount > 0) {
       const n = Math.min(state.nextBatchCount, items.length);
       ctx.globalAlpha = 1.0;
+      let batchPixelsDrawn = 0;
+      
       for (let i = 0; i < n; i++) {
         const p = items[i];
-        const x = (p.globalX - ax) | 0;
-        const y = (p.globalY - ay) | 0;
-        if (x < 0 || y < 0) continue;
-        ctx.fillStyle = `rgb(${p.r|0},${p.g|0},${p.b|0})`;
-        ctx.fillRect(x, y, 1, 1);
+        const x = p.globalX - anchorGlobalX;
+        const y = p.globalY - anchorGlobalY;
+        
+        if (x >= 0 && y >= 0 && x < canvas.width && y < canvas.height) {
+          ctx.fillStyle = `rgb(${p.r|0},${p.g|0},${p.b|0})`;
+          ctx.fillRect(x, y, 1, 1);
+          batchPixelsDrawn++;
+        }
       }
+      
+      console.log(`[PLAN OVERLAY] Batch pixels highlighted: ${batchPixelsDrawn}/${n}`);
     }
+    
+    console.log(`[PLAN OVERLAY] Rendering complete - drew ${pixelsDrawn}/${items.length} pixels in canvas`);
   }
 
   function setEnabled(enabled) {
@@ -501,17 +718,24 @@
     const anchorGlobalY = state.anchor.tileY * TILE_SIZE + state.anchor.pxY;
     console.log('[PLAN OVERLAY] Anchor global coords:', { x: anchorGlobalX, y: anchorGlobalY });
     
-    ensureOverlayCanvas();
+  ensureOverlayCanvas();
     renderPlan();
   }
 
 function setAnchorCss(x, y) {
   state.cssAnchorX = Math.round(Number(x) || 0);
   state.cssAnchorY = Math.round(Number(y) || 0);
+  state.selectingMode = true;
   console.log('[PLAN OVERLAY] CSS anchor set:', { x: state.cssAnchorX, y: state.cssAnchorY });
   if (state.enabled) {
   applyOverlayPosition();
   }
+}
+
+function endSelectionMode() {
+  state.selectingMode = false;
+  // No borramos los valores por si se quiere depurar; simplemente dejamos de usarlos
+  if (state.enabled) applyOverlayPosition();
 }
 
 // API pública compatible con la anterior
@@ -523,6 +747,7 @@ function setAnchorCss(x, y) {
     setNextBatchCount,
     setAnchor,
     setAnchorCss,
+  endSelectionMode,
     render: renderPlan,
     cleanup,
     get state() { return state; },
