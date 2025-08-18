@@ -69,6 +69,7 @@ export const en = {
     batchSize: "Batch size",
     nextBatchTime: "Next batch in",
     useAllCharges: "Use all available charges",
+    showOverlay: "Show overlay",
     maxCharges: "Max charges per batch",
     waitingForCharges: "⏳ Waiting for charges: {current}/{needed}",
     timeRemaining: "Time remaining",

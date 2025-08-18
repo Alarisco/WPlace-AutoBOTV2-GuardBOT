@@ -69,6 +69,7 @@ export const es = {
     batchSize: "Tamaño del lote",
     nextBatchTime: "Siguiente lote en",
     useAllCharges: "Usar todas las cargas disponibles",
+    showOverlay: "Mostrar overlay",
     maxCharges: "Cargas máximas por lote",
     waitingForCharges: "⏳ Esperando cargas: {current}/{needed}",
     timeRemaining: "Tiempo restante",

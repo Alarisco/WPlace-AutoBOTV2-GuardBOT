@@ -140,9 +140,6 @@ export async function runImage() {
       
       // Habilitar botones de upload y load progress
       ui.enableButtonsAfterInit();
-      
-      // Actualizar estado del botón overlay después de la inicialización
-      ui.updateOverlayButtonState();
 
       // Inicializar plan overlay si ya hay cola previa (p.ej. reanudación)
       try {

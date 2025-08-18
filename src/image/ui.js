@@ -454,6 +454,12 @@ export async function createImageUI({ texts, ...handlers }) {
             ${texts.useAllCharges}
           </label>
         </div>
+        <div class="config-item">
+          <label>
+            <input class="config-checkbox show-overlay" type="checkbox" checked>
+            ${texts.showOverlay || 'Mostrar overlay'}
+          </label>
+        </div>
       </div>
       
       <!-- Configuración visible en la interfaz principal -->
@@ -475,10 +481,6 @@ export async function createImageUI({ texts, ...handlers }) {
           🤖
           <span>${texts.initBot}</span>
         </button>
-          <button class="btn btn-primary plan-overlay-toggle-btn" disabled>
-            ️
-            <span>${texts.overlayOff || 'Overlay: OFF'}</span>
-          </button>
         <button class="btn btn-upload upload-btn" disabled>
           📤
           <span>${texts.uploadImage}</span>
@@ -583,6 +585,7 @@ export async function createImageUI({ texts, ...handlers }) {
     configPanel: container.querySelector('.config-panel'),
     pixelsPerBatch: container.querySelector('.pixels-per-batch'),
     useAllCharges: container.querySelector('.use-all-charges'),
+    showOverlay: container.querySelector('.show-overlay'),
     batchValue: container.querySelector('.batch-value'),
     cooldownValue: container.querySelector('.cooldown-value'),
     initBtn: container.querySelector('.init-btn'),
@@ -592,7 +595,6 @@ export async function createImageUI({ texts, ...handlers }) {
     selectPosBtn: container.querySelector('.select-pos-btn'),
     startBtn: container.querySelector('.start-btn'),
     stopBtn: container.querySelector('.stop-btn'),
-  planOverlayToggleBtn: container.querySelector('.plan-overlay-toggle-btn'),
     progressBar: container.querySelector('.progress-bar'),
     statsArea: container.querySelector('.stats-area'),
     status: container.querySelector('.status'),
@@ -663,22 +665,9 @@ export async function createImageUI({ texts, ...handlers }) {
   });
   
   // Función para habilitar botones después de inicialización exitosa
-  // Función para actualizar el estado del botón overlay
-  function updateOverlayButtonState() {
-    if (!window.__WPA_PLAN_OVERLAY__ || !elements.planOverlayToggleBtn) return;
-    
-    const isEnabled = window.__WPA_PLAN_OVERLAY__.state.enabled;
-    const label = isEnabled ? (texts.overlayOn || 'Overlay: ON') : (texts.overlayOff || 'Overlay: OFF');
-    elements.planOverlayToggleBtn.querySelector('span').textContent = label;
-  }
-
   function enableButtonsAfterInit() {
     elements.uploadBtn.disabled = false;
     elements.loadProgressBtn.disabled = false;
-    elements.planOverlayToggleBtn.disabled = false;
-    
-    // Actualizar estado del botón overlay
-    updateOverlayButtonState();
   }
   
   elements.initBtn.addEventListener('click', async () => {
@@ -738,16 +727,13 @@ export async function createImageUI({ texts, ...handlers }) {
     }
   });
 
-    // Botón Plan Overlay: ON/OFF
-    elements.planOverlayToggleBtn.addEventListener('click', () => {
-      if (!window.__WPA_PLAN_OVERLAY__) return;
-      window.__WPA_PLAN_OVERLAY__.injectStyles();
-      const next = !window.__WPA_PLAN_OVERLAY__.state.enabled;
-      window.__WPA_PLAN_OVERLAY__.setEnabled(next);
-      
-      // Actualizar estado del botón
-      updateOverlayButtonState();
-    });
+  // Checkbox mostrar overlay
+  elements.showOverlay.addEventListener('change', () => {
+    if (!window.__WPA_PLAN_OVERLAY__) return;
+    window.__WPA_PLAN_OVERLAY__.injectStyles();
+    const isEnabled = elements.showOverlay.checked;
+    window.__WPA_PLAN_OVERLAY__.setEnabled(isEnabled);
+  });
   
   elements.startBtn.addEventListener('click', async () => {
     if (handlers.onStartPainting) {
@@ -991,7 +977,6 @@ export async function createImageUI({ texts, ...handlers }) {
     setInitialized,
     setInitButtonVisible,
     enableButtonsAfterInit,
-    updateOverlayButtonState,
     showResizeDialog,
     closeResizeDialog,
     destroy
