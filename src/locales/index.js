@@ -76,7 +76,7 @@ export function initializeLanguage() {
   } else if (browserLang && translations[browserLang]) {
     selectedLang = browserLang;
   }
-  
+
   setLanguage(selectedLang);
   return selectedLang;
 }
