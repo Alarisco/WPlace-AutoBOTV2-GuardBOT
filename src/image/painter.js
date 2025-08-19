@@ -435,18 +435,38 @@ function generatePixelQueue(imageData, startPosition, tileX, tileY) {
   const { x: localStartX, y: localStartY } = startPosition;
   const queue = [];
 
+  // Verificar si pixels es un array iterable
+  if (!Array.isArray(pixels)) {
+    log(`❌ Error: pixels no es un array iterable. Tipo: ${typeof pixels}`, pixels);
+    return [];
+  }
+
   for (const pixelData of pixels) {
-    const globalX = localStartX + pixelData.x;
-    const globalY = localStartY + pixelData.y;
+    if (!pixelData) continue;
+    
+    // Manejar diferentes formatos de píxel
+    // Formato Blue Marble: imageX, imageY, color
+    // Formato clásico: x, y, targetColor
+    const pixelX = pixelData.imageX !== undefined ? pixelData.imageX : pixelData.x;
+    const pixelY = pixelData.imageY !== undefined ? pixelData.imageY : pixelData.y;
+    const pixelColor = pixelData.color !== undefined ? pixelData.color : pixelData.targetColor;
+    
+    if (pixelX === undefined || pixelY === undefined) {
+      log(`⚠️ Píxel con coordenadas inválidas:`, pixelData);
+      continue;
+    }
+    
+    const globalX = localStartX + pixelX;
+    const globalY = localStartY + pixelY;
     
     queue.push({
-      imageX: pixelData.x,
-      imageY: pixelData.y,
+      imageX: pixelX,
+      imageY: pixelY,
       localX: globalX,
       localY: globalY,
       tileX: tileX,
       tileY: tileY,
-      color: pixelData.targetColor,
+      color: pixelColor,
       originalColor: pixelData.originalColor
     });
   }
