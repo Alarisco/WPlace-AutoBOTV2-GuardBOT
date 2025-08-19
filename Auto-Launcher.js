@@ -1,4 +1,4 @@
-/* WPlace AutoBOT — uso bajo tu responsabilidad. Compilado 2025-08-18T13:36:21.651Z */
+/* WPlace AutoBOT — uso bajo tu responsabilidad. Compilado 2025-08-19T05:52:23.410Z */
 (()=>{var i=(...n)=>console.log("[WPA-UI]",...n);function $(n=null){let a=document.createElement("div");n&&(a.id=n),a.style.cssText=`
     position: fixed;
     top: 10px;

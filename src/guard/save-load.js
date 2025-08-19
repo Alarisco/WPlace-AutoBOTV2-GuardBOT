@@ -112,7 +112,7 @@ export function saveProgress(filename = null, splitCount = null) {
       
       const suffix = splitCount > 1 ? `_parte${i + 1}de${splitCount}` : '';
       const finalFilename = filename || 
-        `wplace_progress_guard_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}${suffix}.json`;
+        `wplace_GUARD_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}${suffix}.json`;
       
       // Crear y disparar descarga
       const url = window.URL.createObjectURL(blob);
