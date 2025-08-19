@@ -96,7 +96,9 @@ export class BlueMarblelImageProcessor {
           name: transparent.name 
         });
       }
-    } catch (_) {}
+    } catch (_error) {
+      // Ignorar errores al procesar transparencias
+    }
 
     log(`[BLUE MARBLE] Paleta inicializada: ${this.allowedColorsSet.size} colores permitidos`);
     return Array.from(availableColors);
@@ -221,7 +223,7 @@ export class BlueMarblelImageProcessor {
         colorPalette: paletteObj
       };
 
-    } catch (err) {
+    } catch (_err) {
       // Fallback si OffscreenCanvas no está disponible
       this.requiredPixelCount = Math.max(0, this.totalPixels);
       this.defacePixelCount = 0;
@@ -584,7 +586,7 @@ export function findClosestColor(rgb, palette) {
 export function generatePixelQueue(imageData, startPosition, tileX, tileY) {
   // Esta función ahora es manejada por BlueMarblelImageProcessor.generatePixelQueue()
   // Mantenida para compatibilidad
-  const { width, height, pixels } = imageData;
+  const { pixels } = imageData;
   const { x: localStartX, y: localStartY } = startPosition;
   const queue = [];
 

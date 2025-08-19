@@ -1,0 +1,8 @@
+# Archivos generados por el build
+Auto-Farm.js
+Auto-Guard.js
+Auto-Image.js
+Auto-Launcher.js
+
+# Dependencias
+node_modules/
