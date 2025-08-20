@@ -4,7 +4,7 @@ export const GUARD_DEFAULTS = {
   COOLDOWN_DEFAULT: 31000,
   TILE_SIZE: 3000,
   CHECK_INTERVAL: 10000, // Revisar cada 10 segundos
-  MAX_PROTECTION_SIZE: 100000, // Máximo 100k píxeles protegidos
+  MAX_PROTECTION_SIZE: Infinity, // Sin límite de píxeles protegidos
   PIXELS_PER_BATCH: 10, // Menos que Image para ser más sutil
   MIN_CHARGES_TO_WAIT: 20, // Cargas mínimas a esperar antes de continuar
   BACKEND_URL: "https://backend.wplace.live"

@@ -78,7 +78,7 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
   const body = JSON.stringify({ pixels, token: turnstileToken });
   const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
     body,
     credentials: "include"
   });
@@ -104,7 +104,7 @@ export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
     const body = JSON.stringify({ pixels, token: turnstileToken });
     const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body,
       credentials: "include"
     });

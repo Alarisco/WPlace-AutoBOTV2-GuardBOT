@@ -6,8 +6,7 @@ import { saveProgress, loadProgress, clearProgress, getProgressInfo } from "./sa
 import { createImageUI, showConfirmDialog } from "./ui.js";
 import { getSession } from "../core/wplace-api.js";
 import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
-import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
-import { sleep } from "../core/timing.js";
+import { isPaletteOpen, autoClickPaintButton } from "../core/dom.js";
 import "./plan-overlay-blue-marble.js";
 
 export async function runImage() {
@@ -70,25 +69,16 @@ export async function runImage() {
         return true;
       }
       
-      log('🔍 Paleta no encontrada, buscando botón Paint...');
+      log('🔍 Paleta no encontrada, iniciando auto-click del botón Paint...');
       
-      // Intentar hacer clic en el botón Paint
-      if (findAndClickPaintButton()) {
-        log('👆 Botón Paint encontrado y presionado');
-        
-        // Esperar un momento para que la paleta se abra
-        await sleep(2000);
-        
-        // Verificar si la paleta se abrió
-        if (isPaletteOpen()) {
-          log('✅ Paleta abierta exitosamente');
-          return true;
-        } else {
-          log('❌ La paleta no se abrió después de hacer clic');
-          return false;
-        }
+      // Usar la nueva función de auto-click que hace doble clic automáticamente
+      const success = await autoClickPaintButton(3, true);
+      
+      if (success) {
+        log('✅ Auto-click exitoso, paleta abierta');
+        return true;
       } else {
-        log('❌ Botón Paint no encontrado');
+        log('❌ Auto-click falló, requerirá inicio manual');
         return false;
       }
     }

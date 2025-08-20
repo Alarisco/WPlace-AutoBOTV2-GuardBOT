@@ -1,7 +1,17 @@
 import { runImage } from "../image/index.js";
+import { autoClickPaintButton } from "../core/dom.js";
 
-(() => {
+(async () => {
   "use strict";
+  
+  // Auto-click del botón Paint al inicio
+  try {
+    console.log('[WPA-Image] 🤖 Iniciando auto-click del botón Paint...');
+    await autoClickPaintButton(3, true);
+  } catch (error) {
+    console.log('[WPA-Image] ⚠️ Error en auto-click del botón Paint:', error);
+  }
+  
   // Verificar si el bot de imagen ya está ejecutándose
   if (window.__wplaceBot?.imageRunning) {
     alert("Auto-Image ya está corriendo.");

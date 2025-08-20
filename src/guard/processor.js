@@ -81,10 +81,6 @@ export async function analyzeAreaPixels(area) {
   const { x1, y1, x2, y2 } = area;
   const width = x2 - x1;
   const height = y2 - y1;
-  
-  if (width * height > GUARD_DEFAULTS.MAX_PROTECTION_SIZE) {
-    throw new Error(`Área demasiado grande: ${width * height} píxeles (máximo: ${GUARD_DEFAULTS.MAX_PROTECTION_SIZE})`);
-  }
 
   log(`🔍 Analizando área ${width}x${height} desde (${x1},${y1}) hasta (${x2},${y2})`);
   

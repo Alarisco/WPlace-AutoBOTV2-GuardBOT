@@ -1,7 +1,7 @@
 import { log } from "../core/logger.js";
 import { sleep } from "../core/timing.js";
 import { postPixelBatchImage } from "../core/wplace-api.js";
-import { getTurnstileToken } from "../core/turnstile.js";
+import { getTurnstileToken, detectSiteKey } from "../core/turnstile.js";
 import { imageState, IMAGE_DEFAULTS } from "./config.js";
 import { t } from "../locales/index.js";
 
@@ -190,43 +190,59 @@ export async function paintPixelBatch(batch) {
       return { success: false, painted: 0, error: 'Lote vacío' };
     }
     
-    // Convertir el lote al formato esperado por la API
-    const coords = [];
-    const colors = [];
-    let tileX = null;
-    let tileY = null;
-    
-    for (const pixel of batch) {
-      coords.push(pixel.localX, pixel.localY);
-      colors.push(pixel.color.id || pixel.color.value || 1);
-      
-      // Tomar tileX/tileY del primer píxel (todos deberían tener el mismo tile)
-      if (tileX === null) {
-        tileX = pixel.tileX;
-        tileY = pixel.tileY;
+    // Agrupar el lote por tile como hace wplacer
+    const byTile = new Map(); // key: `${tx},${ty}` -> { coords: [], colors: [], tx, ty }
+    for (const p of batch) {
+      const key = `${p.tileX},${p.tileY}`;
+      if (!byTile.has(key)) byTile.set(key, { coords: [], colors: [], tx: p.tileX, ty: p.tileY });
+      const bucket = byTile.get(key);
+      bucket.coords.push(p.localX, p.localY);
+      bucket.colors.push(p.color.id || p.color.value || 1);
+    }
+
+    // Obtener un único token de Turnstile para el conjunto
+    const siteKey = detectSiteKey(IMAGE_DEFAULTS.SITEKEY);
+    const token = await getTurnstileToken(siteKey);
+
+    let totalPainted = 0;
+    for (const { coords, colors, tx, ty } of byTile.values()) {
+      if (colors.length === 0) continue;
+      // Saneado extra de coords (0..999) y depuración de rangos
+      const sanitized = [];
+      for (let i = 0; i < coords.length; i += 2) {
+        const x = ((Number(coords[i]) % 1000) + 1000) % 1000;
+        const y = ((Number(coords[i + 1]) % 1000) + 1000) % 1000;
+        // Filtrar NaN/undefined
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          sanitized.push(x, y);
+        }
       }
+      // Log de diagnóstico
+      try {
+        let minX = 999, maxX = 0, minY = 999, maxY = 0;
+        for (let i = 0; i < sanitized.length; i += 2) {
+          const x = sanitized[i], y = sanitized[i + 1];
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+        log(`[IMG] Enviando tile ${tx},${ty}: ${colors.length} px | x:[${minX},${maxX}] y:[${minY},${maxY}]`);
+      } catch (e) {
+        // noop (solo diagnóstico)
+      }
+
+      const resp = await postPixelBatchImage(tx, ty, sanitized, colors, token);
+      if (resp.status !== 200) {
+        return {
+          success: false,
+          painted: totalPainted,
+          error: resp.json?.message || `HTTP ${resp.status}`,
+          status: resp.status
+        };
+      }
+      totalPainted += resp.painted || 0;
     }
-    
-    // Obtener token de Turnstile
-    const token = await getTurnstileToken(IMAGE_DEFAULTS.SITEKEY);
-    
-    // Enviar píxeles usando el formato correcto
-    const response = await postPixelBatchImage(tileX, tileY, coords, colors, token);
-    
-    if (response.status === 200) {
-      return {
-        success: true,
-        painted: response.painted,
-        response: response.json
-      };
-    } else {
-      return {
-        success: false,
-        painted: 0,
-        error: response.json?.message || `HTTP ${response.status}`,
-        status: response.status
-      };
-    }
+
+    return { success: true, painted: totalPainted };
   } catch (error) {
     log('Error en paintPixelBatch:', error);
     return {
@@ -430,7 +446,7 @@ async function waitForCooldown(chargesNeeded, onProgress) {
   );
 }
 
-function generatePixelQueue(imageData, startPosition, tileX, tileY) {
+function generatePixelQueue(imageData, startPosition, baseTileX, baseTileY) {
   const { pixels } = imageData;
   const { x: localStartX, y: localStartY } = startPosition;
   const queue = [];
@@ -456,16 +472,23 @@ function generatePixelQueue(imageData, startPosition, tileX, tileY) {
       continue;
     }
     
+    // global dentro del mosaico base, puede exceder 0..999 y cruzar a otros tiles
     const globalX = localStartX + pixelX;
     const globalY = localStartY + pixelY;
+    const tileOffsetX = Math.floor(globalX / 1000);
+    const tileOffsetY = Math.floor(globalY / 1000);
+    const tx = baseTileX + tileOffsetX;
+    const ty = baseTileY + tileOffsetY;
+    const localX = ((globalX % 1000) + 1000) % 1000; // asegurar 0..999
+    const localY = ((globalY % 1000) + 1000) % 1000;
     
     queue.push({
       imageX: pixelX,
       imageY: pixelY,
-      localX: globalX,
-      localY: globalY,
-      tileX: tileX,
-      tileY: tileY,
+      localX,
+      localY,
+      tileX: tx,
+      tileY: ty,
       color: pixelColor,
       originalColor: pixelData.originalColor
     });

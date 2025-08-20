@@ -50,7 +50,7 @@ export function isPaletteOpen(debug = false) {
 }
 
 // Función para encontrar y hacer clic en el botón de Paint
-export function findAndClickPaintButton(debug = false) {
+export function findAndClickPaintButton(debug = false, doubleClick = false) {
   // Método 1: Búsqueda específica por clases (método original, más confiable)
   const specificButton = document.querySelector('button.btn.btn-primary.btn-lg, button.btn.btn-primary.sm\\:btn-xl');
   
@@ -63,6 +63,14 @@ export function findAndClickPaintButton(debug = false) {
     if (hasPaintText || hasPaintIcon) {
       if (debug) console.log(`[WPA-UI] 🎯 Botón Paint encontrado por selector específico: "${buttonText}"`);
       specificButton.click();
+      
+      // Si se requiere doble clic, hacer segundo clic después de un delay
+      if (doubleClick) {
+        setTimeout(() => {
+          if (debug) console.log(`[WPA-UI] 🎯 Segundo clic en botón Paint`);
+          specificButton.click();
+        }, 500);
+      }
       return true;
     }
   }
@@ -76,10 +84,59 @@ export function findAndClickPaintButton(debug = false) {
         !button.disabled) {
       if (debug) console.log(`[WPA-UI] 🎯 Botón Paint encontrado por texto: "${button.textContent.trim()}"`);
       button.click();
+      
+      // Si se requiere doble clic, hacer segundo clic después de un delay
+      if (doubleClick) {
+        setTimeout(() => {
+          if (debug) console.log(`[WPA-UI] 🎯 Segundo clic en botón Paint`);
+          button.click();
+        }, 500);
+      }
       return true;
     }
   }
   
   if (debug) console.log(`[WPA-UI] ❌ Botón Paint no encontrado`);
+  return false;
+}
+
+// Función para realizar auto-click del botón Paint con secuencia correcta
+export async function autoClickPaintButton(maxAttempts = 3, debug = true) {
+  if (debug) console.log(`[WPA-UI] 🤖 Iniciando auto-click del botón Paint (máximo ${maxAttempts} intentos)`);
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (debug) console.log(`[WPA-UI] 🎯 Intento ${attempt}/${maxAttempts} - Buscando botón Paint...`);
+    
+    // Verificar si la paleta ya está abierta
+    if (isPaletteOpen()) {
+      if (debug) console.log(`[WPA-UI] ✅ Paleta ya está abierta, auto-click completado`);
+      return true;
+    }
+    
+    // CLIC ÚNICO: Presionar Paint una sola vez (solo para mostrar paleta/detectar colores)
+    if (findAndClickPaintButton(debug, false)) {
+      if (debug) console.log(`[WPA-UI] 👆 Clic en botón Paint realizado (sin segundo clic)`);
+      
+      // Esperar un poco para que la UI/paleta aparezca en pantalla
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Verificar si la paleta se abrió
+      if (isPaletteOpen()) {
+        if (debug) console.log(`[WPA-UI] ✅ Paleta abierta exitosamente después del intento ${attempt}`);
+        return true;
+      } else {
+        if (debug) console.log(`[WPA-UI] ⚠️ Paleta no detectada tras el clic en intento ${attempt}. Reintentará.`);
+      }
+    } else {
+      if (debug) console.log(`[WPA-UI] ❌ Botón Paint no encontrado para clic en intento ${attempt}`);
+    }
+    
+    // Esperar antes del siguiente intento
+    if (attempt < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  if (debug) console.log(`[WPA-UI] ❌ Auto-click falló después de ${maxAttempts} intentos`);
   return false;
 }

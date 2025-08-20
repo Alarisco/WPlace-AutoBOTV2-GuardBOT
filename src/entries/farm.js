@@ -7,12 +7,21 @@ import { loop, paintWithRetry } from "../farm/loop.js";
 import { coordinateCapture } from "../core/capture.js";
 import { clamp } from "../core/utils.js";
 import { initializeLanguage, t } from "../locales/index.js";
+import { autoClickPaintButton } from "../core/dom.js";
 
 (async function() {
   'use strict';
 
   // Initialize internationalization first
   await initializeLanguage();
+  
+  // Auto-click del botón Paint al inicio
+  try {
+    log('🤖 [FARM] Iniciando auto-click del botón Paint...');
+    await autoClickPaintButton(3, true);
+  } catch (error) {
+    log('⚠️ [FARM] Error en auto-click del botón Paint:', error);
+  }
 
   // Verificar si el bot de farm ya está ejecutándose
   if (window.__wplaceBot?.farmRunning) {
