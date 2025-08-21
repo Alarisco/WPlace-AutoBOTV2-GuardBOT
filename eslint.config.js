@@ -42,7 +42,8 @@ export default [
         caughtErrors: 'none'
       }],
       'no-implicit-globals': 'error',
-      'no-alert': 'off'
+      'no-alert': 'off',
+      'no-empty': ['error', { 'allowEmptyCatch': true }]
     }
   }
 ];

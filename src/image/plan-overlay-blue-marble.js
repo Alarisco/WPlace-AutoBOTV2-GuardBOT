@@ -270,7 +270,7 @@
     setAnchor,
     setAnchorCss,
     endSelectionMode,
-    render: () => {}, // No-op en sistema de tiles
+    render: () => { /* No-op en sistema de tiles */ },
     cleanup,
     get state() { return state; }
   };

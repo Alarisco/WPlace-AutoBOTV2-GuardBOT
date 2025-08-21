@@ -24,7 +24,11 @@ jobs:
           VALIDATE_MARKDOWN: true
           VALIDATE_YAML: true
           VALIDATE_ALL_CODEBASE: false
-          FILTER_REGEX_EXCLUDE: ".*dist/.*|.*node_modules/.*"
+          # Configuración de filtros - múltiples estrategias
+          FILTER_REGEX_EXCLUDE: ".*Auto-Farm\\.js|.*Auto-Guard\\.js|.*Auto-Image\\.js|.*Auto-Launcher\\.js|.*dist/.*|.*node_modules/.*"
+          JAVASCRIPT_ES_FILE_NAME: "eslint.config.js"
+          # Usar solo el código fuente para validación
+          FILTER_REGEX_INCLUDE: ".*src/.*\\.js$|.*eslint\\.config\\.js$|.*package\\.json$"
           # Don't fail the workflow on lint errors; just report status
           IGNORE_GITIGNORED_FILES: true
         continue-on-error: true

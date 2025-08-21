@@ -11,5 +11,5 @@ export const logger = {
 export const log = (...a) => console.log('[WPA-UI]', ...a);
 
 // Utility functions
-export const noop = () => {};
+export const noop = () => { /* Función vacía intencional */ };
 export const clamp = (n, a, b) => Math.max(a, Math.min(b, n));

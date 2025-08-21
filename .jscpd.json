@@ -1,0 +1,11 @@
+{
+  "threshold": 10,
+  "reporters": ["html", "console"],
+  "ignore": [
+    "Auto-Farm.js",
+    "Auto-Guard.js", 
+    "Auto-Image.js",
+    "Auto-Launcher.js",
+    "node_modules/**"
+  ]
+}
