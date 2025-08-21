@@ -37,7 +37,9 @@ WPlace-AutoBOT/
 │   │   ├── index.js       # Motor i18n: traducción, detección, persistencia
 │   │   ├── es.js          # Traducciones en español (por defecto)
 │   │   ├── en.js          # Traducciones en inglés
-│   │   └── fr.js          # Traducciones en francés
+│   │   ├── fr.js          # Traducciones en francés
+|   |   ├── zh-Hans.js     # Traducciones en 简体中文
+|   |   └── zh-Hant.js     # Traducciones en 繁體中文
 │   ├── ui/                # Componentes de interfaz
 │   │   ├── drag.js        # makeDraggable - Sistema de arrastre
 │   │   └── overlay.js     # createOverlay con Shadow DOM
@@ -150,7 +152,7 @@ import de from './de.js';
 
 const translations = {
   es: { name: "Español", flag: "🇪🇸", code: "es" },
-  en: { name: "English", flag: "🇺🇸", code: "en" }, 
+  en: { name: "English", flag: "🇺🇸", code: "en" },
   fr: { name: "Français", flag: "🇫🇷", code: "fr" },
   de: { name: "Deutsch", flag: "🇩🇪", code: "de" }  // ← Nuevo
 };
@@ -175,9 +177,9 @@ import { t } from '../locales/index.js';
 const title = t('launcher.title'); // → "WPlace AutoBOT"
 
 // Con interpolación
-const progress = t('image.paintingProgress', { 
-  painted: 150, 
-  total: 500 
+const progress = t('image.paintingProgress', {
+  painted: 150,
+  total: 500
 }); // → "🧱 Progreso: 150/500 píxeles..."
 ```
 
@@ -306,7 +308,7 @@ npm run lint
 
 ### Estado Actual: Migración en Progreso
 
-> ⚠️ **Nota Importante**: Actualmente el proyecto está en **migración gradual** hacia la arquitectura modular. 
+> ⚠️ **Nota Importante**: Actualmente el proyecto está en **migración gradual** hacia la arquitectura modular.
 > Los archivos `Auto-*.js` utilizan temporalmente el código original mientras completamos la refactorización.
 
 ### Proceso con esbuild
