@@ -1,7 +1,7 @@
 // Utility functions
 export const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 export const randInt = (n) => Math.floor(Math.random() * n);
-export const noop = () => {};
+export const noop = () => { /* Función vacía intencional */ };
 
 export function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));

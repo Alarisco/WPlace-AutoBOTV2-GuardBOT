@@ -126,6 +126,44 @@ export async function createImageUI({ texts, ...handlers }) {
       text-align: center;
     }
     
+    .config-input[type="text"], 
+    .config-input select {
+      width: 120px;
+      text-align: left;
+    }
+    
+    .config-checkbox {
+      margin-right: 8px;
+    }
+    
+    .main-config {
+      background: #2d3748;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      border: 1px solid #3a4553;
+    }
+    
+    .config-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .config-label {
+      font-size: 13px;
+      color: #cbd5e0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .batch-value, .cooldown-value {
+      font-weight: bold;
+      color: #60a5fa;
+    }
+    
     .btn {
       padding: 10px;
       border: none;
@@ -413,8 +451,57 @@ export async function createImageUI({ texts, ...handlers }) {
     <div class="content">
       <div class="config-panel">
         <div class="config-item">
-          <label>${texts.pixelsPerBatch}:</label>
-          <input class="config-input pixels-per-batch" type="number" min="1" max="50" value="10">
+          <label>${texts.batchSize}:</label>
+          <input class="config-input pixels-per-batch" type="number" min="1" max="9999" value="20">
+        </div>
+        <div class="config-item">
+          <label>
+            <input class="config-checkbox use-all-charges" type="checkbox" checked>
+            ${texts.useAllCharges}
+          </label>
+        </div>
+        <div class="config-item">
+          <label>
+            <input class="config-checkbox show-overlay" type="checkbox" checked>
+            ${texts.showOverlay || 'Mostrar overlay'}
+          </label>
+        </div>
+        <div class="config-item">
+          <label>
+            <input class="config-checkbox protection-enabled" type="checkbox" checked>
+            🛡️ Protección del dibujo
+          </label>
+        </div>
+        <div class="config-item">
+          <label>
+            <input class="config-checkbox smart-verification" type="checkbox" checked>
+            💡 Verificación inteligente
+          </label>
+        </div>
+        <div class="config-item">
+          <label>📐 Patrón de pintado:</label>
+          <select class="config-input paint-pattern">
+            <option value="linear_start">Lineal (Inicio)</option>
+            <option value="linear_end">Lineal (Final)</option>
+            <option value="random">Aleatorio</option>
+            <option value="center_out">Centro hacia afuera</option>
+            <option value="corners_first">Esquinas primero</option>
+            <option value="spiral">Espiral</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Configuración visible en la interfaz principal -->
+      <div class="main-config">
+        <div class="config-row">
+          <div class="config-label">
+            🎯 ${texts.batchSize}:
+            <span class="batch-value">20</span>
+          </div>
+          <div class="config-label">
+            ⏱️ ${texts.nextBatchTime}:
+            <span class="cooldown-value">--</span>
+          </div>
         </div>
       </div>
       
@@ -430,6 +517,10 @@ export async function createImageUI({ texts, ...handlers }) {
         <button class="btn btn-load load-progress-btn" disabled>
           📁
           <span>${texts.loadProgress}</span>
+        </button>
+        <button class="btn btn-load export-guard-btn" disabled style="background: #8b5cf6;">
+          🛡️
+          <span>Exportar para Guard</span>
         </button>
         <button class="btn btn-primary resize-btn" disabled>
           🔄
@@ -526,9 +617,17 @@ export async function createImageUI({ texts, ...handlers }) {
     minimizeBtn: container.querySelector('.minimize-btn'),
     configPanel: container.querySelector('.config-panel'),
     pixelsPerBatch: container.querySelector('.pixels-per-batch'),
+    useAllCharges: container.querySelector('.use-all-charges'),
+    protectionEnabled: container.querySelector('.protection-enabled'),
+    smartVerification: container.querySelector('.smart-verification'),
+    paintPattern: container.querySelector('.paint-pattern'),
+    showOverlay: container.querySelector('.show-overlay'),
+    batchValue: container.querySelector('.batch-value'),
+    cooldownValue: container.querySelector('.cooldown-value'),
     initBtn: container.querySelector('.init-btn'),
     uploadBtn: container.querySelector('.upload-btn'),
     loadProgressBtn: container.querySelector('.load-progress-btn'),
+    exportGuardBtn: container.querySelector('.export-guard-btn'),
     resizeBtn: container.querySelector('.resize-btn'),
     selectPosBtn: container.querySelector('.select-pos-btn'),
     startBtn: container.querySelector('.start-btn'),
@@ -585,13 +684,53 @@ export async function createImageUI({ texts, ...handlers }) {
     }
   });
   
+  // Event listeners para configuración
+  elements.pixelsPerBatch.addEventListener('change', () => {
+    const value = parseInt(elements.pixelsPerBatch.value) || 20;
+    elements.batchValue.textContent = value;
+    
+    // Actualizar configuración si hay handlers
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ pixelsPerBatch: value });
+    }
+  });
+  
+  elements.useAllCharges.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ useAllCharges: elements.useAllCharges.checked });
+    }
+  });
+  
+  elements.protectionEnabled.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ protectionEnabled: elements.protectionEnabled.checked });
+    }
+  });
+  
+  elements.smartVerification.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ smartVerification: elements.smartVerification.checked });
+    }
+  });
+  
+  elements.paintPattern.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ paintPattern: elements.paintPattern.value });
+    }
+  });
+  
+  // Función para habilitar botones después de inicialización exitosa
+  function enableButtonsAfterInit() {
+    elements.uploadBtn.disabled = false;
+    elements.loadProgressBtn.disabled = false;
+  }
+  
   elements.initBtn.addEventListener('click', async () => {
     elements.initBtn.disabled = true;
     if (handlers.onInitBot) {
       const success = await handlers.onInitBot();
       if (success) {
-        elements.uploadBtn.disabled = false;
-        elements.loadProgressBtn.disabled = false;
+        enableButtonsAfterInit();
       }
     }
     elements.initBtn.disabled = false;
@@ -641,6 +780,14 @@ export async function createImageUI({ texts, ...handlers }) {
       }
       elements.selectPosBtn.disabled = false;
     }
+  });
+
+  // Checkbox mostrar overlay
+  elements.showOverlay.addEventListener('change', () => {
+    if (!window.__WPA_PLAN_OVERLAY__) return;
+    window.__WPA_PLAN_OVERLAY__.injectStyles();
+    const isEnabled = elements.showOverlay.checked;
+    window.__WPA_PLAN_OVERLAY__.setEnabled(isEnabled);
   });
   
   elements.startBtn.addEventListener('click', async () => {
@@ -785,7 +932,7 @@ export async function createImageUI({ texts, ...handlers }) {
       if (userInfo.username) {
         statsHTML += `
           <div class="stat-item">
-            <div class="stat-label">👤 Usuario</div>
+            <div class="stat-label">👤 ${texts.userName}</div>
             <div>${userInfo.username}</div>
           </div>
         `;
@@ -810,9 +957,65 @@ export async function createImageUI({ texts, ...handlers }) {
           </div>
         `;
       }
+      
+      // Mostrar tiempo estimado si está disponible
+      if (userInfo.estimatedTime !== undefined && userInfo.estimatedTime > 0) {
+        const hours = Math.floor(userInfo.estimatedTime / 3600);
+        const minutes = Math.floor((userInfo.estimatedTime % 3600) / 60);
+        const timeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        
+        statsHTML += `
+          <div class="stat-item">
+            <div class="stat-label">⏰ ${texts.timeRemaining}</div>
+            <div>${timeStr}</div>
+          </div>
+        `;
+      }
     }
     
     elements.statsArea.innerHTML = statsHTML;
+  }
+  
+  function updateCooldownDisplay(seconds) {
+    if (seconds > 0) {
+      const minutes = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      const timeStr = minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
+      elements.cooldownValue.textContent = timeStr;
+    } else {
+      elements.cooldownValue.textContent = '--';
+    }
+  }
+  
+  // Nueva función para actualizar solo el mensaje de cooldown sin parpadeo
+  function updateCooldownMessage(message) {
+    if (message && message.includes('⏳')) {
+      // Es un mensaje de cooldown, actualizar solo el texto sin recargar todo
+      elements.status.textContent = message;
+      elements.status.className = 'status status-info';
+      // No hacer animación para evitar parpadeo
+    } else if (message) {
+      // Mensaje normal, usar setStatus completo
+      setStatus(message, 'info');
+    }
+  }
+  
+  // Función para controlar el estado del botón de inicialización
+  function setInitialized(isInitialized) {
+    if (isInitialized) {
+      elements.initBtn.disabled = true;
+      elements.initBtn.style.opacity = '0.6';
+      elements.initBtn.innerHTML = `✅ <span>${texts.initBot} - Completado</span>`;
+    } else {
+      elements.initBtn.disabled = false;
+      elements.initBtn.style.opacity = '1';
+      elements.initBtn.innerHTML = `🤖 <span>${texts.initBot}</span>`;
+    }
+  }
+  
+  // Función para ocultar/mostrar el botón de inicialización
+  function setInitButtonVisible(visible) {
+    elements.initBtn.style.display = visible ? 'flex' : 'none';
   }
   
   function destroy() {
@@ -824,6 +1027,11 @@ export async function createImageUI({ texts, ...handlers }) {
   return {
     setStatus,
     updateProgress,
+    updateCooldownDisplay,
+    updateCooldownMessage,
+    setInitialized,
+    setInitButtonVisible,
+    enableButtonsAfterInit,
     showResizeDialog,
     closeResizeDialog,
     destroy

@@ -2,9 +2,14 @@ import { log } from "../core/logger.js";
 import { createLauncherUI } from "./ui.js";
 import { getSession, checkBackendHealth, downloadAndExecuteBot } from "./api.js";
 import { launcherState, LAUNCHER_CONFIG } from "./config.js";
+import { initializeLanguage } from "../locales/index.js";
+import { createLanguageSelector } from "../core/language-selector.js";
 
 export async function runLauncher() {
   log('🚀 Iniciando WPlace Auto-Launcher (versión modular)');
+  
+  // Inicializar sistema de idiomas
+  initializeLanguage();
   
   // Verificar si ya está ejecutándose
   if (window.__wplaceBot?.launcherRunning) {
@@ -16,10 +21,18 @@ export async function runLauncher() {
   window.__wplaceBot = { ...window.__wplaceBot, launcherRunning: true };
   
   try {
+    // Variable para el selector de idioma
+    let languageSelector = null;
+    
     // Crear interfaz de usuario
     const ui = createLauncherUI({
       onSelectBot: (botType) => {
         log(`🎯 Bot seleccionado: ${botType}`);
+        // Ocultar el selector de idioma cuando se selecciona un bot
+        if (languageSelector) {
+          languageSelector.unmount();
+          languageSelector = null;
+        }
       },
       
       onLaunch: async (botType) => {
@@ -29,9 +42,36 @@ export async function runLauncher() {
       
       onClose: () => {
         log('👋 Cerrando launcher');
+        // Asegurar que el selector se desmonte al cerrar
+        if (languageSelector) {
+          languageSelector.unmount();
+          languageSelector = null;
+        }
         window.__wplaceBot.launcherRunning = false;
       }
     });
+    
+    // Crear selector de idioma después de la UI
+    languageSelector = createLanguageSelector({
+      position: 'top-left', // Esquina opuesta al launcher
+      showFlags: true,
+      onLanguageChange: (newLanguage) => {
+        log(`🌍 Idioma cambiado a: ${newLanguage} desde el launcher`);
+        
+        // Actualizar textos de la UI del launcher
+        ui.updateTexts();
+        
+        // Emitir evento personalizado para notificar a otros módulos
+        if (typeof window !== 'undefined' && window.CustomEvent) {
+          window.dispatchEvent(new window.CustomEvent('launcherLanguageChanged', {
+            detail: { language: newLanguage }
+          }));
+        }
+      }
+    });
+    
+    // Montar el selector
+    languageSelector.mount();
     
     // Cargar información inicial
     log('📊 Cargando información inicial...');
@@ -64,6 +104,9 @@ export async function runLauncher() {
     // Cleanup cuando se cierre la página
     window.addEventListener('beforeunload', () => {
       ui.cleanup();
+      if (languageSelector) {
+        languageSelector.unmount();
+      }
       window.__wplaceBot.launcherRunning = false;
     });
     

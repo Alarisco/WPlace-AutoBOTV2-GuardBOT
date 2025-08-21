@@ -1,1 +1,24 @@
+# Sistema operativo
 .DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Dependencias
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporal
+*.tmp
+*.temp
+
+# Variables de entorno
+.env
+.env.local

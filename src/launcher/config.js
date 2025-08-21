@@ -1,3 +1,5 @@
+import { getSection } from '../locales/index.js';
+
 export const LAUNCHER_CONFIG = {
   RAW_BASE: 'https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main',
   REFRESH_INTERVAL: 60000, // 1 minuto
@@ -12,32 +14,31 @@ export const LAUNCHER_CONFIG = {
   }
 };
 
+// Esta función ahora retorna las traducciones dinámicamente
+export function getLauncherTexts() {
+  return getSection('launcher');
+}
+
+// Función para obtener textos con parámetros
+export function getLauncherText(key, params = {}) {
+  const texts = getLauncherTexts();
+  let text = texts[key] || key;
+  
+  // Interpolar parámetros
+  if (params && Object.keys(params).length > 0) {
+    text = text.replace(/\{(\w+)\}/g, (match, paramKey) => {
+      return params[paramKey] !== undefined ? params[paramKey] : match;
+    });
+  }
+  
+  return text;
+}
+
+// Mantener LAUNCHER_TEXTS por compatibilidad pero marcarlo como deprecated
 export const LAUNCHER_TEXTS = {
-  es: {
-    title: 'WPlace AutoBOT',
-    autoFarm: '🌾 Auto-Farm',
-    autoImage: '🎨 Auto-Image',
-    selection: 'Selección',
-    user: 'Usuario',
-    charges: 'Cargas',
-    backend: 'Backend',
-    database: 'Database',
-    uptime: 'Uptime',
-    close: 'Cerrar',
-    launch: 'Lanzar',
-    loading: 'Cargando…',
-    executing: 'Ejecutando…',
-    downloading: 'Descargando script…',
-    chooseBot: 'Elige un bot y presiona Lanzar',
-    readyToLaunch: 'Listo para lanzar',
-    loadError: 'Error al cargar',
-    loadErrorMsg: 'No se pudo cargar el bot seleccionado. Revisa tu conexión o inténtalo de nuevo.',
-    checking: '🔄 Verificando...',
-    online: '🟢 Online',
-    offline: '🔴 Offline',
-    ok: '🟢 OK',
-    error: '🔴 Error',
-    unknown: '-'
+  get es() {
+    console.warn('LAUNCHER_TEXTS.es está deprecated. Usa getLauncherTexts() en su lugar.');
+    return getLauncherTexts();
   }
 };
 

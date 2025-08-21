@@ -1,9 +1,50 @@
 import { build } from "esbuild";
 import { copyFileSync } from "fs";
 
+// Función para mostrar ayuda
+function showHelp() {
+  console.log(`
+🤖 WPlace AutoBOT Build Tool
+
+Uso: node build.mjs [opciones]
+
+Opciones:
+  --dev          Compilación en modo desarrollo (con sourcemaps)
+  --watch        Modo watch para recompilación automática
+  --farm         Compilar solo Auto-Farm.js
+  --image        Compilar solo Auto-Image.js  
+  --launcher     Compilar solo Auto-Launcher.js
+  --guard        Compilar solo Auto-Guard.js
+  --help         Mostrar esta ayuda
+
+Ejemplos:
+  node build.mjs                    # Compilar todos los bots
+  node build.mjs --dev              # Compilar todos en modo desarrollo
+  node build.mjs --farm --dev       # Compilar solo farm en modo desarrollo
+  node build.mjs --image --guard    # Compilar solo image y guard
+  node build.mjs --watch            # Modo watch para todos los bots
+`);
+}
+
 const args = new Set(process.argv.slice(2));
+
+// Mostrar ayuda si se solicita
+if (args.has("--help") || args.has("-h")) {
+  showHelp();
+  process.exit(0);
+}
+
 const dev = args.has("--dev");
 const watch = args.has("--watch");
+
+// Opciones para compilar bots específicos
+const buildFarm = args.has("--farm");
+const buildImage = args.has("--image");
+const buildLauncher = args.has("--launcher");
+const buildGuard = args.has("--guard");
+
+// Si no se especifica ningún bot, compilar todos
+const buildAll = !buildFarm && !buildImage && !buildLauncher && !buildGuard;
 
 // Por ahora, usar archivos originales hasta completar la migración
 const useOriginals = false; // ✅ Migración del farm completada
@@ -42,32 +83,49 @@ const common = {
   }
 };
 
-const jobs = [
-  { in: "src/entries/farm.js",     out: "Auto-Farm.js" },
-  { in: "src/entries/image.js",    out: "Auto-Image.js" },
-  { in: "src/entries/launcher.js", out: "Auto-Launcher.js" }
-].map(({ in: entry, out: outfile }) => {
-  const buildOptions = {
-    entryPoints: [entry],
-    outfile,
-    ...common,
-    minify: !dev,
-    sourcemap: dev ? "inline" : false
-  };
-  
-  if (watch) {
-    buildOptions.watch = {
-      onRebuild(error) {
-        if (error) console.error(`⛔ Rebuild failed for ${outfile}`, error);
-        else console.log(`✅ Rebuilt ${outfile}`);
-      }
-    };
-  }
-  
-  return build(buildOptions);
-});
+(async () => {
+  // Definir todos los bots disponibles
+  const allBots = [
+    { in: "src/entries/farm.js",     out: "Auto-Farm.js",     flag: buildFarm },
+    { in: "src/entries/image.js",    out: "Auto-Image.js",    flag: buildImage },
+    { in: "src/entries/launcher.js", out: "Auto-Launcher.js", flag: buildLauncher },
+    { in: "src/entries/guard.js",    out: "Auto-Guard.js",    flag: buildGuard }
+  ];
 
-await Promise.all(jobs);
-console.log(
-  `✨ Build ${dev ? "DEV" : "PROD"} listo. Archivos en raíz: Auto-Farm.js, Auto-Image.js, Auto-Launcher.js`
-);
+  // Filtrar qué bots compilar
+  const botsToCompile = buildAll ? allBots : allBots.filter(bot => bot.flag);
+  
+  if (botsToCompile.length === 0) {
+    console.log("❌ No se especificó ningún bot válido para compilar.");
+    console.log("💡 Usa: --farm, --image, --launcher, --guard o ninguna opción para compilar todos");
+    process.exit(1);
+  }
+
+  console.log(`🚀 Compilando: ${botsToCompile.map(bot => bot.out).join(', ')}`);
+
+  const jobs = botsToCompile.map(({ in: entry, out: outfile }) => {
+    const buildOptions = {
+      entryPoints: [entry],
+      outfile,
+      ...common,
+      minify: !dev,
+      sourcemap: dev ? "inline" : false
+    };
+    
+    if (watch) {
+      buildOptions.watch = {
+        onRebuild(error) {
+          if (error) console.error(`⛔ Rebuild failed for ${outfile}`, error);
+          else console.log(`✅ Rebuilt ${outfile}`);
+        }
+      };
+    }
+    
+    return build(buildOptions);
+  });
+
+  await Promise.all(jobs);
+  
+  const compiledFiles = botsToCompile.map(bot => bot.out).join(', ');
+  console.log(`✨ Build ${dev ? "DEV" : "PROD"} listo. Archivos compilados: ${compiledFiles}`);
+})();

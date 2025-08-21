@@ -88,9 +88,16 @@ export class CoordinateCapture {
         }
       }
 
-      // Intentar extraer de la URL
+      // Extraer tile desde la URL si está presente
+      const urlStr = url.toString();
+      const tileMatch = urlStr.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);
+      if (tileMatch) {
+        tileX = parseInt(tileMatch[1]);
+        tileY = parseInt(tileMatch[2]);
+      }
+
+      // Intentar extraer coords de la URL si no vinieron en el body
       if (!coords) {
-        const urlStr = url.toString();
         const urlCoordMatch = urlStr.match(/[?&](?:x|coords?)=([^&]+)/);
         if (urlCoordMatch) {
           const coordStr = decodeURIComponent(urlCoordMatch[1]);
@@ -107,28 +114,39 @@ export class CoordinateCapture {
 
       // Si encontramos coordenadas, calcular el tile
       if (coords && coords.length >= 2) {
-        const globalX = coords[0];
-        const globalY = coords[1];
-        
-        // Calcular tile (cada tile es de 3000x3000)
-        tileX = Math.floor(globalX / 3000);
-        tileY = Math.floor(globalY / 3000);
+        let globalX, globalY, localX, localY;
 
-        log(`🎯 Coordenadas capturadas: global(${globalX},${globalY}) -> tile(${tileX},${tileY})`);
+        if (Number.isInteger(tileX) && Number.isInteger(tileY)) {
+          // Tratamos coords como locales al tile extraído de la URL
+          localX = coords[0];
+          localY = coords[1];
+          globalX = tileX * 3000 + localX;
+          globalY = tileY * 3000 + localY;
+          log(`🎯 Coordenadas capturadas (locales): tile(${tileX},${tileY}) local(${localX},${localY}) -> global(${globalX},${globalY})`);
+        } else {
+          // Sin tile en URL, interpretamos coords como globales y derivamos tile
+          globalX = coords[0];
+          globalY = coords[1];
+          tileX = Math.floor(globalX / 3000);
+          tileY = Math.floor(globalY / 3000);
+          localX = globalX % 3000;
+          localY = globalY % 3000;
+          log(`🎯 Coordenadas capturadas (globales): global(${globalX},${globalY}) -> tile(${tileX},${tileY}) local(${localX},${localY})`);
+        }
 
         // Verificar que la respuesta sea exitosa
         if (response.ok) {
           this.disable();
           
           if (this.callback) {
-            this.callback({ 
-              success: true, 
-              tileX, 
-              tileY, 
-              globalX, 
+            this.callback({
+              success: true,
+              tileX,
+              tileY,
+              globalX,
               globalY,
-              localX: globalX % 3000,
-              localY: globalY % 3000
+              localX,
+              localY
             });
           }
         } else {

@@ -1,3 +1,5 @@
+import { getSection } from '../locales/index.js';
+
 export const IMAGE_DEFAULTS = {
   SITEKEY: '0x4AAAAAABpqJe8FO0N84q0F',
   COOLDOWN_DEFAULT: 31000,
@@ -19,57 +21,31 @@ export const IMAGE_DEFAULTS = {
   }
 };
 
+// Esta función ahora retorna las traducciones dinámicamente
+export function getImageTexts() {
+  return getSection('image');
+}
+
+// Función para obtener textos con parámetros
+export function getImageText(key, params = {}) {
+  const texts = getImageTexts();
+  let text = texts[key] || key;
+  
+  // Interpolar parámetros
+  if (params && Object.keys(params).length > 0) {
+    text = text.replace(/\{(\w+)\}/g, (match, paramKey) => {
+      return params[paramKey] !== undefined ? params[paramKey] : match;
+    });
+  }
+  
+  return text;
+}
+
+// Mantener TEXTS por compatibilidad pero marcarlo como deprecated
 export const TEXTS = {
-  es: {
-    title: "WPlace Auto-Image",
-    initBot: "Iniciar Auto-BOT",
-    uploadImage: "Subir Imagen",
-    resizeImage: "Redimensionar Imagen",
-    selectPosition: "Seleccionar Posición",
-    startPainting: "Iniciar Pintura",
-    stopPainting: "Detener Pintura",
-    saveProgress: "Guardar Progreso",
-    loadProgress: "Cargar Progreso",
-    checkingColors: "🔍 Verificando colores disponibles...",
-    noColorsFound: "❌ ¡Abre la paleta de colores en el sitio e inténtalo de nuevo!",
-    colorsFound: "✅ {count} colores disponibles encontrados",
-    loadingImage: "🖼️ Cargando imagen...",
-    imageLoaded: "✅ Imagen cargada con {count} píxeles válidos",
-    imageError: "❌ Error al cargar la imagen",
-    selectPositionAlert: "¡Pinta el primer píxel en la ubicación donde quieres que comience el arte!",
-    waitingPosition: "👆 Esperando que pintes el píxel de referencia...",
-    positionSet: "✅ ¡Posición establecida con éxito!",
-    positionTimeout: "❌ Tiempo agotado para seleccionar posición",
-    startPaintingMsg: "🎨 Iniciando pintura...",
-    paintingProgress: "🧱 Progreso: {painted}/{total} píxeles...",
-    noCharges: "⌛ Sin cargas. Esperando {time}...",
-    paintingStopped: "⏹️ Pintura detenida por el usuario",
-    paintingComplete: "✅ ¡Pintura completada! {count} píxeles pintados.",
-    paintingError: "❌ Error durante la pintura",
-    missingRequirements: "❌ Carga una imagen y selecciona una posición primero",
-    progress: "Progreso",
-    pixels: "Píxeles",
-    charges: "Cargas",
-    estimatedTime: "Tiempo estimado",
-    initMessage: "Haz clic en 'Iniciar Auto-BOT' para comenzar",
-    waitingInit: "Esperando inicialización...",
-    resizeSuccess: "✅ Imagen redimensionada a {width}x{height}",
-    paintingPaused: "⏸️ Pintura pausada en la posición X: {x}, Y: {y}",
-    pixelsPerBatch: "Píxeles por lote",
-    cooldownWaiting: "⏳ Esperando {time} para continuar...",
-    progressSaved: "✅ Progreso guardado como {filename}",
-    progressLoaded: "✅ Progreso cargado: {painted}/{total} píxeles pintados",
-    progressLoadError: "❌ Error al cargar progreso: {error}",
-    progressSaveError: "❌ Error al guardar progreso: {error}",
-    confirmSaveProgress: "¿Deseas guardar el progreso actual antes de detener?",
-    saveProgressTitle: "Guardar Progreso",
-    discardProgress: "Descartar",
-    cancel: "Cancelar",
-    minimize: "Minimizar",
-    width: "Ancho",
-    height: "Alto", 
-    keepAspect: "Mantener proporción",
-    apply: "Aplicar"
+  get es() {
+    console.warn('TEXTS.es está deprecated. Usa getImageTexts() en su lugar.');
+    return getImageTexts();
   }
 };
 
@@ -87,6 +63,8 @@ export const imageState = {
   colorsChecked: false,
   startPosition: null,
   selectingPosition: false,
+  positionTimeoutId: null, // Para manejar timeout de selección
+  cleanupObserver: null, // Para limpiar observers
   region: null,
   minimized: false,
   lastPosition: { x: 0, y: 0 },
@@ -95,10 +73,21 @@ export const imageState = {
   tileX: null,
   tileY: null,
   pixelsPerBatch: IMAGE_DEFAULTS.PIXELS_PER_BATCH,
+  useAllChargesFirst: true, // Usar todas las cargas en la primera pasada
+  isFirstBatch: true, // Controlar si es la primera pasada
+  maxCharges: 9999, // Cargas máximas del usuario
+  nextBatchCooldown: 0, // Tiempo para el siguiente lote
   inCooldown: false,
   cooldownEndTime: 0,
   remainingPixels: [],
   lastChargeUpdate: 0,
   chargeDecimalPart: 0,
-  originalImageName: null
+  originalImageName: null,
+  retryCount: 0, // Contador de reintentos para estadísticas
+  // Nuevas opciones para protección y patrones
+  protectionEnabled: true, // Habilitar protección del dibujo
+  smartVerification: true, // Verificación inteligente de píxeles (omitir píxeles ya correctos)
+  paintPattern: 'linear_start', // Patrón de pintado predeterminado
+  drawnPixelsMap: new Map(), // Mapa de píxeles ya dibujados para protección
+  lastProtectionCheck: 0 // Timestamp de última verificación de protección
 };

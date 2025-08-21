@@ -78,7 +78,7 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
   const body = JSON.stringify({ pixels, token: turnstileToken });
   const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
     body,
     credentials: "include"
   });
@@ -96,6 +96,25 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
     // Response not JSON
   }
   throw new Error(`paint failed: ${msg}`);
+}
+
+// Versión 'safe' que no arroja excepciones y retorna status/json
+export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
+  try {
+    const body = JSON.stringify({ pixels, token: turnstileToken });
+    const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body,
+      credentials: "include"
+    });
+  let json = {};
+  // If response is not JSON, ignore parse error
+  try { json = await r.json(); } catch { /* ignore */ }
+    return { status: r.status, json, success: r.ok };
+  } catch (error) {
+    return { status: 0, json: { error: error.message }, success: false };
+  }
 }
 
 // Post píxel para farm (versión corregida con formato original)

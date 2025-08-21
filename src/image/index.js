@@ -1,26 +1,62 @@
 import { log } from "../core/logger.js";
-import { imageState, IMAGE_DEFAULTS, TEXTS } from "./config.js";
-import { ImageProcessor, detectAvailableColors } from "./processor.js";
+import { imageState, IMAGE_DEFAULTS } from "./config.js";
+import { BlueMarblelImageProcessor, detectAvailableColors } from "./blue-marble-processor.js";
 import { processImage, stopPainting } from "./painter.js";
 import { saveProgress, loadProgress, clearProgress, getProgressInfo } from "./save-load.js";
 import { createImageUI, showConfirmDialog } from "./ui.js";
 import { getSession } from "../core/wplace-api.js";
+import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
+import { isPaletteOpen, autoClickPaintButton } from "../core/dom.js";
+import "./plan-overlay-blue-marble.js";
 
 export async function runImage() {
+  console.log('[WPA-Image] 🚀 runImage() iniciado');
   log('🚀 Iniciando WPlace Auto-Image (versión modular)');
+  
+  // Inicializar sistema de idiomas
+  console.log('[WPA-Image] 🌍 Inicializando sistema de idiomas');
+  initializeLanguage();
+  console.log('[WPA-Image] ✅ Sistema de idiomas inicializado');
   
   // Asegurarse que el estado global existe
   window.__wplaceBot = { ...window.__wplaceBot, imageRunning: true };
+  console.log('[WPA-Image] 🔧 Estado global actualizado');
 
   let currentUserInfo = null; // Variable global para información del usuario
+  let originalFetch = window.fetch; // Guardar fetch original globalmente
+  
+  // Función para restaurar fetch original de forma segura
+  const restoreFetch = () => {
+    // FIX: No restaurar fetch si el overlay está activo para evitar cancelar su intercepción
+    const overlayActive = window.__WPA_PLAN_OVERLAY__ && window.__WPA_PLAN_OVERLAY__.state && window.__WPA_PLAN_OVERLAY__.state.enabled;
+    
+    if (window.fetch !== originalFetch && !overlayActive) {
+      window.fetch = originalFetch;
+      log('🔄 Fetch original restaurado');
+    } else if (overlayActive) {
+      log('🔄 Fetch NO restaurado - overlay activo');
+    }
+    
+    if (imageState.positionTimeoutId) {
+      clearTimeout(imageState.positionTimeoutId);
+      imageState.positionTimeoutId = null;
+    }
+    if (imageState.cleanupObserver) {
+      imageState.cleanupObserver();
+      imageState.cleanupObserver = null;
+    }
+    imageState.selectingPosition = false;
+  };
 
   try {
     // Inicializar configuración
     const config = { ...IMAGE_DEFAULTS };
     
-    // Detectar idioma
-    const language = detectLanguage();
-    imageState.language = language;
+    // Obtener textos en el idioma actual
+    const texts = getSection('image');
+    
+    // Actualizar estado del idioma
+    imageState.language = getCurrentLanguage();
     
     // Verificar sitekey
     if (!config.SITEKEY) {
@@ -33,79 +69,201 @@ export async function runImage() {
       }
     }
 
+    // Función para auto-inicio del bot
+    async function tryAutoInit() {
+      log('🤖 Intentando auto-inicio...');
+      
+      // Verificar si la paleta ya está abierta
+      if (isPaletteOpen()) {
+        log('🎨 Paleta de colores ya está abierta');
+        return true;
+      }
+      
+      log('🔍 Paleta no encontrada, iniciando auto-click del botón Paint...');
+      
+      // Usar la nueva función de auto-click que hace doble clic automáticamente
+      const success = await autoClickPaintButton(3, true);
+      
+      if (success) {
+        log('✅ Auto-click exitoso, paleta abierta');
+        return true;
+      } else {
+        log('❌ Auto-click falló, requerirá inicio manual');
+        return false;
+      }
+    }
+
+    // Función para inicializar el bot (usada tanto para auto-inicio como inicio manual)
+    async function initializeBot(isAutoInit = false) {
+      log('🤖 Inicializando Auto-Image...');
+      
+      // Verificar colores disponibles
+      ui.setStatus(t('image.checkingColors'), 'info');
+      const colors = detectAvailableColors();
+      
+      if (colors.length === 0) {
+        ui.setStatus(t('image.noColorsFound'), 'error');
+        return false;
+      }
+      
+      // Obtener información del usuario
+      const sessionInfo = await getSession();
+      let userInfo = null;
+      if (sessionInfo.success && sessionInfo.data.user) {
+        userInfo = {
+          username: sessionInfo.data.user.name || 'Anónimo',
+          charges: sessionInfo.data.charges,
+          maxCharges: sessionInfo.data.maxCharges,
+          pixels: sessionInfo.data.user.pixelsPainted || 0  // Usar pixelsPainted en lugar de pixels
+        };
+        currentUserInfo = userInfo; // Actualizar variable global
+        imageState.currentCharges = sessionInfo.data.charges;
+        imageState.maxCharges = sessionInfo.data.maxCharges || 9999; // Guardar maxCharges en state
+        log(`👤 Usuario conectado: ${sessionInfo.data.user.name || 'Anónimo'} - Cargas: ${userInfo.charges}/${userInfo.maxCharges} - Píxeles: ${userInfo.pixels}`);
+      } else {
+        log('⚠️ No se pudo obtener información del usuario');
+      }
+      
+      imageState.availableColors = colors;
+      imageState.colorsChecked = true;
+      
+      ui.setStatus(t('image.colorsFound', { count: colors.length }), 'success');
+      ui.updateProgress(0, 0, userInfo);
+      
+      // Solo mostrar log una vez (evitar duplicado en auto-inicio)
+      if (!isAutoInit) {
+        log(`✅ ${colors.length} colores disponibles detectados`);
+      }
+      
+      // Marcar como inicializado exitosamente para deshabilitar el botón
+      ui.setInitialized(true);
+      
+      // Habilitar botones de upload y load progress
+      ui.enableButtonsAfterInit();
+
+      // Inicializar plan overlay si ya hay cola previa (p.ej. reanudación)
+      try {
+    // Removed references to __WPA_PLAN_OVERLAY__
+      } catch {
+        // noop
+      }
+      
+      return true;
+    }
+
     // Crear interfaz de usuario
     const ui = await createImageUI({
-      texts: TEXTS[language],
-      onInitBot: async () => {
-        log('🤖 Inicializando Auto-Image...');
-        
-        // Verificar colores disponibles
-        ui.setStatus(TEXTS[language].checkingColors, 'info');
-        const colors = detectAvailableColors();
-        
-        if (colors.length === 0) {
-          ui.setStatus(TEXTS[language].noColorsFound, 'error');
-          return false;
+      texts,
+      
+      onConfigChange: (config) => {
+        // Manejar cambios de configuración
+        if (config.pixelsPerBatch !== undefined) {
+          imageState.pixelsPerBatch = config.pixelsPerBatch;
         }
-        
-        // Obtener información del usuario
-        const sessionInfo = await getSession();
-        let userInfo = null;
-        if (sessionInfo.success && sessionInfo.data.user) {
-          userInfo = {
-            username: sessionInfo.data.user.name || 'Anónimo',
-            charges: sessionInfo.data.charges,
-            maxCharges: sessionInfo.data.maxCharges,
-            pixels: sessionInfo.data.user.pixelsPainted || 0  // Usar pixelsPainted en lugar de pixels
-          };
-          currentUserInfo = userInfo; // Actualizar variable global
-          imageState.currentCharges = sessionInfo.data.charges;
-          log(`👤 Usuario conectado: ${sessionInfo.data.user.name || 'Anónimo'} - Cargas: ${userInfo.charges}/${userInfo.maxCharges} - Píxeles: ${userInfo.pixels}`);
-        } else {
-          log('⚠️ No se pudo obtener información del usuario');
+        if (config.useAllCharges !== undefined) {
+          imageState.useAllChargesFirst = config.useAllCharges;
         }
-        
-        imageState.availableColors = colors;
-        imageState.colorsChecked = true;
-        
-        ui.setStatus(TEXTS[language].colorsFound.replace('{count}', colors.length), 'success');
-        ui.updateProgress(0, 0, userInfo);
-        log(`✅ ${colors.length} colores disponibles detectados`);
-        
-        return true;
+        if (config.protectionEnabled !== undefined) {
+          imageState.protectionEnabled = config.protectionEnabled;
+          log(`🛡️ Protección del dibujo: ${config.protectionEnabled ? 'habilitada' : 'deshabilitada'}`);
+        }
+        if (config.smartVerification !== undefined) {
+          imageState.smartVerification = config.smartVerification;
+          log(`💡 Verificación inteligente: ${config.smartVerification ? 'habilitada' : 'deshabilitada'}`);
+        }
+        if (config.paintPattern !== undefined) {
+          imageState.paintPattern = config.paintPattern;
+          log(`🎨 Patrón de pintado cambiado a: ${config.paintPattern}`);
+          
+          // Si hay píxeles restantes, reaplicar el patrón
+          if (imageState.remainingPixels && imageState.remainingPixels.length > 0) {
+            import('./patterns.js').then(({ applyPaintPattern }) => {
+              imageState.remainingPixels = applyPaintPattern(
+                imageState.remainingPixels, 
+                config.paintPattern, 
+                imageState.imageData
+              );
+              
+              // Actualizar overlay si está activo
+              try {
+                if (window.__WPA_PLAN_OVERLAY__) {
+                  window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
+                    enabled: true,
+                    nextBatchCount: imageState.pixelsPerBatch
+                  });
+                  log(`✅ Overlay actualizado con nuevo patrón: ${config.paintPattern}`);
+                }
+              } catch (e) {
+                log('⚠️ Error actualizando overlay con nuevo patrón:', e);
+              }
+            }).catch(error => {
+              log('❌ Error aplicando nuevo patrón:', error);
+            });
+          }
+        }
+        log(`Configuración actualizada:`, config);
       },
+      
+      onInitBot: initializeBot,
       
       onUploadImage: async (file) => {
         try {
-          ui.setStatus(TEXTS[language].loadingImage, 'info');
+          ui.setStatus(t('image.loadingImage'), 'info');
           
           const imageUrl = window.URL.createObjectURL(file);
-          const processor = new ImageProcessor(imageUrl);
+          const processor = new BlueMarblelImageProcessor(imageUrl);
           processor.originalName = file.name;
           
           await processor.load();
           
-          // Procesar imagen con colores disponibles
-          const processedData = processor.processImage(imageState.availableColors, config);
+          // Inicializar paleta de colores Blue Marble
+          const availableColors = processor.initializeColorPalette();
+          imageState.availableColors = availableColors;
+          
+          // Analizar píxeles de la imagen
+          const analysisResult = await processor.analyzePixels();
+          
+          // Establecer coordenadas base (se actualizarán al seleccionar posición)
+          processor.setCoords(0, 0, 0, 0);
+          
+          // Obtener datos de imagen procesados
+          const processedData = processor.getImageData();
           
           imageState.imageData = processedData;
           imageState.imageData.processor = processor; // Guardar referencia al processor para resize
-          imageState.totalPixels = processedData.validPixelCount;
+          imageState.totalPixels = analysisResult.requiredPixels;
           imageState.paintedPixels = 0;
           imageState.originalImageName = file.name;
           imageState.imageLoaded = true;
           
-          ui.setStatus(TEXTS[language].imageLoaded.replace('{count}', processedData.validPixelCount), 'success');
-          ui.updateProgress(0, processedData.validPixelCount, currentUserInfo);
+          ui.setStatus(t('image.imageLoaded', { count: analysisResult.requiredPixels }), 'success');
+          ui.updateProgress(0, analysisResult.requiredPixels, currentUserInfo);
           
-          log(`✅ Imagen cargada: ${processedData.width}x${processedData.height}, ${processedData.validPixelCount} píxeles válidos`);
+          log(`✅ [BLUE MARBLE] Imagen cargada: ${processedData.width}x${processedData.height}, ${analysisResult.requiredPixels} píxeles válidos`);
+          log(`✅ [BLUE MARBLE] Análisis: ${analysisResult.uniqueColors} colores únicos, ${analysisResult.defacePixels} píxeles #deface`);
           
-          // Limpiar URL temporal
+          // Limpiar URL temporal (el overlay usa un dataURL separado)
           window.URL.revokeObjectURL(imageUrl);
+
+          // Activar overlay de plan automáticamente cuando se carga imagen
+          try {
+            if (window.__WPA_PLAN_OVERLAY__) {
+              window.__WPA_PLAN_OVERLAY__.injectStyles();
+              window.__WPA_PLAN_OVERLAY__.setEnabled(true); // Activar automáticamente
+              // Configurar ancla base con la posición del tile (será ajustada al seleccionar posición)
+              window.__WPA_PLAN_OVERLAY__.setPlan([], {
+                enabled: true,
+                nextBatchCount: 0
+              });
+              log('✅ Plan overlay activado automáticamente al cargar imagen');
+            }
+          } catch (e) {
+            log('⚠️ Error activando plan overlay:', e);
+          }
           
           return true;
         } catch (error) {
-          ui.setStatus(TEXTS[language].imageError, 'error');
+          ui.setStatus(t('image.imageError'), 'error');
           log('❌ Error cargando imagen:', error);
           return false;
         }
@@ -113,61 +271,213 @@ export async function runImage() {
       
       onSelectPosition: async () => {
         return new Promise((resolve) => {
-          ui.setStatus(TEXTS[language].selectPositionAlert, 'info');
-          ui.setStatus(TEXTS[language].waitingPosition, 'info');
+          ui.setStatus(t('image.selectPositionAlert'), 'info');
+          ui.setStatus(t('image.waitingPosition'), 'info');
           
           imageState.selectingPosition = true;
+          let positionCaptured = false;
           
-          // Interceptar requests para capturar posición
-          const originalFetch = window.fetch;
-          window.fetch = async (url, options) => {
-            if (imageState.selectingPosition && url.includes('/s0/paint')) {
-              try {
-                const response = await originalFetch(url, options);
+          // Método 1: Interceptar fetch (método original mejorado)
+          const setupFetchInterception = () => {
+            window.fetch = async (url, options) => {
+              // Solo interceptar requests específicos de pintado cuando estamos seleccionando posición
+              if (imageState.selectingPosition && 
+                  !positionCaptured &&
+                  typeof url === 'string' && 
+                  url.includes('/s0/pixel/') && 
+                  options && 
+                  options.method === 'POST') {
                 
-                if (response.ok && options.body) {
-                  const bodyData = JSON.parse(options.body);
-                  if (bodyData.coords && bodyData.coords.length >= 2) {
-                    const localX = bodyData.coords[0];
-                    const localY = bodyData.coords[1];
-                    
-                    // Extraer tile de la URL
-                    const tileMatch = url.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);
-                    if (tileMatch) {
-                      imageState.tileX = parseInt(tileMatch[1]);
-                      imageState.tileY = parseInt(tileMatch[2]);
+                try {
+                  log(`🎯 Interceptando request de pintado: ${url}`);
+                  
+                  const response = await originalFetch(url, options);
+                  
+                  if (response.ok && options.body) {
+                    let bodyData;
+                    try {
+                      bodyData = JSON.parse(options.body);
+                    } catch (parseError) {
+                      log('Error parseando body del request:', parseError);
+                      return response;
                     }
                     
-                    imageState.startPosition = { x: localX, y: localY };
-                    imageState.selectingPosition = false;
-                    
-                    window.fetch = originalFetch;
-                    
-                    ui.setStatus(TEXTS[language].positionSet, 'success');
-                    log(`✅ Posición establecida: tile(${imageState.tileX},${imageState.tileY}) local(${localX},${localY})`);
-                    
-                    resolve(true);
+                    if (bodyData.coords && Array.isArray(bodyData.coords) && bodyData.coords.length >= 2) {
+                      const localX = bodyData.coords[0];
+                      const localY = bodyData.coords[1];
+                      
+                      // Extraer tile de la URL de forma más robusta
+                      const tileMatch = url.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);
+                      if (tileMatch && !positionCaptured) {
+                        positionCaptured = true;
+                        const tileX = parseInt(tileMatch[1]);
+                        const tileY = parseInt(tileMatch[2]);
+                        
+                        // Guardar coordenadas tile/pixel
+                        imageState.tileX = tileX;
+                        imageState.tileY = tileY;
+                        imageState.startPosition = { x: localX, y: localY };
+                        imageState.selectingPosition = false;
+                        
+                        // Actualizar coordenadas del procesador Blue Marble
+                        if (imageState.imageData && imageState.imageData.processor) {
+                          const processor = imageState.imageData.processor;
+                          processor.setCoords(tileX, tileY, localX, localY);
+                          
+                          // Generar tiles de template una vez que tenemos coordenadas
+                          try {
+                            await processor.createTemplateTiles();
+                            log(`✅ [BLUE MARBLE] Template tiles creados para posición tile(${tileX},${tileY}) pixel(${localX},${localY})`);
+                          } catch (error) {
+                            log(`❌ [BLUE MARBLE] Error creando template tiles: ${error.message}`);
+                          }
+                          
+                          // Regenerar cola de píxeles con coordenadas actualizadas
+                          const pixelQueue = processor.generatePixelQueue();
+                          imageState.remainingPixels = pixelQueue;
+                          imageState.totalPixels = pixelQueue.length;
+                          
+                          log(`✅ Cola de píxeles generada: ${pixelQueue.length} píxeles para overlay`);
+                        }
+                        
+                        // Configurar overlay del plan con la posición seleccionada
+                        try {
+                          if (window.__WPA_PLAN_OVERLAY__) {
+                            // FIX: Forzar reinicio completo del overlay
+                            // Desactivar overlay para limpiar estado anterior
+                            window.__WPA_PLAN_OVERLAY__.setEnabled(false);
+                            
+                            // Limpiar plan anterior
+                            window.__WPA_PLAN_OVERLAY__.setPlan([], {});
+                            
+                            // Inyectar estilos y reactivar
+                            window.__WPA_PLAN_OVERLAY__.injectStyles();
+                            window.__WPA_PLAN_OVERLAY__.setEnabled(true);
+                            
+                            // Configurar ancla lógica (tile/pixel) para posicionamiento
+                            window.__WPA_PLAN_OVERLAY__.setAnchor({
+                              tileX: tileX,
+                              tileY: tileY,
+                              pxX: localX,
+                              pxY: localY
+                            });
+                            
+                            // Usar la cola de píxeles regenerada
+                            if (imageState.remainingPixels && imageState.remainingPixels.length > 0) {
+                              window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
+                                anchor: { tileX: tileX, tileY: tileY, pxX: localX, pxY: localY },
+                                imageWidth: imageState.imageData.width,
+                                imageHeight: imageState.imageData.height,
+                                enabled: true
+                              });
+                              
+                              log(`✅ Plan overlay reiniciado y anclado en tile(${tileX},${tileY}) local(${localX},${localY})`);
+                            } else {
+                              log(`⚠️ No hay píxeles para mostrar en overlay`);
+                            }
+                          }
+                        } catch (error) {
+                          log(`❌ Error configurando overlay: ${error.message}`);
+                        }
+                        
+                        // Restaurar fetch original inmediatamente
+                        restoreFetch();
+                        
+                        ui.setStatus(t('image.positionSet'), 'success');
+                        log(`✅ Posición establecida: tile(${imageState.tileX},${imageState.tileY}) local(${localX},${localY})`);
+                        
+                        resolve(true);
+                      } else {
+                        log('⚠️ No se pudo extraer tile de la URL:', url);
+                      }
+                    }
+                  }
+                  
+                  return response;
+                } catch (error) {
+                  log('❌ Error interceptando pixel:', error);
+                  // En caso de error, restaurar fetch y continuar con el original
+                  if (!positionCaptured) {
+                    restoreFetch();
+                    return originalFetch(url, options);
                   }
                 }
-                
-                return response;
-              } catch (error) {
-                log('Error interceptando pixel:', error);
-                return originalFetch(url, options);
               }
-            }
-            return originalFetch(url, options);
+              
+              // Para todos los demás requests, usar fetch original
+              return originalFetch(url, options);
+            };
           };
           
-          // Timeout para selección de posición
-          setTimeout(() => {
-            if (imageState.selectingPosition) {
-              window.fetch = originalFetch;
-              imageState.selectingPosition = false;
-              ui.setStatus(TEXTS[language].positionTimeout, 'error');
+          // Método 2: Observer de canvas para detectar cambios visuales
+          const setupCanvasObserver = () => {
+            const canvasElements = document.querySelectorAll('canvas');
+            if (canvasElements.length === 0) {
+              log('⚠️ No se encontraron elementos canvas');
+              return;
+            }
+            
+            log(`📊 Configurando observer para ${canvasElements.length} canvas`);
+            
+            // Escuchar eventos de click en el documento para detectar pintado
+            const clickHandler = (event) => {
+              if (!imageState.selectingPosition || positionCaptured) return;
+              
+              // Verificar si el click fue en un canvas
+              const target = event.target;
+              if (target && target.tagName === 'CANVAS') {
+                log('🖱️ Click detectado en canvas durante selección');
+                // Calcular coordenadas CSS relativas al contenedor del board para ancla CSS
+                try {
+                  const board = document.querySelector('canvas')?.parentElement || document.body;
+                  const rect = board.getBoundingClientRect();
+                  const cssX = event.clientX - rect.left;
+                  const cssY = event.clientY - rect.top;
+                  if (window.__WPA_PLAN_OVERLAY__) {
+                    window.__WPA_PLAN_OVERLAY__.setAnchorCss(cssX, cssY);
+                    log(`Plan overlay: ancla CSS establecida en (${cssX}, ${cssY})`);
+                  }
+                } catch (e) {
+                  log('Plan Overlay: error calculando ancla CSS', e);
+                }
+                
+                // Dar tiempo para que se procese el pintado
+                setTimeout(() => {
+                  if (!positionCaptured && imageState.selectingPosition) {
+                    log('🔍 Buscando requests recientes de pintado...');
+                    // El fetch interceptor manejará la captura
+                  }
+                }, 500);
+              }
+            };
+            
+            document.addEventListener('click', clickHandler);
+            
+            // Limpiar observer al finalizar
+            imageState.cleanupObserver = () => {
+              document.removeEventListener('click', clickHandler);
+            };
+          };
+          
+          // Configurar ambos métodos
+          setupFetchInterception();
+          setupCanvasObserver();
+          
+          // Timeout para selección de posición con cleanup mejorado
+          const timeoutId = setTimeout(() => {
+            if (imageState.selectingPosition && !positionCaptured) {
+              restoreFetch();
+              if (imageState.cleanupObserver) {
+                imageState.cleanupObserver();
+              }
+              ui.setStatus(t('image.positionTimeout'), 'error');
+              log('⏰ Timeout en selección de posición');
               resolve(false);
             }
           }, 120000); // 2 minutos
+          
+          // Guardar timeout para poder cancelarlo
+          imageState.positionTimeoutId = timeoutId;
         });
       },
       
@@ -183,46 +493,68 @@ export async function runImage() {
         });
         
         if (!imageState.imageLoaded || !imageState.startPosition) {
-          ui.setStatus(TEXTS[language].missingRequirements, 'error');
+          ui.setStatus(t('image.missingRequirements'), 'error');
           log(`❌ Validación fallida: imageLoaded=${imageState.imageLoaded}, startPosition=${!!imageState.startPosition}`);
           return false;
         }
         
         imageState.running = true;
         imageState.stopFlag = false;
+        // Siempre resetear flag de primera pasada cuando se inicia pintado
+        // independientemente de si es nuevo o reanudación
+        imageState.isFirstBatch = imageState.useAllChargesFirst; 
         
-        ui.setStatus(TEXTS[language].startPaintingMsg, 'success');
+        log(`🚀 Iniciando pintado - isFirstBatch: ${imageState.isFirstBatch}, useAllChargesFirst: ${imageState.useAllChargesFirst}`);
+        
+        ui.setStatus(t('image.startPaintingMsg'), 'success');
         
         try {
           await processImage(
             imageState.imageData,
             imageState.startPosition,
-            // onProgress
-            (painted, total, message) => {
+            // onProgress - ahora incluye tiempo estimado
+            (painted, total, message, estimatedTime) => {
               // Actualizar cargas en userInfo si existe
               if (currentUserInfo) {
                 currentUserInfo.charges = Math.floor(imageState.currentCharges);
+                if (estimatedTime !== undefined) {
+                  currentUserInfo.estimatedTime = estimatedTime;
+                }
               }
+              
               ui.updateProgress(painted, total, currentUserInfo);
-              if (message) {
-                ui.setStatus(message, 'info');
+              
+              // Actualizar display de cooldown si hay cooldown activo
+              if (imageState.inCooldown && imageState.nextBatchCooldown > 0) {
+                ui.updateCooldownDisplay(imageState.nextBatchCooldown);
               } else {
-                ui.setStatus(TEXTS[language].paintingProgress.replace('{painted}', painted).replace('{total}', total), 'info');
+                ui.updateCooldownDisplay(0);
+              }
+              
+              if (message) {
+                // Usar función optimizada para mensajes de cooldown para evitar parpadeo
+                if (message.includes('⏳') && imageState.inCooldown) {
+                  ui.updateCooldownMessage(message);
+                } else {
+                  ui.setStatus(message, 'info');
+                }
+              } else {
+                ui.setStatus(t('image.paintingProgress', { painted, total }), 'info');
               }
             },
             // onComplete
             (completed, pixelsPainted) => {
               if (completed) {
-                ui.setStatus(TEXTS[language].paintingComplete.replace('{count}', pixelsPainted), 'success');
+                ui.setStatus(t('image.paintingComplete', { count: pixelsPainted }), 'success');
                 clearProgress();
               } else {
-                ui.setStatus(TEXTS[language].paintingStopped, 'warning');
+                ui.setStatus(t('image.paintingStopped'), 'warning');
               }
               imageState.running = false;
             },
             // onError
             (error) => {
-              ui.setStatus(TEXTS[language].paintingError, 'error');
+              ui.setStatus(t('image.paintingError'), 'error');
               log('❌ Error en proceso de pintado:', error);
               imageState.running = false;
             }
@@ -230,7 +562,7 @@ export async function runImage() {
           
           return true;
         } catch (error) {
-          ui.setStatus(TEXTS[language].paintingError, 'error');
+          ui.setStatus(t('image.paintingError'), 'error');
           log('❌ Error iniciando pintado:', error);
           imageState.running = false;
           return false;
@@ -242,21 +574,21 @@ export async function runImage() {
         
         if (progressInfo.hasProgress) {
           const shouldSave = await showConfirmDialog(
-            TEXTS[language].confirmSaveProgress,
-            TEXTS[language].saveProgressTitle,
+            t('image.confirmSaveProgress'),
+            t('image.saveProgressTitle'),
             {
-              save: TEXTS[language].saveProgress,
-              discard: TEXTS[language].discardProgress,
-              cancel: TEXTS[language].cancel
+              save: t('image.saveProgress'),
+              discard: t('image.discardProgress'),
+              cancel: t('image.cancel')
             }
           );
           
           if (shouldSave === 'save') {
             const result = saveProgress();
             if (result.success) {
-              ui.setStatus(TEXTS[language].progressSaved.replace('{filename}', result.filename), 'success');
+              ui.setStatus(t('image.progressSaved', { filename: result.filename }), 'success');
             } else {
-              ui.setStatus(TEXTS[language].progressSaveError.replace('{error}', result.error), 'error');
+              ui.setStatus(t('image.progressSaveError', { error: result.error }), 'error');
             }
           } else if (shouldSave === 'cancel') {
             return false; // No detener
@@ -264,16 +596,16 @@ export async function runImage() {
         }
         
         stopPainting();
-        ui.setStatus(TEXTS[language].paintingStopped, 'warning');
+        ui.setStatus(t('image.paintingStopped'), 'warning');
         return true;
       },
       
       onSaveProgress: async () => {
         const result = saveProgress();
         if (result.success) {
-          ui.setStatus(TEXTS[language].progressSaved.replace('{filename}', result.filename), 'success');
+          ui.setStatus(t('image.progressSaved', { filename: result.filename }), 'success');
         } else {
-          ui.setStatus(TEXTS[language].progressSaveError.replace('{error}', result.error), 'error');
+          ui.setStatus(t('image.progressSaveError', { error: result.error }), 'error');
         }
         return result.success;
       },
@@ -282,7 +614,7 @@ export async function runImage() {
         try {
           const result = await loadProgress(file);
           if (result.success) {
-            ui.setStatus(TEXTS[language].progressLoaded.replace('{painted}', result.painted).replace('{total}', result.total), 'success');
+            ui.setStatus(t('image.progressLoaded', { painted: result.painted, total: result.total }), 'success');
             ui.updateProgress(result.painted, result.total, currentUserInfo);
             
             // Habilitar botones después de cargar progreso exitosamente
@@ -291,11 +623,29 @@ export async function runImage() {
             
             return true;
           } else {
-            ui.setStatus(TEXTS[language].progressLoadError.replace('{error}', result.error), 'error');
+            ui.setStatus(t('image.progressLoadError', { error: result.error }), 'error');
             return false;
           }
         } catch (error) {
-          ui.setStatus(TEXTS[language].progressLoadError.replace('{error}', error.message), 'error');
+          ui.setStatus(t('image.progressLoadError', { error: error.message }), 'error');
+          return false;
+        }
+      },
+      
+      onExportGuard: async () => {
+        try {
+          const { exportForGuard } = await import('./save-load.js');
+          const result = exportForGuard();
+          if (result.success) {
+            ui.setStatus(t('image.guardExportSuccess', { filename: result.filename }), 'success');
+            log(`✅ Exportado para Auto-Guard: ${result.filename}`);
+          } else {
+            ui.setStatus(t('image.guardExportError', { error: result.error }), 'error');
+          }
+          return result.success;
+        } catch (error) {
+          ui.setStatus(t('image.guardExportError', { error: error.message }), 'error');
+          log(`❌ Error exportando para Guard: ${error.message}`);
           return false;
         }
       },
@@ -306,45 +656,134 @@ export async function runImage() {
         }
       },
       
-      onConfirmResize: (processor, newWidth, newHeight) => {
+      onConfirmResize: async (processor, newWidth, newHeight) => {
         log(`🔄 Redimensionando imagen de ${processor.getDimensions().width}x${processor.getDimensions().height} a ${newWidth}x${newHeight}`);
         
         try {
-          // Redimensionar la imagen
-          processor.resize(newWidth, newHeight);
+          // Redimensionar la imagen usando Blue Marble
+          await processor.resize(newWidth, newHeight);
           
-          // Recalcular píxeles válidos
-          const processedData = processor.processImage(imageState.availableColors, config);
+          // Reanalizar imagen con nuevo tamaño usando Blue Marble
+          const analysisResult = await processor.analyzePixels();
           
-          // Actualizar imageState
-          imageState.imageData = processedData;
-          imageState.totalPixels = processedData.validPixelCount;
+          // Actualizar imageState con resultados de Blue Marble
+          imageState.imageData = {
+            processor: processor,
+            width: newWidth,
+            height: newHeight,
+            validPixelCount: analysisResult.validPixelCount,
+            totalPixels: analysisResult.totalPixels,
+            unknownPixels: analysisResult.unknownPixels
+          };
+          
+          imageState.totalPixels = analysisResult.validPixelCount;
           imageState.paintedPixels = 0;
           imageState.remainingPixels = []; // Resetear cola al redimensionar
           imageState.lastPosition = { x: 0, y: 0 };
           
           // Actualizar UI
-          ui.updateProgress(0, processedData.validPixelCount, currentUserInfo);
-          ui.setStatus(TEXTS[language].resizeSuccess.replace('{width}', newWidth).replace('{height}', newHeight), 'success');
+          ui.updateProgress(0, analysisResult.validPixelCount, currentUserInfo);
+          ui.setStatus(t('image.resizeSuccess', { width: newWidth, height: newHeight }), 'success');
           
-          log(`✅ Imagen redimensionada: ${processedData.validPixelCount} píxeles válidos`);
+          log(`✅ Imagen redimensionada: ${analysisResult.validPixelCount} píxeles válidos de ${analysisResult.totalPixels} totales`);
+
+          // Actualizar overlay si ya hay posición seleccionada
+          try {
+            if (window.__WPA_PLAN_OVERLAY__ && imageState.startPosition && imageState.tileX != null && imageState.tileY != null) {
+              // Regenerar template tiles con nuevo tamaño
+              await processor.createTemplateTiles();
+              
+              // Regenerar cola de píxeles con Blue Marble
+              const pixelQueue = processor.generatePixelQueue();
+              imageState.remainingPixels = pixelQueue;
+              imageState.totalPixels = pixelQueue.length;
+              
+              // Actualizar overlay con nueva cola
+              window.__WPA_PLAN_OVERLAY__.setPlan(pixelQueue, {
+                anchor: { 
+                  tileX: imageState.tileX, 
+                  tileY: imageState.tileY, 
+                  pxX: imageState.startPosition.x, 
+                  pxY: imageState.startPosition.y 
+                },
+                imageWidth: newWidth,
+                imageHeight: newHeight,
+                enabled: true
+              });
+              
+              log(`✅ Overlay actualizado con ${pixelQueue.length} píxeles después del resize`);
+            }
+          } catch (overlayError) {
+            log(`⚠️ Error actualizando overlay después del resize: ${overlayError.message}`);
+          }
         } catch (error) {
           log(`❌ Error redimensionando imagen: ${error.message}`);
-          ui.setStatus(TEXTS[language].imageError, 'error');
+          ui.setStatus(t('image.imageError'), 'error');
         }
       }
     });
 
+    // Escuchar cambios de idioma desde el launcher
+    const handleLauncherLanguageChange = (event) => {
+      const { language } = event.detail;
+      log(`🌍 Imagen: Detectado cambio de idioma desde launcher: ${language}`);
+      
+      // Actualizar estado del idioma
+      imageState.language = language;
+      
+      // Aquí se podría añadir lógica adicional para actualizar la UI
+      // Por ejemplo, actualizar textos dinámicos, re-renderizar elementos, etc.
+    };
+    
+    window.addEventListener('launcherLanguageChanged', handleLauncherLanguageChange);
+    window.addEventListener('languageChanged', handleLauncherLanguageChange);
+
     // Cleanup al cerrar la página
     window.addEventListener('beforeunload', () => {
+      // Restaurar fetch original si está interceptado
+      restoreFetch();
+      
       stopPainting();
       ui.destroy();
+      window.removeEventListener('launcherLanguageChanged', handleLauncherLanguageChange);
+      window.removeEventListener('languageChanged', handleLauncherLanguageChange);
       if (window.__wplaceBot) {
         window.__wplaceBot.imageRunning = false;
       }
     });
 
     log('✅ Auto-Image inicializado correctamente');
+    
+    // Intentar auto-inicio después de que la UI esté lista
+    setTimeout(async () => {
+      try {
+        ui.setStatus(t('image.autoInitializing'), 'info');
+        log('🤖 Intentando auto-inicio...');
+        
+        const autoInitSuccess = await tryAutoInit();
+        
+        if (autoInitSuccess) {
+          ui.setStatus(t('image.autoInitSuccess'), 'success');
+          log('✅ Auto-inicio exitoso');
+          
+          // Ocultar el botón de inicialización manual
+          ui.setInitButtonVisible(false);
+          
+          // Ejecutar la lógica de inicialización del bot
+          const initResult = await initializeBot(true); // true = es auto-inicio
+          if (initResult) {
+            log('🚀 Bot auto-iniciado completamente');
+          }
+        } else {
+          ui.setStatus(t('image.autoInitFailed'), 'warning');
+          log('⚠️ Auto-inicio falló, se requiere inicio manual');
+          // El botón de inicio manual permanece visible
+        }
+      } catch (error) {
+        log('❌ Error en auto-inicio:', error);
+        ui.setStatus(t('image.manualInitRequired'), 'warning');
+      }
+    }, 1000); // Esperar 1 segundo para que la UI esté completamente cargada
     
   } catch (error) {
     log('❌ Error inicializando Auto-Image:', error);
@@ -353,9 +792,4 @@ export async function runImage() {
     }
     throw error;
   }
-}
-
-function detectLanguage() {
-  const lang = window.navigator.language || window.navigator.userLanguage || 'es';
-  return lang.startsWith('es') ? 'es' : 'es'; // Por ahora solo español
 }

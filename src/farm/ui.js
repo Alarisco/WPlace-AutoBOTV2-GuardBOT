@@ -1,9 +1,10 @@
 import { log } from "../core/logger.js";
-import { farmState, FARM_DEFAULTS } from "./config.js";
+import { FARM_DEFAULTS, farmState } from "./config.js";
 import { saveFarmCfg, loadFarmCfg, resetFarmCfg } from "../core/storage.js";
 import { dragHeader, clamp } from "../core/utils.js";
+import { t } from "../locales/index.js";
 
-export function createFarmUI(config, onStart, onStop, onCalibrate) {
+export function createFarmUI(config, onStart, onStop) {
   const shadowHost = document.createElement('div');
   shadowHost.id = 'wplace-farm-ui';
   shadowHost.style.cssText = `
@@ -173,14 +174,6 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
       background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
     }
     
-    .wplace-button.calibrate {
-      background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
-    }
-    
-    .wplace-button.calibrate:hover {
-      background: linear-gradient(135deg, #dd6b20 0%, #c05621 100%);
-    }
-    
     .wplace-button.small {
       padding: 4px 8px;
       font-size: 11px;
@@ -280,6 +273,30 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     .wplace-health.offline {
       color: #f56565;
     }
+    
+    .wplace-zone-info {
+      background: rgba(0,0,0,0.2);
+      border-radius: 6px;
+      padding: 8px;
+      margin: 8px 0;
+      font-size: 11px;
+    }
+    
+    .wplace-zone-text {
+      color: #e2e8f0;
+      margin-bottom: 4px;
+    }
+    
+    .wplace-zone-warning {
+      color: #ffd700;
+      font-size: 10px;
+      font-style: italic;
+    }
+    
+    #zone-display {
+      font-weight: bold;
+      color: #90cdf4;
+    }
   `;
   
   shadow.appendChild(style);
@@ -296,7 +313,7 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
   container.innerHTML = `
     <div class="wplace-header">
       <div class="wplace-title">
-        🤖 WPlace Farm Bot
+        🤖 ${t('farm.title')}
       </div>
       <button class="wplace-minimize">−</button>
     </div>
@@ -304,73 +321,79 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     <div class="wplace-content">
       <!-- Estado y controles principales -->
       <div class="wplace-section">
-        <div class="wplace-status" id="status">💤 Bot detenido</div>
+        <div class="wplace-status" id="status">💤 ${t('farm.stopped')}</div>
         
         <div class="wplace-stats">
           <div class="wplace-stat">
             <div class="wplace-stat-value" id="painted-count">0</div>
-            <div class="wplace-stat-label">Pintados</div>
+            <div class="wplace-stat-label">${t('farm.painted')}</div>
           </div>
           <div class="wplace-stat">
             <div class="wplace-stat-value" id="charges-count">0</div>
-            <div class="wplace-stat-label">Cargas</div>
+            <div class="wplace-stat-label">${t('farm.charges')}</div>
           </div>
           <div class="wplace-stat">
             <div class="wplace-stat-value" id="retry-count">0</div>
-            <div class="wplace-stat-label">Fallos</div>
+            <div class="wplace-stat-label">${t('farm.retries')}</div>
           </div>
           <div class="wplace-stat">
             <div class="wplace-stat-value" id="tile-pos">0,0</div>
-            <div class="wplace-stat-label">Tile</div>
+            <div class="wplace-stat-label">${t('farm.tile')}</div>
           </div>
         </div>
         
         <div class="wplace-buttons">
-          <button class="wplace-button start" id="start-btn">▶️ Iniciar</button>
-          <button class="wplace-button stop" id="stop-btn" disabled>⏹️ Detener</button>
-          <button class="wplace-button calibrate" id="calibrate-btn">🎯 Calibrar</button>
-          <button class="wplace-button small" id="once-btn">🎨 Una vez</button>
+          <button class="wplace-button start" id="start-btn">▶️ ${t('farm.start')}</button>
+          <button class="wplace-button stop" id="stop-btn" disabled>⏹️ ${t('farm.stop')}</button>
+          <button class="wplace-button small" id="select-position-btn">🌍 ${t('farm.selectPosition')}</button>
+          <button class="wplace-button small" id="once-btn">🎨 ${t('farm.paintOnce')}</button>
         </div>
         
-        <div class="wplace-health" id="health-status">🔍 Verificando estado...</div>
+        <!-- Información de la zona seleccionada -->
+        <div class="wplace-zone-info" id="zone-info">
+          <div class="wplace-zone-text">📍 ${t('farm.positionInfo')}: <span id="zone-display">${t('farm.noPosition')}</span></div>
+          <div class="wplace-zone-warning">⚠️ ${t('farm.selectEmptyArea')}</div>
+        </div>
+        
+        <div class="wplace-health" id="health-status">🔍 ${t('farm.checkingStatus')}</div>
       </div>
       
       <!-- Configuración básica -->
       <div class="wplace-section">
-        <div class="wplace-section-title">⚙️ Configuración</div>
+        <div class="wplace-section-title">⚙️ ${t('farm.configuration')}</div>
         
         <div class="wplace-row">
-          <span class="wplace-label">Delay (ms):</span>
+          <span class="wplace-label">${t('farm.delay')}:</span>
           <input type="number" class="wplace-input" id="delay-input" min="1000" max="300000" step="1000">
         </div>
         
         <div class="wplace-row">
-          <span class="wplace-label">Píxeles/lote:</span>
+          <span class="wplace-label">${t('farm.pixelsPerBatch')}:</span>
           <input type="number" class="wplace-input" id="pixels-input" min="1" max="50">
         </div>
         
         <div class="wplace-row">
-          <span class="wplace-label">Cargas mín:</span>
+          <span class="wplace-label">${t('farm.minCharges')}:</span>
           <input type="number" class="wplace-input" id="min-charges-input" min="0" max="50" step="0.1">
         </div>
         
         <div class="wplace-row">
-          <span class="wplace-label">Modo color:</span>
+          <span class="wplace-label">${t('farm.colorMode')}:</span>
           <select class="wplace-select" id="color-mode-select">
-            <option value="random">Aleatorio</option>
-            <option value="fixed">Fijo</option>
+            <option value="random">${t('farm.random')}</option>
+            <option value="fixed">${t('farm.fixed')}</option>
           </select>
         </div>
         
         <div class="wplace-row" id="color-range-row">
-          <span class="wplace-label">Rango:</span>
+          <span class="wplace-label">${t('farm.range')}:</span>
           <input type="number" class="wplace-input" id="color-min-input" min="1" max="32" style="width: 35px;">
           <span style="color: #cbd5e0;">-</span>
           <input type="number" class="wplace-input" id="color-max-input" min="1" max="32" style="width: 35px;">
         </div>
         
         <div class="wplace-row" id="color-fixed-row" style="display: none;">
-          <span class="wplace-label">Color fijo:</span>
+          <span class="wplace-label">${t('farm.fixedColor')}:</span>
           <input type="number" class="wplace-input" id="color-fixed-input" min="1" max="32">
         </div>
       </div>
@@ -378,33 +401,33 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
       <!-- Configuración avanzada (colapsable) -->
       <div class="wplace-section">
         <div class="wplace-section-title" id="advanced-toggle">
-          🔧 Avanzado <span id="advanced-arrow">▶</span>
+          🔧 ${t('farm.advanced')} <span id="advanced-arrow">▶</span>
         </div>
         
         <div class="wplace-advanced" id="advanced-section" style="display: none;">
           <div class="wplace-row">
-            <span class="wplace-label">Tile X:</span>
+            <span class="wplace-label">${t('farm.tileX')}:</span>
             <input type="number" class="wplace-input" id="tile-x-input">
           </div>
           
           <div class="wplace-row">
-            <span class="wplace-label">Tile Y:</span>
+            <span class="wplace-label">${t('farm.tileY')}:</span>
             <input type="number" class="wplace-input" id="tile-y-input">
           </div>
           
           <div class="wplace-row">
-            <span class="wplace-label">Paleta personalizada:</span>
+            <span class="wplace-label">${t('farm.customPalette')}:</span>
           </div>
           <div class="wplace-row">
             <input type="text" class="wplace-input wide" id="custom-palette-input" 
-                   placeholder="ej: #FF0000,#00FF00,#0000FF">
+                   placeholder="${t('farm.paletteExample')}">
           </div>
           
           <div class="wplace-buttons">
-            <button class="wplace-button small" id="save-btn">💾 Guardar</button>
-            <button class="wplace-button small" id="load-btn">📁 Cargar</button>
-            <button class="wplace-button small" id="reset-btn">🔄 Reset</button>
-            <button class="wplace-button small" id="capture-btn">📸 Capturar</button>
+            <button class="wplace-button small" id="save-btn">💾 ${t('common.save')}</button>
+            <button class="wplace-button small" id="load-btn">📁 ${t('common.load')}</button>
+            <button class="wplace-button small" id="reset-btn">🔄 ${t('common.reset')}</button>
+            <button class="wplace-button small" id="capture-btn">📸 ${t('farm.capture')}</button>
           </div>
         </div>
       </div>
@@ -429,8 +452,10 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     tilePos: shadow.getElementById('tile-pos'),
     startBtn: shadow.getElementById('start-btn'),
     stopBtn: shadow.getElementById('stop-btn'),
-    calibrateBtn: shadow.getElementById('calibrate-btn'),
+    selectPositionBtn: shadow.getElementById('select-position-btn'),
     onceBtn: shadow.getElementById('once-btn'),
+    zoneInfo: shadow.getElementById('zone-info'),
+    zoneDisplay: shadow.getElementById('zone-display'),
     healthStatus: shadow.getElementById('health-status'),
     delayInput: shadow.getElementById('delay-input'),
     pixelsInput: shadow.getElementById('pixels-input'),
@@ -469,6 +494,8 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     // Actualizar visibilidad de controles de color
     updateColorModeVisibility();
     updateTileDisplay();
+    updateZoneDisplay();
+    updateButtonStates(farmState?.running || false);
   }
   
   // Función para actualizar la configuración desde los inputs
@@ -493,6 +520,7 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     if (Number.isFinite(tileY)) config.TILE_Y = tileY;
     
     updateTileDisplay();
+    updateZoneDisplay();
   }
   
   // Función para actualizar visibilidad de controles de modo de color
@@ -507,6 +535,22 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     if (elements.tilePos) {
       elements.tilePos.textContent = `${config.TILE_X || 0},${config.TILE_Y || 0}`;
     }
+  }
+  
+  // Función para actualizar el display de la zona seleccionada
+  function updateZoneDisplay() {
+    if (elements.zoneDisplay) {
+      if (config.POSITION_SELECTED && config.BASE_X !== null && config.BASE_Y !== null) {
+        elements.zoneDisplay.textContent = t('farm.currentZone', { x: config.BASE_X, y: config.BASE_Y });
+        elements.zoneDisplay.style.color = '#48bb78'; // Verde para indicar activa
+      } else {
+        elements.zoneDisplay.textContent = t('farm.noPosition');
+        elements.zoneDisplay.style.color = '#f56565'; // Rojo para indicar no seleccionada
+      }
+    }
+    
+    // Actualizar estado de botones cuando cambie la zona
+    updateButtonStates(farmState?.running || false);
   }
   
   // Event listeners
@@ -527,16 +571,18 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
     updateButtonStates(false);
   });
   
-  elements.calibrateBtn?.addEventListener('click', () => {
-    onCalibrate();
-  });
-  
   elements.onceBtn?.addEventListener('click', () => {
+    // Asegurar que inputs reflejan la última captura/calibración
+    updateInputsFromConfig();
     updateConfigFromInputs();
     // Llamar a la función de pintar una vez si existe
     if (window.WPAUI && window.WPAUI.once) {
       window.WPAUI.once();
     }
+  });
+  
+  elements.selectPositionBtn?.addEventListener('click', () => {
+    selectFarmPosition(config, setStatus, updateZoneDisplay);
   });
   
   elements.colorModeSelect?.addEventListener('change', () => {
@@ -562,32 +608,47 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
   elements.saveBtn?.addEventListener('click', () => {
     updateConfigFromInputs();
     saveFarmCfg(config);
-    setStatus('💾 Configuración guardada', 'success');
+    setStatus(`💾 ${t('farm.configSaved')}`, 'success');
   });
   
   elements.loadBtn?.addEventListener('click', () => {
     const loaded = loadFarmCfg(FARM_DEFAULTS);
     Object.assign(config, loaded);
     updateInputsFromConfig();
-    setStatus('📁 Configuración cargada', 'success');
+    setStatus(`📁 ${t('farm.configLoaded')}`, 'success');
   });
   
   elements.resetBtn?.addEventListener('click', () => {
     resetFarmCfg();
     Object.assign(config, FARM_DEFAULTS);
     updateInputsFromConfig();
-    setStatus('🔄 Configuración reiniciada', 'success');
+    setStatus(`🔄 ${t('farm.configReset')}`, 'success');
   });
   
   elements.captureBtn?.addEventListener('click', () => {
     // Función de captura - será implementada
-    setStatus('📸 Pinta un píxel manualmente para capturar coordenadas...', 'status');
+    setStatus(`📸 ${t('farm.captureInstructions')}`, 'status');
     // Aquí iría la lógica de captura
   });
   
   // Función para actualizar estado de botones
   function updateButtonStates(running) {
-    if (elements.startBtn) elements.startBtn.disabled = running;
+    if (elements.startBtn) {
+      // El botón de inicio está deshabilitado si:
+      // 1. El bot está corriendo, O
+      // 2. No se ha seleccionado una zona
+      const noZoneSelected = !config.POSITION_SELECTED || config.BASE_X === null || config.BASE_Y === null;
+      elements.startBtn.disabled = running || noZoneSelected;
+      
+      // Cambiar texto del botón según el estado
+      if (noZoneSelected) {
+        elements.startBtn.textContent = `🚫 ${t('farm.selectPosition')} ⚠️`;
+        elements.startBtn.title = t('farm.missingPosition');
+      } else {
+        elements.startBtn.textContent = `▶️ ${t('farm.start')}`;
+        elements.startBtn.title = '';
+      }
+    }
     if (elements.stopBtn) elements.stopBtn.disabled = !running;
   }
   
@@ -612,7 +673,7 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
       elements.retryCount.textContent = retries || 0;
     }
     if (elements.healthStatus && health) {
-      elements.healthStatus.textContent = health.up ? '🟢 Backend Online' : '🔴 Backend Offline';
+      elements.healthStatus.textContent = health.up ? `🟢 ${t('farm.backendOnline')}` : `🔴 ${t('farm.backendOffline')}`;
       elements.healthStatus.className = `wplace-health ${health.up ? 'online' : 'offline'}`;
     }
   }
@@ -628,13 +689,170 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
   // Inicializar valores
   updateInputsFromConfig();
   
+  // Función para actualizar textos cuando cambie el idioma
+  function updateTexts() {
+    // Actualizar título
+    const title = shadow.querySelector('.wplace-title');
+    if (title) {
+      title.innerHTML = `🤖 ${t('farm.title')}`;
+    }
+    
+    // Actualizar botones
+    if (elements.startBtn) elements.startBtn.innerHTML = `▶️ ${t('farm.start')}`;
+    if (elements.stopBtn) elements.stopBtn.innerHTML = `⏹️ ${t('farm.stop')}`;
+    if (elements.selectPositionBtn) elements.selectPositionBtn.innerHTML = `🌍 ${t('farm.selectPosition')}`;
+    if (elements.onceBtn) elements.onceBtn.innerHTML = `🎨 ${t('farm.paintOnce')}`;
+    
+    // Actualizar etiquetas de estadísticas
+    const paintedLabel = shadow.querySelector('#painted-count').parentElement.querySelector('.wplace-stat-label');
+    const chargesLabel = shadow.querySelector('#charges-count').parentElement.querySelector('.wplace-stat-label');
+    const retryLabel = shadow.querySelector('#retry-count').parentElement.querySelector('.wplace-stat-label');
+    const tileLabel = shadow.querySelector('#tile-pos').parentElement.querySelector('.wplace-stat-label');
+    
+    if (paintedLabel) paintedLabel.textContent = t('farm.painted');
+    if (chargesLabel) chargesLabel.textContent = t('farm.charges');
+    if (retryLabel) retryLabel.textContent = t('farm.retries');
+    if (tileLabel) tileLabel.textContent = t('farm.tile');
+    
+    // Actualizar secciones
+    const configTitle = shadow.querySelector('.wplace-section-title');
+    if (configTitle) configTitle.innerHTML = `⚙️ ${t('farm.configuration')}`;
+    
+    const advancedTitle = shadow.getElementById('advanced-toggle');
+    if (advancedTitle) {
+      const arrow = advancedTitle.querySelector('#advanced-arrow');
+      const arrowText = arrow ? arrow.textContent : '▶';
+      advancedTitle.innerHTML = `🔧 ${t('farm.advanced')} <span id="advanced-arrow">${arrowText}</span>`;
+    }
+    
+    // Actualizar etiquetas de configuración
+    // Las etiquetas se actualizan automáticamente desde el innerHTML inicial
+    
+    // Actualizar opciones del selector de modo de color
+    const colorModeSelect = elements.colorModeSelect;
+    if (colorModeSelect) {
+      const randomOption = colorModeSelect.querySelector('option[value="random"]');
+      const fixedOption = colorModeSelect.querySelector('option[value="fixed"]');
+      if (randomOption) randomOption.textContent = t('farm.random');
+      if (fixedOption) fixedOption.textContent = t('farm.fixed');
+    }
+    
+    // Actualizar placeholder
+    if (elements.customPaletteInput) {
+      elements.customPaletteInput.placeholder = t('farm.paletteExample');
+    }
+    
+    // Actualizar botones de configuración
+    if (elements.saveBtn) elements.saveBtn.innerHTML = `💾 ${t('common.save')}`;
+    if (elements.loadBtn) elements.loadBtn.innerHTML = `📁 ${t('common.load')}`;
+    if (elements.resetBtn) elements.resetBtn.innerHTML = `🔄 ${t('common.reset')}`;
+    if (elements.captureBtn) elements.captureBtn.innerHTML = `📸 ${t('farm.capture')}`;
+    
+    // Actualizar información de zona
+    updateZoneDisplay();
+    
+    // Actualizar estado de botones (para actualizar textos)
+    updateButtonStates(farmState?.running || false);
+    
+    // Actualizar estado de salud si existe
+    const healthStatus = elements.healthStatus;
+    if (healthStatus && healthStatus.textContent.includes('🔍')) {
+      healthStatus.textContent = `🔍 ${t('farm.checkingStatus')}`;
+    }
+    
+    // Actualizar estado si está detenido
+    const status = elements.status;
+    if (status && status.textContent.includes('💤')) {
+      status.textContent = `💤 ${t('farm.stopped')}`;
+    }
+  }
+  
+  // Función para seleccionar posición de farming
+  async function selectFarmPosition(config, setStatus, updateZoneDisplay) {
+    return new Promise((resolve) => {
+      setStatus(t('farm.selectPositionAlert'), 'info');
+      
+      // Activar modo de selección de posición
+      config.selectingPosition = true;
+      
+      // Interceptar requests para capturar posición
+      const originalFetch = window.fetch;
+      window.fetch = async (url, options) => {
+        if (config.selectingPosition && url.includes('/s0/pixel/')) {
+          try {
+            const response = await originalFetch(url, options);
+            
+            if (response.ok && options && options.body) {
+              const bodyData = JSON.parse(options.body);
+              if (bodyData.coords && bodyData.coords.length >= 2) {
+                const localX = bodyData.coords[0];
+                const localY = bodyData.coords[1];
+                
+                // Extraer tile de la URL
+                const tileMatch = url.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);
+                if (tileMatch) {
+                  config.TILE_X = parseInt(tileMatch[1]);
+                  config.TILE_Y = parseInt(tileMatch[2]);
+                }
+                
+                // Establecer posición base y activar sistema de radio
+                config.BASE_X = localX;
+                config.BASE_Y = localY;
+                config.POSITION_SELECTED = true;
+                
+                config.selectingPosition = false;
+                window.fetch = originalFetch;
+                
+                // Actualizar displays y sincronizar inputs con la nueva config
+                updateZoneDisplay();
+                updateTileDisplay();
+                // MUY IMPORTANTE: sincronizar los inputs para que 'updateConfigFromInputs()'
+                // no sobreescriba el TILE_X/TILE_Y con valores antiguos al pulsar "Una vez"/"Iniciar"
+                updateInputsFromConfig();
+                
+                setStatus(t('farm.positionSet'), 'success');
+                log(`✅ Zona de farming establecida: tile(${config.TILE_X},${config.TILE_Y}) base(${localX},${localY}) radio(${config.FARM_RADIUS}px)`);
+                
+                // Guardar configuración
+                saveFarmCfg(config);
+                
+                resolve(true);
+              }
+            }
+            
+            return response;
+          } catch (error) {
+            log('Error interceptando pixel:', error);
+            return originalFetch(url, options);
+          }
+        }
+        return originalFetch(url, options);
+      };
+      
+      // Timeout para selección de posición
+      setTimeout(() => {
+        if (config.selectingPosition) {
+          window.fetch = originalFetch;
+          config.selectingPosition = false;
+          setStatus(t('farm.positionTimeout'), 'error');
+          resolve(false);
+        }
+      }, 120000); // 2 minutos
+    });
+  }
+  
+  // Escuchar cambios de idioma
+  window.addEventListener('languageChanged', updateTexts);
+  
   // API pública de la UI
   return {
     setStatus,
     updateStats,
     flashEffect,
     updateButtonStates,
+    updateTexts,
     destroy: () => {
+      window.removeEventListener('languageChanged', updateTexts);
       document.body.removeChild(shadowHost);
     },
     updateConfig: updateInputsFromConfig,
@@ -646,6 +864,12 @@ export function createFarmUI(config, onStart, onStop, onCalibrate) {
 export async function autoCalibrateTile(config) {
   try {
     log('🎯 Iniciando auto-calibración del tile...');
+    // Si ya hay una zona seleccionada y un tile definido, no forzar nueva calibración
+    if (config.POSITION_SELECTED && config.BASE_X != null && config.BASE_Y != null && Number.isFinite(config.TILE_X) && Number.isFinite(config.TILE_Y)) {
+      log(`ℹ️ Ya existe zona seleccionada. Se mantiene tile actual: (${config.TILE_X}, ${config.TILE_Y})`);
+      saveFarmCfg(config);
+      return { tileX: config.TILE_X, tileY: config.TILE_Y, success: true };
+    }
     
     // Buscar elementos que indiquen la posición actual
     const urlParams = new window.URLSearchParams(window.location.search);
@@ -727,9 +951,23 @@ export async function autoCalibrateTile(config) {
 export function mountFarmUI() {
   // Esta función será llamada desde farm/index.js
   log('📱 Montando UI del farm...');
+  
+  // Crear una UI básica para el farm
+  const ui = createFarmUI(
+    FARM_DEFAULTS,
+    () => log(t('farm.startingBot')),
+    () => log(t('farm.stoppingBot')),
+    () => log(t('farm.calibrating'))
+  );
+  
   return {
-    setStatus: (msg) => log(msg),
-    updateStats: () => {},
-    flashEffect: () => {}
+    setStatus: (msg) => {
+      log(msg);
+      ui.setStatus(msg);
+    },
+    updateStats: ui.updateStats,
+    flashEffect: ui.flashEffect,
+    updateTexts: ui.updateTexts,
+    destroy: ui.destroy
   };
 }

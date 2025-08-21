@@ -6,19 +6,32 @@ import { createFarmUI, autoCalibrateTile } from "../farm/ui.js";
 import { loop, paintWithRetry } from "../farm/loop.js";
 import { coordinateCapture } from "../core/capture.js";
 import { clamp } from "../core/utils.js";
+import { initializeLanguage, t } from "../locales/index.js";
+import { autoClickPaintButton } from "../core/dom.js";
 
 (async function() {
   'use strict';
 
+  // Initialize internationalization first
+  await initializeLanguage();
+  
+  // Auto-click del botón Paint al inicio
+  try {
+    log('🤖 [FARM] Iniciando auto-click del botón Paint...');
+    await autoClickPaintButton(3, true);
+  } catch (error) {
+    log('⚠️ [FARM] Error en auto-click del botón Paint:', error);
+  }
+
   // Verificar si el bot de farm ya está ejecutándose
   if (window.__wplaceBot?.farmRunning) {
-    alert("Auto-Farm ya está corriendo.");
+    alert(t('farm.alreadyRunning', "Auto-Farm ya está corriendo."));
     return;
   }
   
   // Verificar si hay otros bots ejecutándose
   if (window.__wplaceBot?.imageRunning) {
-    alert("Auto-Image está ejecutándose. Ciérralo antes de iniciar Auto-Farm.");
+    alert(t('farm.imageRunningWarning', "Auto-Image está ejecutándose. Ciérralo antes de iniciar Auto-Farm."));
     return;
   }
 
@@ -30,21 +43,29 @@ import { clamp } from "../core/utils.js";
   // Marcar que el farm bot está ejecutándose
   window.__wplaceBot.farmRunning = true;
 
+  // Listen for language changes
+  window.addEventListener('languageChanged', () => {
+    if (window.__wplaceBot?.ui?.updateTexts) {
+      window.__wplaceBot.ui.updateTexts();
+    }
+  });
+
   log('🚀 Iniciando WPlace Farm Bot (versión modular)');
 
   // Verificar si necesita calibración inicial
   function needsCalibrationCheck(cfg) {
-    // Verificar si las coordenadas son las por defecto
-    const hasDefaultCoords = cfg.TILE_X === FARM_DEFAULTS.TILE_X && cfg.TILE_Y === FARM_DEFAULTS.TILE_Y;
-    // También verificar si no hay configuración guardada
-    const hasNoSavedConfig = !localStorage.getItem('WPA_UI_CFG');
-    // Verificar que las coordenadas sean números válidos
-    const hasInvalidCoords = !Number.isFinite(cfg.TILE_X) || !Number.isFinite(cfg.TILE_Y);
-    
-    const needsCalib = hasDefaultCoords || hasNoSavedConfig || hasInvalidCoords;
-    log(`Verificación calibración: defaults=${hasDefaultCoords}, noConfig=${hasNoSavedConfig}, invalid=${hasInvalidCoords}, coords=(${cfg.TILE_X},${cfg.TILE_Y})`);
-    
-    return needsCalib;
+  // Si el usuario ya seleccionó una zona válida, NO recalibrar
+  const hasSelectedZone = !!cfg.POSITION_SELECTED && cfg.BASE_X != null && cfg.BASE_Y != null;
+  // Verificar si las coordenadas son las por defecto
+  const hasDefaultCoords = cfg.TILE_X === FARM_DEFAULTS.TILE_X && cfg.TILE_Y === FARM_DEFAULTS.TILE_Y;
+  // Verificar que las coordenadas sean números válidos
+  const hasInvalidCoords = !Number.isFinite(cfg.TILE_X) || !Number.isFinite(cfg.TILE_Y);
+
+  // Solo calibrar si NO hay zona seleccionada aún y además las coords son default o inválidas
+  const needsCalib = !hasSelectedZone && (hasDefaultCoords || hasInvalidCoords);
+  log(`Verificación calibración: defaults=${hasDefaultCoords}, selected=${hasSelectedZone}, invalid=${hasInvalidCoords}, coords=(${cfg.TILE_X},${cfg.TILE_Y})`);
+
+  return needsCalib;
   }
 
   // Función para habilitar captura de coordenadas
@@ -60,11 +81,11 @@ import { clamp } from "../core/utils.js";
         ui.setStatus(`🎯 Coordenadas capturadas: tile(${result.tileX},${result.tileY})`, 'success');
         log(`✅ Coordenadas capturadas automáticamente: tile(${result.tileX},${result.tileY})`);
       } else {
-        ui.setStatus('❌ No se pudieron capturar coordenadas', 'error');
+        ui.setStatus(`❌ ${t('common.error', 'No se pudieron capturar coordenadas')}`, 'error');
       }
     });
     
-    ui.setStatus('📸 Pinta un píxel manualmente para capturar coordenadas...', 'status');
+    ui.setStatus(`📸 ${t('farm.captureInstructions')}`, 'status');
   }
 
   // Inicializar configuración
@@ -134,7 +155,21 @@ import { clamp } from "../core/utils.js";
         return;
       }
       
-      // Verificar si necesita calibración
+      // Si no se ha seleccionado una zona, activar automáticamente la selección
+      if (!cfg.POSITION_SELECTED || cfg.BASE_X === null || cfg.BASE_Y === null) {
+        ui.setStatus(t('farm.autoSelectPosition'), 'info');
+        
+        // Activar selección de zona automáticamente
+        const selectButton = ui.getElement().shadowRoot.getElementById('select-position-btn');
+        if (selectButton) {
+          selectButton.click();
+        }
+        
+        // Retornar para no iniciar el bot todavía
+        return;
+      }
+      
+      // Verificar si necesita calibración (solo si no hay zona seleccionada)
       if (needsCalibrationCheck(cfg)) {
         ui.setStatus('🎯 Calibrando automáticamente...', 'status');
         const calibration = await autoCalibrateTile(cfg);

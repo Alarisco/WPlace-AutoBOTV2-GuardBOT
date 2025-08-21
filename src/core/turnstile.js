@@ -49,3 +49,28 @@ export async function executeTurnstile(siteKey, action = "paint") {
 export async function getTurnstileToken(siteKey) {
   return executeTurnstile(siteKey, 'paint');
 }
+
+// Detecta dinámicamente la sitekey de Turnstile del DOM o del contexto global.
+// Prioridad: [data-sitekey] > .cf-turnstile[data-sitekey] > window.__TURNSTILE_SITEKEY > fallback
+export function detectSiteKey(fallback = '') {
+  try {
+    // 1) Elemento con atributo data-sitekey (común en integraciones explícitas)
+    const el = document.querySelector('[data-sitekey]');
+    if (el) {
+      const key = el.getAttribute('data-sitekey');
+      if (key && key.length > 10) return key;
+    }
+    // 2) Widget Turnstile insertado (.cf-turnstile)
+    const cf = document.querySelector('.cf-turnstile');
+    if (cf && cf.dataset?.sitekey && cf.dataset.sitekey.length > 10) {
+      return cf.dataset.sitekey;
+    }
+    // 3) Variable global opcional
+    if (typeof window !== 'undefined' && window.__TURNSTILE_SITEKEY && window.__TURNSTILE_SITEKEY.length > 10) {
+      return window.__TURNSTILE_SITEKEY;
+    }
+  } catch {
+    // ignore
+  }
+  return fallback;
+}
