@@ -124,9 +124,6 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 ### 🎨 Auto-Image Bot
 **Creación automática de pixel art desde imágenes**
 
-### 🎨 Auto-Image Bot
-**Creación automática de pixel art desde imágenes**
-
 ```javascript
 javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/refs/heads/main/Auto-Image.js").then(t=>t.text()).then(eval);
 ```
@@ -137,6 +134,8 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 - ✅ Selección precisa de posición
 - ✅ Pintado por lotes optimizado
 - ✅ Sistema de cooldown automático
+- ✅ 🛡️ Protección del dibujo entre lotes (repara cambios antes del siguiente lote)
+- ✅ 📐 Patrón de pintado: lineal (inicio/fin), aleatorio, centro→afuera, esquinas primero, espiral
 - ✅ **💾 Guardar/Cargar progreso**
 - ✅ **⏸️ Pausar y reanudar trabajos**
 - ✅ Interfaz 100% en español

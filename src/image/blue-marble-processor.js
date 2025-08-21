@@ -220,7 +220,7 @@ export class BlueMarblelImageProcessor {
           // Si no es un color exacto, verificar si es muy próximo al blanco
           if (!isValidPixel && this.allowedColorsSet.has('255,255,255')) {
             // Tolerancia para píxeles muy próximos al blanco (diferencia máxima de 10 en cada canal)
-            if (r >= 245 && g >= 245 && b >= 245) {
+            if (r >= 240 && g >= 240 && b >= 240) {
               matchedKey = '255,255,255';
               isValidPixel = true;
             }
