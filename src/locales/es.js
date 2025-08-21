@@ -107,7 +107,23 @@ export const es = {
     retryFailed: "❌ Falló después de {maxAttempts} intentos. Continuando con siguiente lote...",
     networkError: "🌐 Error de red. Reintentando...",
     serverError: "🔥 Error del servidor. Reintentando...",
-    timeoutError: "⏰ Timeout del servidor. Reintentando..."
+    timeoutError: "⏰ Timeout del servidor. Reintentando...",
+    // Nuevos textos v2.0
+    protectionEnabled: "🛡️ Protección habilitada",
+    protectionDisabled: "🛡️ Protección deshabilitada", 
+    paintPattern: "📐 Patrón de pintado",
+    patternLinearStart: "Lineal (Inicio)",
+    patternLinearEnd: "Lineal (Final)",
+    patternRandom: "Aleatorio",
+    patternCenterOut: "Centro hacia afuera",
+    patternCornersFirst: "Esquinas primero",
+    patternSpiral: "Espiral",
+    protectingDrawing: "🛡️ Protegiendo dibujo...",
+    changesDetected: "🚨 {count} cambios detectados en el dibujo",
+    repairing: "🔧 Reparando {count} píxeles alterados...",
+    repairCompleted: "✅ Reparación completada: {count} píxeles",
+    noChargesForRepair: "⚡ Sin cargas para reparar, esperando...",
+    protectionPriority: "🛡️ Prioridad de protección activada"
   },
 
   // Farm Module (por implementar)

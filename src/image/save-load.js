@@ -1,6 +1,27 @@
 import { log } from "../core/logger.js";
 import { imageState } from "./config.js";
 
+/**
+ * Obtener datos completos de píxeles para guardar
+ */
+function getFullPixelData() {
+  if (!imageState.imageData) {
+    return null;
+  }
+
+  // Si hay un processor Blue Marble, usar su método
+  if (imageState.imageData.processor && typeof imageState.imageData.processor.generatePixelQueue === 'function') {
+    return imageState.imageData.processor.generatePixelQueue();
+  }
+
+  // Fallback para formato clásico
+  if (imageState.imageData.pixels) {
+    return imageState.imageData.pixels;
+  }
+
+  return null;
+}
+
 export function saveProgress(filename = null) {
   try {
     if (!imageState.imageData || imageState.paintedPixels === 0) {
@@ -8,12 +29,14 @@ export function saveProgress(filename = null) {
     }
     
     const progressData = {
-      version: "1.0",
+      version: "2.0", // Versión actualizada para compatibilidad
       timestamp: Date.now(),
       imageData: {
         width: imageState.imageData.width,
         height: imageState.imageData.height,
-        originalName: imageState.originalImageName
+        originalName: imageState.originalImageName,
+        // Guardar todos los píxeles del proyecto completo para protección
+        fullPixelData: getFullPixelData()
       },
       progress: {
         paintedPixels: imageState.paintedPixels,
@@ -29,7 +52,10 @@ export function saveProgress(filename = null) {
         pixelsPerBatch: imageState.pixelsPerBatch,
         useAllChargesFirst: imageState.useAllChargesFirst,
         isFirstBatch: imageState.isFirstBatch,
-        maxCharges: imageState.maxCharges
+        maxCharges: imageState.maxCharges,
+        // Nuevas configuraciones v2.0
+        protectionEnabled: imageState.protectionEnabled,
+        paintPattern: imageState.paintPattern
       },
       // Filtrar solo los datos serializables de los colores (sin elementos DOM)
       colors: imageState.availableColors.map(color => ({
@@ -38,7 +64,13 @@ export function saveProgress(filename = null) {
         g: color.g,
         b: color.b
       })),
-      remainingPixels: imageState.remainingPixels || []
+      remainingPixels: imageState.remainingPixels || [],
+      // Nueva información v2.0 para protección
+      drawnPixels: Array.from(imageState.drawnPixelsMap.values()),
+      protection: {
+        enabled: imageState.protectionEnabled,
+        lastCheck: imageState.lastProtectionCheck
+      }
     };
 
     // Persistencia del overlay de imagen eliminada; el overlay de plan se infiere desde remainingPixels
@@ -84,6 +116,10 @@ export async function loadProgress(file) {
             throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
           }
           
+          // Detectar versión del archivo para retrocompatibilidad
+          const fileVersion = progressData.version || "1.0";
+          log(`📁 Cargando progreso versión ${fileVersion}`);
+          
           // Verificar compatibilidad de colores
           if (imageState.availableColors.length > 0) {
             const savedColorIds = progressData.colors.map(c => c.id);
@@ -95,7 +131,7 @@ export async function loadProgress(file) {
             }
           }
           
-          // Restaurar estado
+          // Restaurar estado básico (compatible con v1.0 y v2.0)
           imageState.imageData = {
             ...progressData.imageData,
             pixels: [] // Los píxeles se regenerarán si es necesario
@@ -129,6 +165,63 @@ export async function loadProgress(file) {
           // Manejar remainingPixels tanto en progress como en raíz
           imageState.remainingPixels = progressData.remainingPixels || progressData.progress.remainingPixels || [];
 
+          // Cargar configuración (retrocompatible)
+          if (progressData.config) {
+            imageState.pixelsPerBatch = progressData.config.pixelsPerBatch || imageState.pixelsPerBatch;
+            imageState.useAllChargesFirst = progressData.config.useAllChargesFirst !== undefined ? 
+              progressData.config.useAllChargesFirst : imageState.useAllChargesFirst;
+            imageState.isFirstBatch = progressData.config.isFirstBatch !== undefined ? 
+              progressData.config.isFirstBatch : true; // Por defecto, continuar como no primera pasada
+            imageState.maxCharges = progressData.config.maxCharges || imageState.maxCharges;
+            
+            // Nuevas configuraciones v2.0 (solo si están disponibles)
+            if (fileVersion >= "2.0") {
+              imageState.protectionEnabled = progressData.config.protectionEnabled !== undefined ? 
+                progressData.config.protectionEnabled : true;
+              imageState.paintPattern = progressData.config.paintPattern || 'linear_start';
+            }
+          }
+          
+          // Cargar datos de protección (solo en v2.0+)
+          if (fileVersion >= "2.0" && progressData.drawnPixels) {
+            // Reconstruir mapa de píxeles dibujados
+            imageState.drawnPixelsMap.clear();
+            for (const pixel of progressData.drawnPixels) {
+              const key = `${pixel.imageX},${pixel.imageY}`;
+              imageState.drawnPixelsMap.set(key, pixel);
+            }
+            log(`✅ Cargados ${progressData.drawnPixels.length} píxeles dibujados para protección`);
+            
+            // Cargar información de protección
+            if (progressData.protection) {
+              imageState.protectionEnabled = progressData.protection.enabled !== undefined ? 
+                progressData.protection.enabled : true;
+              imageState.lastProtectionCheck = progressData.protection.lastCheck || 0;
+            }
+          } else {
+            // En archivos v1.0, crear mapa de protección basado en progreso actual
+            imageState.drawnPixelsMap.clear();
+            log('📁 Archivo v1.0 detectado, protección se activará al continuar pintado');
+          }
+          
+          // Aplicar patrón de pintado a píxeles restantes (solo si hay configuración)
+          if (imageState.paintPattern && imageState.paintPattern !== 'linear_start' && imageState.remainingPixels.length > 0) {
+            try {
+              import('./patterns.js').then(({ applyPaintPattern }) => {
+                imageState.remainingPixels = applyPaintPattern(
+                  imageState.remainingPixels, 
+                  imageState.paintPattern, 
+                  imageState.imageData
+                );
+                log(`🎨 Patrón de pintado aplicado: ${imageState.paintPattern}`);
+              }).catch(patternError => {
+                log('⚠️ Error aplicando patrón de pintado:', patternError);
+              });
+            } catch (patternError) {
+              log('⚠️ Error cargando módulo de patrones:', patternError);
+            }
+          }
+
           // Actualizar overlay del plan con los píxeles restantes (si los hay)
           try {
             if (window.__WPA_PLAN_OVERLAY__) {
@@ -157,29 +250,24 @@ export async function loadProgress(file) {
             log('⚠️ Error activando plan overlay al cargar progreso:', e);
           }
           
-          if (progressData.config) {
-            imageState.pixelsPerBatch = progressData.config.pixelsPerBatch || imageState.pixelsPerBatch;
-            imageState.useAllChargesFirst = progressData.config.useAllChargesFirst !== undefined ? 
-              progressData.config.useAllChargesFirst : imageState.useAllChargesFirst;
-            imageState.isFirstBatch = progressData.config.isFirstBatch !== undefined ? 
-              progressData.config.isFirstBatch : true; // Por defecto, continuar como no primera pasada
-            imageState.maxCharges = progressData.config.maxCharges || imageState.maxCharges;
-          }
-          
           // Marcar como imagen cargada y listo para continuar
           imageState.imageLoaded = true;
           imageState.colorsChecked = true;
 
           // Ya no se restaura overlay de imagen; el overlay de plan se llena más abajo
           
-          log(`✅ Progreso cargado: ${imageState.paintedPixels}/${imageState.totalPixels} píxeles`);
+          log(`✅ Progreso cargado (v${fileVersion}): ${imageState.paintedPixels}/${imageState.totalPixels} píxeles`);
+          if (fileVersion >= "2.0") {
+            log(`🛡️ Protección: ${imageState.protectionEnabled ? 'habilitada' : 'deshabilitada'}, Patrón: ${imageState.paintPattern}`);
+          }
           
           resolve({ 
             success: true, 
             data: progressData,
             painted: imageState.paintedPixels,
             total: imageState.totalPixels,
-            canContinue: imageState.remainingPixels.length > 0
+            canContinue: imageState.remainingPixels.length > 0,
+            version: fileVersion
           });
           
         } catch (parseError) {
@@ -214,6 +302,9 @@ export function clearProgress() {
   imageState.originalImageName = null;
   imageState.isFirstBatch = true; // Resetear para nueva imagen
   imageState.nextBatchCooldown = 0;
+  // Limpiar nuevos campos v2.0
+  imageState.drawnPixelsMap.clear();
+  imageState.lastProtectionCheck = 0;
   
   log('🧹 Progreso limpiado');
 }

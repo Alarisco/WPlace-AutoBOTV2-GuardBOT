@@ -159,6 +159,40 @@ export async function runImage() {
         if (config.useAllCharges !== undefined) {
           imageState.useAllChargesFirst = config.useAllCharges;
         }
+        if (config.protectionEnabled !== undefined) {
+          imageState.protectionEnabled = config.protectionEnabled;
+          log(`🛡️ Protección del dibujo: ${config.protectionEnabled ? 'habilitada' : 'deshabilitada'}`);
+        }
+        if (config.paintPattern !== undefined) {
+          imageState.paintPattern = config.paintPattern;
+          log(`🎨 Patrón de pintado cambiado a: ${config.paintPattern}`);
+          
+          // Si hay píxeles restantes, reaplicar el patrón
+          if (imageState.remainingPixels && imageState.remainingPixels.length > 0) {
+            import('./patterns.js').then(({ applyPaintPattern }) => {
+              imageState.remainingPixels = applyPaintPattern(
+                imageState.remainingPixels, 
+                config.paintPattern, 
+                imageState.imageData
+              );
+              
+              // Actualizar overlay si está activo
+              try {
+                if (window.__WPA_PLAN_OVERLAY__) {
+                  window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
+                    enabled: true,
+                    nextBatchCount: imageState.pixelsPerBatch
+                  });
+                  log(`✅ Overlay actualizado con nuevo patrón: ${config.paintPattern}`);
+                }
+              } catch (e) {
+                log('⚠️ Error actualizando overlay con nuevo patrón:', e);
+              }
+            }).catch(error => {
+              log('❌ Error aplicando nuevo patrón:', error);
+            });
+          }
+        }
         log(`Configuración actualizada:`, config);
       },
       

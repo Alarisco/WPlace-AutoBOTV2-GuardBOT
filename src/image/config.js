@@ -83,5 +83,10 @@ export const imageState = {
   lastChargeUpdate: 0,
   chargeDecimalPart: 0,
   originalImageName: null,
-  retryCount: 0 // Contador de reintentos para estadísticas
+  retryCount: 0, // Contador de reintentos para estadísticas
+  // Nuevas opciones para protección y patrones
+  protectionEnabled: true, // Habilitar protección del dibujo
+  paintPattern: 'linear_start', // Patrón de pintado predeterminado
+  drawnPixelsMap: new Map(), // Mapa de píxeles ya dibujados para protección
+  lastProtectionCheck: 0 // Timestamp de última verificación de protección
 };

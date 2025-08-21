@@ -126,6 +126,12 @@ export async function createImageUI({ texts, ...handlers }) {
       text-align: center;
     }
     
+    .config-input[type="text"], 
+    .config-input select {
+      width: 120px;
+      text-align: left;
+    }
+    
     .config-checkbox {
       margin-right: 8px;
     }
@@ -460,6 +466,23 @@ export async function createImageUI({ texts, ...handlers }) {
             ${texts.showOverlay || 'Mostrar overlay'}
           </label>
         </div>
+        <div class="config-item">
+          <label>
+            <input class="config-checkbox protection-enabled" type="checkbox" checked>
+            🛡️ Protección del dibujo
+          </label>
+        </div>
+        <div class="config-item">
+          <label>📐 Patrón de pintado:</label>
+          <select class="config-input paint-pattern">
+            <option value="linear_start">Lineal (Inicio)</option>
+            <option value="linear_end">Lineal (Final)</option>
+            <option value="random">Aleatorio</option>
+            <option value="center_out">Centro hacia afuera</option>
+            <option value="corners_first">Esquinas primero</option>
+            <option value="spiral">Espiral</option>
+          </select>
+        </div>
       </div>
       
       <!-- Configuración visible en la interfaz principal -->
@@ -585,6 +608,8 @@ export async function createImageUI({ texts, ...handlers }) {
     configPanel: container.querySelector('.config-panel'),
     pixelsPerBatch: container.querySelector('.pixels-per-batch'),
     useAllCharges: container.querySelector('.use-all-charges'),
+    protectionEnabled: container.querySelector('.protection-enabled'),
+    paintPattern: container.querySelector('.paint-pattern'),
     showOverlay: container.querySelector('.show-overlay'),
     batchValue: container.querySelector('.batch-value'),
     cooldownValue: container.querySelector('.cooldown-value'),
@@ -661,6 +686,18 @@ export async function createImageUI({ texts, ...handlers }) {
   elements.useAllCharges.addEventListener('change', () => {
     if (handlers.onConfigChange) {
       handlers.onConfigChange({ useAllCharges: elements.useAllCharges.checked });
+    }
+  });
+  
+  elements.protectionEnabled.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ protectionEnabled: elements.protectionEnabled.checked });
+    }
+  });
+  
+  elements.paintPattern.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ paintPattern: elements.paintPattern.value });
     }
   });
   

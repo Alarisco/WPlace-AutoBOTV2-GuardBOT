@@ -4,17 +4,26 @@ import { postPixelBatchImage } from "../core/wplace-api.js";
 import { getTurnstileToken, detectSiteKey } from "../core/turnstile.js";
 import { imageState, IMAGE_DEFAULTS } from "./config.js";
 import { t } from "../locales/index.js";
+import { protectBeforeNextBatch } from "./protection.js";
+import { applyPaintPattern } from "./patterns.js";
 
 export async function processImage(imageData, startPosition, onProgress, onComplete, onError) {
   const { width, height } = imageData;
   const { x: localStartX, y: localStartY } = startPosition;
   
   log(`Iniciando pintado: imagen(${width}x${height}) inicio LOCAL(${localStartX},${localStartY}) tile(${imageState.tileX},${imageState.tileY})`);
+  log(`🛡️ Protección: ${imageState.protectionEnabled ? 'habilitada' : 'deshabilitada'}, Patrón: ${imageState.paintPattern}`);
   
   // Generar cola de píxeles si no existe
   if (!imageState.remainingPixels || imageState.remainingPixels.length === 0 || (imageState.lastPosition.x === 0 && imageState.lastPosition.y === 0)) {
     log('Generando cola de píxeles...');
     imageState.remainingPixels = generatePixelQueue(imageData, startPosition, imageState.tileX, imageState.tileY);
+    
+    // Aplicar patrón de pintado
+    if (imageState.paintPattern && imageState.paintPattern !== 'linear_start') {
+      log(`🎨 Aplicando patrón de pintado: ${imageState.paintPattern}`);
+      imageState.remainingPixels = applyPaintPattern(imageState.remainingPixels, imageState.paintPattern, imageData);
+    }
     
     // Si hay una posición de continuación, filtrar píxeles ya pintados
     if (imageState.lastPosition.x > 0 || imageState.lastPosition.y > 0) {
@@ -56,6 +65,38 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
   
   try {
     while (imageState.remainingPixels.length > 0 && !imageState.stopFlag) {
+      // *** NUEVA FUNCIONALIDAD: Protección antes de cada lote ***
+      if (imageState.protectionEnabled && imageState.paintedPixels > 0) {
+        try {
+          const protectionResult = await protectBeforeNextBatch(onProgress);
+          
+          if (!protectionResult.canContinue) {
+            if (protectionResult.reason === 'no_charges_for_protection') {
+              log(`🛡️ No hay cargas suficientes para proteger ${protectionResult.changesCount} píxeles alterados, esperando...`);
+              if (onProgress) {
+                onProgress(imageState.paintedPixels, imageState.totalPixels, 
+                  `🛡️ Protegiendo dibujo: esperando cargas para reparar ${protectionResult.changesCount} píxeles alterados...`);
+              }
+              
+              // Esperar cargas antes de continuar
+              await waitForCooldown(Math.min(protectionResult.changesCount, 20), onProgress);
+              continue; // Volver a intentar el ciclo con protección
+            }
+          } else if (protectionResult.needsProtection) {
+            if (protectionResult.reason === 'protection_completed') {
+              log(`🛡️ Protección completada: ${protectionResult.repairedCount} píxeles reparados`);
+              // Actualizar cargas después de la reparación
+              imageState.currentCharges = protectionResult.remainingCharges || imageState.currentCharges;
+            } else if (protectionResult.reason === 'protection_failed') {
+              log(`⚠️ Protección falló, continuando con advertencia (${protectionResult.changesCount} cambios no reparados)`);
+            }
+          }
+        } catch (protectionError) {
+          log('❌ Error en protección:', protectionError);
+          // Continuar pintado aunque la protección falle
+        }
+      }
+      
       // Verificar cargas disponibles
       let availableCharges = Math.floor(imageState.currentCharges);
       
@@ -105,6 +146,23 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
       
       if (result.success && result.painted > 0) {
         imageState.paintedPixels += result.painted;
+        
+        // *** NUEVA FUNCIONALIDAD: Registrar píxeles pintados para protección ***
+        if (imageState.protectionEnabled) {
+          for (const pixel of batch.slice(0, result.painted)) {
+            const key = `${pixel.imageX},${pixel.imageY}`;
+            imageState.drawnPixelsMap.set(key, {
+              imageX: pixel.imageX,
+              imageY: pixel.imageY,
+              localX: pixel.localX,
+              localY: pixel.localY,
+              tileX: pixel.tileX,
+              tileY: pixel.tileY,
+              color: pixel.color,
+              paintedAt: Date.now()
+            });
+          }
+        }
         
         // Actualizar cargas consumidas
         imageState.currentCharges = Math.max(0, imageState.currentCharges - result.painted);
