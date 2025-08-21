@@ -107,10 +107,28 @@ export const en = {
     retryFailed: "❌ Failed after {maxAttempts} attempts. Continuing with next batch...",
     networkError: "🌐 Network error. Retrying...",
     serverError: "🔥 Server error. Retrying...",
-    timeoutError: "⏰ Server timeout. Retrying..."
+    timeoutError: "⏰ Server timeout, retrying...",
+    // v2.0 - Protection and Patterns
+    protectionEnabled: "Protection enabled",
+    protectionDisabled: "Protection disabled",
+    paintPattern: "Paint pattern",
+    solid: "Solid",
+    stripes: "Stripes",
+    checkerboard: "Checkerboard",
+    gradient: "Gradient",
+    dots: "Dots",
+    waves: "Waves",
+    spiral: "Spiral",
+    mosaic: "Mosaic",
+    bricks: "Bricks",
+    zigzag: "Zigzag",
+    protectingDrawing: "Protecting drawing...",
+    repairCompleted: "Repair completed",
+    patternApplied: "Pattern applied",
+    customPattern: "Custom pattern"
   },
 
-  // Farm Module (to be implemented)
+  // Farm module (to be implemented)
   farm: {
     title: "WPlace Farm Bot",
     start: "Start",

@@ -107,7 +107,25 @@ export const zhHant = {
     retryFailed: "❌ 超過 {maxAttempts} 次嘗試失敗。繼續下一批...",
     networkError: "🌐 網絡錯誤，正在重試...",
     serverError: "🔥 服務器錯誤，正在重試...",
-    timeoutError: "⏰ 服務器超時，正在重試..."
+    timeoutError: "⏰ 服務器超時，正在重試...",
+    // v2.0 - Protection and Patterns
+    protectionEnabled: "保護已啟用",
+    protectionDisabled: "保護已禁用",
+    paintPattern: "繪畫圖案",
+    solid: "純色",
+    stripes: "條紋",
+    checkerboard: "棋盤",
+    gradient: "漸變",
+    dots: "點狀",
+    waves: "波浪",
+    spiral: "螺旋",
+    mosaic: "馬賽克",
+    bricks: "磚塊",
+    zigzag: "鋸齒",
+    protectingDrawing: "正在保護繪圖...",
+    repairCompleted: "修復完成",
+    patternApplied: "圖案已應用",
+    customPattern: "自定義圖案"
   },
 
   // 農場模塊（待實現）

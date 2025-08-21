@@ -107,7 +107,25 @@ export const fr = {
     retryFailed: "❌ Échec après {maxAttempts} tentatives. Continuant avec le lot suivant...",
     networkError: "🌐 Erreur réseau. Nouvel essai...",
     serverError: "🔥 Erreur serveur. Nouvel essai...",
-    timeoutError: "⏰ Timeout serveur. Nouvel essai..."
+    timeoutError: "⏰ Timeout serveur. Nouvel essai...",
+    // v2.0 - Protection et Motifs
+    protectionEnabled: "Protection activée",
+    protectionDisabled: "Protection désactivée",
+    paintPattern: "Motif de peinture",
+    solid: "Solide",
+    stripes: "Rayures",
+    checkerboard: "Damier",
+    gradient: "Dégradé",
+    dots: "Points",
+    waves: "Vagues",
+    spiral: "Spirale",
+    mosaic: "Mosaïque",
+    bricks: "Briques",
+    zigzag: "Zigzag",
+    protectingDrawing: "Protection du dessin...",
+    repairCompleted: "Réparation terminée",
+    patternApplied: "Motif appliqué",
+    customPattern: "Motif personnalisé"
   },
 
   // Farm Module (to be implemented)

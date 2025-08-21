@@ -107,7 +107,25 @@ export const zhHans = {
     retryFailed: "❌ 超过 {maxAttempts} 次尝试失败。继续下一批...",
     networkError: "🌐 网络错误，正在重试...",
     serverError: "🔥 服务器错误，正在重试...",
-    timeoutError: "⏰ 服务器超时，正在重试..."
+    timeoutError: "⏰ 服务器超时，正在重试...",
+    // v2.0 - Protection and Patterns
+    protectionEnabled: "保护已启用",
+    protectionDisabled: "保护已禁用",
+    paintPattern: "绘画图案",
+    solid: "纯色",
+    stripes: "条纹",
+    checkerboard: "棋盘",
+    gradient: "渐变",
+    dots: "点状",
+    waves: "波浪",
+    spiral: "螺旋",
+    mosaic: "马赛克",
+    bricks: "砖块",
+    zigzag: "锯齿",
+    protectingDrawing: "正在保护绘图...",
+    repairCompleted: "修复完成",
+    patternApplied: "图案已应用",
+    customPattern: "自定义图案"
   },
 
   // 农场模块（待实现）
