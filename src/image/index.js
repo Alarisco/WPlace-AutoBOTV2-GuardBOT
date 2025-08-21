@@ -163,6 +163,10 @@ export async function runImage() {
           imageState.protectionEnabled = config.protectionEnabled;
           log(`🛡️ Protección del dibujo: ${config.protectionEnabled ? 'habilitada' : 'deshabilitada'}`);
         }
+        if (config.smartVerification !== undefined) {
+          imageState.smartVerification = config.smartVerification;
+          log(`💡 Verificación inteligente: ${config.smartVerification ? 'habilitada' : 'deshabilitada'}`);
+        }
         if (config.paintPattern !== undefined) {
           imageState.paintPattern = config.paintPattern;
           log(`🎨 Patrón de pintado cambiado a: ${config.paintPattern}`);
@@ -616,6 +620,24 @@ export async function runImage() {
           }
         } catch (error) {
           ui.setStatus(t('image.progressLoadError', { error: error.message }), 'error');
+          return false;
+        }
+      },
+      
+      onExportGuard: async () => {
+        try {
+          const { exportForGuard } = await import('./save-load.js');
+          const result = exportForGuard();
+          if (result.success) {
+            ui.setStatus(t('image.guardExportSuccess', { filename: result.filename }), 'success');
+            log(`✅ Exportado para Auto-Guard: ${result.filename}`);
+          } else {
+            ui.setStatus(t('image.guardExportError', { error: result.error }), 'error');
+          }
+          return result.success;
+        } catch (error) {
+          ui.setStatus(t('image.guardExportError', { error: error.message }), 'error');
+          log(`❌ Error exportando para Guard: ${error.message}`);
           return false;
         }
       },

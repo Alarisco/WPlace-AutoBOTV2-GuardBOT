@@ -22,6 +22,110 @@ function getFullPixelData() {
   return null;
 }
 
+/**
+ * Exportar progreso en formato compatible con Auto-Guard
+ */
+export function exportForGuard(filename = null) {
+  try {
+    if (!imageState.imageData || imageState.drawnPixelsMap.size === 0) {
+      throw new Error('No hay píxeles dibujados para exportar a Guard');
+    }
+    
+    // Calcular área de protección basada en píxeles dibujados
+    const drawnPixels = Array.from(imageState.drawnPixelsMap.values());
+    let minX = Number.MAX_SAFE_INTEGER, maxX = Number.MIN_SAFE_INTEGER;
+    let minY = Number.MAX_SAFE_INTEGER, maxY = Number.MIN_SAFE_INTEGER;
+    
+    // Calcular coordenadas globales para encontrar el área mínima
+    for (const pixel of drawnPixels) {
+      const globalX = (pixel.tileX * 1000) + pixel.localX;
+      const globalY = (pixel.tileY * 1000) + pixel.localY;
+      
+      minX = Math.min(minX, globalX);
+      maxX = Math.max(maxX, globalX);
+      minY = Math.min(minY, globalY);
+      maxY = Math.max(maxY, globalY);
+    }
+    
+    // Crear datos compatible con Auto-Guard
+    const guardData = {
+      version: "2.0-guard",
+      timestamp: Date.now(),
+      source: "Auto-Image",
+      originalProject: {
+        name: imageState.originalImageName,
+        totalPixels: imageState.totalPixels,
+        paintedPixels: imageState.paintedPixels
+      },
+      protectionArea: {
+        x1: minX,
+        y1: minY,
+        x2: maxX + 1, // +1 para área inclusiva
+        y2: maxY + 1,
+        width: maxX - minX + 1,
+        height: maxY - minY + 1,
+        pixelCount: drawnPixels.length
+      },
+      // Mapa de píxeles original en formato Guard
+      originalPixels: drawnPixels.map(pixel => {
+        const globalX = (pixel.tileX * 1000) + pixel.localX;
+        const globalY = (pixel.tileY * 1000) + pixel.localY;
+        
+        return {
+          key: `${globalX},${globalY}`,
+          globalX,
+          globalY,
+          localX: pixel.localX,
+          localY: pixel.localY,
+          tileX: pixel.tileX,
+          tileY: pixel.tileY,
+          colorId: pixel.color.id,
+          r: pixel.color.r || 255,
+          g: pixel.color.g || 255,
+          b: pixel.color.b || 255,
+          paintedAt: pixel.paintedAt || Date.now()
+        };
+      }),
+      // Colores disponibles
+      colors: imageState.availableColors.map(color => ({
+        id: color.id,
+        r: color.r,
+        g: color.g,
+        b: color.b
+      })),
+      guardConfig: {
+        pixelsPerBatch: 10, // Configuración por defecto de Guard
+        minChargesToWait: 20,
+        checkInterval: 10000
+      }
+    };
+    
+    const dataStr = JSON.stringify(guardData, null, 2);
+    const blob = new window.Blob([dataStr], { type: 'application/json' });
+    
+    const finalFilename = filename || `wplace_guard_${imageState.originalImageName || 'drawing'}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+    
+    // Crear y disparar descarga
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = finalFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    log(`✅ Datos exportados para Auto-Guard: ${finalFilename}`);
+    log(`📊 Área de protección: (${minX},${minY}) a (${maxX},${maxY}) - ${drawnPixels.length} píxeles`);
+    
+    return { success: true, filename: finalFilename, pixelCount: drawnPixels.length };
+    
+  } catch (error) {
+    log('❌ Error exportando para Guard:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export function saveProgress(filename = null) {
   try {
     if (!imageState.imageData || imageState.paintedPixels === 0) {

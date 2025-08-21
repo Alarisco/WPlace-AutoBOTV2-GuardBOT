@@ -473,6 +473,12 @@ export async function createImageUI({ texts, ...handlers }) {
           </label>
         </div>
         <div class="config-item">
+          <label>
+            <input class="config-checkbox smart-verification" type="checkbox" checked>
+            💡 Verificación inteligente
+          </label>
+        </div>
+        <div class="config-item">
           <label>📐 Patrón de pintado:</label>
           <select class="config-input paint-pattern">
             <option value="linear_start">Lineal (Inicio)</option>
@@ -511,6 +517,10 @@ export async function createImageUI({ texts, ...handlers }) {
         <button class="btn btn-load load-progress-btn" disabled>
           📁
           <span>${texts.loadProgress}</span>
+        </button>
+        <button class="btn btn-load export-guard-btn" disabled style="background: #8b5cf6;">
+          🛡️
+          <span>Exportar para Guard</span>
         </button>
         <button class="btn btn-primary resize-btn" disabled>
           🔄
@@ -609,6 +619,7 @@ export async function createImageUI({ texts, ...handlers }) {
     pixelsPerBatch: container.querySelector('.pixels-per-batch'),
     useAllCharges: container.querySelector('.use-all-charges'),
     protectionEnabled: container.querySelector('.protection-enabled'),
+    smartVerification: container.querySelector('.smart-verification'),
     paintPattern: container.querySelector('.paint-pattern'),
     showOverlay: container.querySelector('.show-overlay'),
     batchValue: container.querySelector('.batch-value'),
@@ -616,6 +627,7 @@ export async function createImageUI({ texts, ...handlers }) {
     initBtn: container.querySelector('.init-btn'),
     uploadBtn: container.querySelector('.upload-btn'),
     loadProgressBtn: container.querySelector('.load-progress-btn'),
+    exportGuardBtn: container.querySelector('.export-guard-btn'),
     resizeBtn: container.querySelector('.resize-btn'),
     selectPosBtn: container.querySelector('.select-pos-btn'),
     startBtn: container.querySelector('.start-btn'),
@@ -692,6 +704,12 @@ export async function createImageUI({ texts, ...handlers }) {
   elements.protectionEnabled.addEventListener('change', () => {
     if (handlers.onConfigChange) {
       handlers.onConfigChange({ protectionEnabled: elements.protectionEnabled.checked });
+    }
+  });
+  
+  elements.smartVerification.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ smartVerification: elements.smartVerification.checked });
     }
   });
   

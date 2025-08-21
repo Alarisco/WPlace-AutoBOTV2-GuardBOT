@@ -315,55 +315,8 @@ async function repairPixelBatch(tileX, tileY, coords, colors) {
  * Obtener lista de píxeles ya pintados desde el estado actual
  */
 export function getPaintedPixelsList() {
-  if (!imageState.imageData || !imageState.remainingPixels) {
-    return [];
-  }
-
-  // Generar lista completa de píxeles del proyecto
-  const totalPixels = [];
-  
-  if (imageState.imageData.processor && typeof imageState.imageData.processor.generatePixelQueue === 'function') {
-    // Usar Blue Marble processor si está disponible
-    totalPixels.push(...imageState.imageData.processor.generatePixelQueue());
-  } else {
-    // Fallback para formato clásico
-    const { pixels } = imageState.imageData;
-    const { x: localStartX, y: localStartY } = imageState.startPosition;
-    
-    for (const pixelData of pixels || []) {
-      const pixelX = pixelData.imageX !== undefined ? pixelData.imageX : pixelData.x;
-      const pixelY = pixelData.imageY !== undefined ? pixelData.imageY : pixelData.y;
-      const pixelColor = pixelData.color !== undefined ? pixelData.color : pixelData.targetColor;
-      
-      if (pixelX === undefined || pixelY === undefined) continue;
-      
-      const globalX = localStartX + pixelX;
-      const globalY = localStartY + pixelY;
-      const tileOffsetX = Math.floor(globalX / 1000);
-      const tileOffsetY = Math.floor(globalY / 1000);
-      const tx = imageState.tileX + tileOffsetX;
-      const ty = imageState.tileY + tileOffsetY;
-      const localX = ((globalX % 1000) + 1000) % 1000;
-      const localY = ((globalY % 1000) + 1000) % 1000;
-      
-      totalPixels.push({
-        imageX: pixelX,
-        imageY: pixelY,
-        localX,
-        localY,
-        tileX: tx,
-        tileY: ty,
-        color: pixelColor
-      });
-    }
-  }
-
-  // Filtrar píxeles que ya han sido pintados (no están en remainingPixels)
-  const remainingSet = new Set(
-    imageState.remainingPixels.map(p => `${p.imageX},${p.imageY}`)
-  );
-  
-  return totalPixels.filter(p => !remainingSet.has(`${p.imageX},${p.imageY}`));
+  // Usar directamente el mapa de píxeles dibujados que se llena al pintar
+  return Array.from(imageState.drawnPixelsMap.values());
 }
 
 /**
@@ -372,6 +325,7 @@ export function getPaintedPixelsList() {
 export async function protectBeforeNextBatch(onProgress) {
   const paintedPixels = getPaintedPixelsList();
   
+  // No proteger si no hay píxeles realmente pintados
   if (paintedPixels.length === 0) {
     return { needsProtection: false, canContinue: true };
   }
@@ -386,6 +340,8 @@ export async function protectBeforeNextBatch(onProgress) {
   if (changes.length === 0) {
     return { needsProtection: false, canContinue: true };
   }
+
+  log(`🚨 Se detectaron ${changes.length} píxeles alterados de ${paintedPixels.length} píxeles pintados`);
 
   // Se detectaron cambios, intentar reparar
   const repairResult = await repairChangedPixels(changes, onProgress);
