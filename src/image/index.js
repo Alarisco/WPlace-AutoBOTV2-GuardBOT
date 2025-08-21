@@ -23,10 +23,16 @@ export async function runImage() {
   
   // Función para restaurar fetch original de forma segura
   const restoreFetch = () => {
-    if (window.fetch !== originalFetch) {
+    // FIX: No restaurar fetch si el overlay está activo para evitar cancelar su intercepción
+    const overlayActive = window.__WPA_PLAN_OVERLAY__ && window.__WPA_PLAN_OVERLAY__.state && window.__WPA_PLAN_OVERLAY__.state.enabled;
+    
+    if (window.fetch !== originalFetch && !overlayActive) {
       window.fetch = originalFetch;
       log('🔄 Fetch original restaurado');
+    } else if (overlayActive) {
+      log('🔄 Fetch NO restaurado - overlay activo');
     }
+    
     if (imageState.positionTimeoutId) {
       clearTimeout(imageState.positionTimeoutId);
       imageState.positionTimeoutId = null;
@@ -295,6 +301,14 @@ export async function runImage() {
                         // Configurar overlay del plan con la posición seleccionada
                         try {
                           if (window.__WPA_PLAN_OVERLAY__) {
+                            // FIX: Forzar reinicio completo del overlay
+                            // Desactivar overlay para limpiar estado anterior
+                            window.__WPA_PLAN_OVERLAY__.setEnabled(false);
+                            
+                            // Limpiar plan anterior
+                            window.__WPA_PLAN_OVERLAY__.setPlan([], {});
+                            
+                            // Inyectar estilos y reactivar
                             window.__WPA_PLAN_OVERLAY__.injectStyles();
                             window.__WPA_PLAN_OVERLAY__.setEnabled(true);
                             
@@ -315,7 +329,7 @@ export async function runImage() {
                                 enabled: true
                               });
                               
-                              log(`✅ Plan overlay anclado en tile(${tileX},${tileY}) local(${localX},${localY})`);
+                              log(`✅ Plan overlay reiniciado y anclado en tile(${tileX},${tileY}) local(${localX},${localY})`);
                             } else {
                               log(`⚠️ No hay píxeles para mostrar en overlay`);
                             }
