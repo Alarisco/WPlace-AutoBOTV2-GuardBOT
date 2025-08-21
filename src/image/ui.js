@@ -126,6 +126,12 @@ export async function createImageUI({ texts, ...handlers }) {
       text-align: center;
     }
     
+    .config-input[type="text"], 
+    .config-input select {
+      width: 120px;
+      text-align: left;
+    }
+    
     .config-checkbox {
       margin-right: 8px;
     }
@@ -446,7 +452,7 @@ export async function createImageUI({ texts, ...handlers }) {
       <div class="config-panel">
         <div class="config-item">
           <label>${texts.batchSize}:</label>
-          <input class="config-input pixels-per-batch" type="number" min="1" max="50" value="20">
+          <input class="config-input pixels-per-batch" type="number" min="1" max="9999" value="20">
         </div>
         <div class="config-item">
           <label>
@@ -459,6 +465,29 @@ export async function createImageUI({ texts, ...handlers }) {
             <input class="config-checkbox show-overlay" type="checkbox" checked>
             ${texts.showOverlay || 'Mostrar overlay'}
           </label>
+        </div>
+        <div class="config-item">
+          <label>
+            <input class="config-checkbox protection-enabled" type="checkbox" checked>
+            🛡️ Protección del dibujo
+          </label>
+        </div>
+        <div class="config-item">
+          <label>
+            <input class="config-checkbox smart-verification" type="checkbox" checked>
+            💡 Verificación inteligente
+          </label>
+        </div>
+        <div class="config-item">
+          <label>📐 Patrón de pintado:</label>
+          <select class="config-input paint-pattern">
+            <option value="linear_start">Lineal (Inicio)</option>
+            <option value="linear_end">Lineal (Final)</option>
+            <option value="random">Aleatorio</option>
+            <option value="center_out">Centro hacia afuera</option>
+            <option value="corners_first">Esquinas primero</option>
+            <option value="spiral">Espiral</option>
+          </select>
         </div>
       </div>
       
@@ -488,6 +517,10 @@ export async function createImageUI({ texts, ...handlers }) {
         <button class="btn btn-load load-progress-btn" disabled>
           📁
           <span>${texts.loadProgress}</span>
+        </button>
+        <button class="btn btn-load export-guard-btn" disabled style="background: #8b5cf6;">
+          🛡️
+          <span>Exportar para Guard</span>
         </button>
         <button class="btn btn-primary resize-btn" disabled>
           🔄
@@ -585,12 +618,16 @@ export async function createImageUI({ texts, ...handlers }) {
     configPanel: container.querySelector('.config-panel'),
     pixelsPerBatch: container.querySelector('.pixels-per-batch'),
     useAllCharges: container.querySelector('.use-all-charges'),
+    protectionEnabled: container.querySelector('.protection-enabled'),
+    smartVerification: container.querySelector('.smart-verification'),
+    paintPattern: container.querySelector('.paint-pattern'),
     showOverlay: container.querySelector('.show-overlay'),
     batchValue: container.querySelector('.batch-value'),
     cooldownValue: container.querySelector('.cooldown-value'),
     initBtn: container.querySelector('.init-btn'),
     uploadBtn: container.querySelector('.upload-btn'),
     loadProgressBtn: container.querySelector('.load-progress-btn'),
+    exportGuardBtn: container.querySelector('.export-guard-btn'),
     resizeBtn: container.querySelector('.resize-btn'),
     selectPosBtn: container.querySelector('.select-pos-btn'),
     startBtn: container.querySelector('.start-btn'),
@@ -661,6 +698,24 @@ export async function createImageUI({ texts, ...handlers }) {
   elements.useAllCharges.addEventListener('change', () => {
     if (handlers.onConfigChange) {
       handlers.onConfigChange({ useAllCharges: elements.useAllCharges.checked });
+    }
+  });
+  
+  elements.protectionEnabled.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ protectionEnabled: elements.protectionEnabled.checked });
+    }
+  });
+  
+  elements.smartVerification.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ smartVerification: elements.smartVerification.checked });
+    }
+  });
+  
+  elements.paintPattern.addEventListener('change', () => {
+    if (handlers.onConfigChange) {
+      handlers.onConfigChange({ paintPattern: elements.paintPattern.value });
     }
   });
   

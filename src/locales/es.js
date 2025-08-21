@@ -39,6 +39,7 @@ export const es = {
     stopPainting: "Detener Pintura",
     saveProgress: "Guardar Progreso",
     loadProgress: "Cargar Progreso",
+    exportGuard: "Exportar a Guard",
     checkingColors: "🔍 Verificando colores disponibles...",
     noColorsFound: "❌ ¡Abre la paleta de colores en el sitio e inténtalo de nuevo!",
     colorsFound: "✅ {count} colores disponibles encontrados",
@@ -80,6 +81,8 @@ export const es = {
     progressLoaded: "✅ Progreso cargado: {painted}/{total} píxeles pintados",
     progressLoadError: "❌ Error al cargar progreso: {error}",
     progressSaveError: "❌ Error al guardar progreso: {error}",
+    guardExportSuccess: "✅ Exportado para Auto-Guard: {filename}",
+    guardExportError: "❌ Error exportando para Guard: {error}",
     confirmSaveProgress: "¿Deseas guardar el progreso actual antes de detener?",
     saveProgressTitle: "Guardar Progreso",
     discardProgress: "Descartar",
@@ -107,7 +110,23 @@ export const es = {
     retryFailed: "❌ Falló después de {maxAttempts} intentos. Continuando con siguiente lote...",
     networkError: "🌐 Error de red. Reintentando...",
     serverError: "🔥 Error del servidor. Reintentando...",
-    timeoutError: "⏰ Timeout del servidor. Reintentando..."
+    timeoutError: "⏰ Timeout del servidor. Reintentando...",
+    // Nuevos textos v2.0
+    protectionEnabled: "🛡️ Protección habilitada",
+    protectionDisabled: "🛡️ Protección deshabilitada", 
+    paintPattern: "📐 Patrón de pintado",
+    patternLinearStart: "Lineal (Inicio)",
+    patternLinearEnd: "Lineal (Final)",
+    patternRandom: "Aleatorio",
+    patternCenterOut: "Centro hacia afuera",
+    patternCornersFirst: "Esquinas primero",
+    patternSpiral: "Espiral",
+    protectingDrawing: "🛡️ Protegiendo dibujo...",
+    changesDetected: "🚨 {count} cambios detectados en el dibujo",
+    repairing: "🔧 Reparando {count} píxeles alterados...",
+    repairCompleted: "✅ Reparación completada: {count} píxeles",
+    noChargesForRepair: "⚡ Sin cargas para reparar, esperando...",
+    protectionPriority: "🛡️ Prioridad de protección activada"
   },
 
   // Farm Module (por implementar)

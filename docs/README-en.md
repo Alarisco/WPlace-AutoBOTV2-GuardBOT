@@ -162,6 +162,8 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 - ✅ Precise position selection
 - ✅ Optimized batch painting
 - ✅ Automatic cooldown system
+- ✅ 🛡️ Drawing protection between batches (repairs changes before the next batch)
+- ✅ 📐 Paint pattern: linear (start/end), random, center-out, corners-first, spiral
 - ✅ **💾 Save/Load progress**
 - ✅ **⏸️ Pause and resume jobs**
 - ✅ 100% translated interface

@@ -75,7 +75,7 @@ export const imageState = {
   pixelsPerBatch: IMAGE_DEFAULTS.PIXELS_PER_BATCH,
   useAllChargesFirst: true, // Usar todas las cargas en la primera pasada
   isFirstBatch: true, // Controlar si es la primera pasada
-  maxCharges: 50, // Cargas máximas del usuario
+  maxCharges: 9999, // Cargas máximas del usuario
   nextBatchCooldown: 0, // Tiempo para el siguiente lote
   inCooldown: false,
   cooldownEndTime: 0,
@@ -83,5 +83,11 @@ export const imageState = {
   lastChargeUpdate: 0,
   chargeDecimalPart: 0,
   originalImageName: null,
-  retryCount: 0 // Contador de reintentos para estadísticas
+  retryCount: 0, // Contador de reintentos para estadísticas
+  // Nuevas opciones para protección y patrones
+  protectionEnabled: true, // Habilitar protección del dibujo
+  smartVerification: true, // Verificación inteligente de píxeles (omitir píxeles ya correctos)
+  paintPattern: 'linear_start', // Patrón de pintado predeterminado
+  drawnPixelsMap: new Map(), // Mapa de píxeles ya dibujados para protección
+  lastProtectionCheck: 0 // Timestamp de última verificación de protección
 };

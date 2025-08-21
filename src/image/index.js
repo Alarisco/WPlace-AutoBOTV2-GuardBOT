@@ -10,13 +10,17 @@ import { isPaletteOpen, autoClickPaintButton } from "../core/dom.js";
 import "./plan-overlay-blue-marble.js";
 
 export async function runImage() {
+  console.log('[WPA-Image] 🚀 runImage() iniciado');
   log('🚀 Iniciando WPlace Auto-Image (versión modular)');
   
   // Inicializar sistema de idiomas
+  console.log('[WPA-Image] 🌍 Inicializando sistema de idiomas');
   initializeLanguage();
+  console.log('[WPA-Image] ✅ Sistema de idiomas inicializado');
   
   // Asegurarse que el estado global existe
   window.__wplaceBot = { ...window.__wplaceBot, imageRunning: true };
+  console.log('[WPA-Image] 🔧 Estado global actualizado');
 
   let currentUserInfo = null; // Variable global para información del usuario
   let originalFetch = window.fetch; // Guardar fetch original globalmente
@@ -114,7 +118,7 @@ export async function runImage() {
         };
         currentUserInfo = userInfo; // Actualizar variable global
         imageState.currentCharges = sessionInfo.data.charges;
-        imageState.maxCharges = sessionInfo.data.maxCharges || 50; // Guardar maxCharges en state
+        imageState.maxCharges = sessionInfo.data.maxCharges || 9999; // Guardar maxCharges en state
         log(`👤 Usuario conectado: ${sessionInfo.data.user.name || 'Anónimo'} - Cargas: ${userInfo.charges}/${userInfo.maxCharges} - Píxeles: ${userInfo.pixels}`);
       } else {
         log('⚠️ No se pudo obtener información del usuario');
@@ -158,6 +162,44 @@ export async function runImage() {
         }
         if (config.useAllCharges !== undefined) {
           imageState.useAllChargesFirst = config.useAllCharges;
+        }
+        if (config.protectionEnabled !== undefined) {
+          imageState.protectionEnabled = config.protectionEnabled;
+          log(`🛡️ Protección del dibujo: ${config.protectionEnabled ? 'habilitada' : 'deshabilitada'}`);
+        }
+        if (config.smartVerification !== undefined) {
+          imageState.smartVerification = config.smartVerification;
+          log(`💡 Verificación inteligente: ${config.smartVerification ? 'habilitada' : 'deshabilitada'}`);
+        }
+        if (config.paintPattern !== undefined) {
+          imageState.paintPattern = config.paintPattern;
+          log(`🎨 Patrón de pintado cambiado a: ${config.paintPattern}`);
+          
+          // Si hay píxeles restantes, reaplicar el patrón
+          if (imageState.remainingPixels && imageState.remainingPixels.length > 0) {
+            import('./patterns.js').then(({ applyPaintPattern }) => {
+              imageState.remainingPixels = applyPaintPattern(
+                imageState.remainingPixels, 
+                config.paintPattern, 
+                imageState.imageData
+              );
+              
+              // Actualizar overlay si está activo
+              try {
+                if (window.__WPA_PLAN_OVERLAY__) {
+                  window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
+                    enabled: true,
+                    nextBatchCount: imageState.pixelsPerBatch
+                  });
+                  log(`✅ Overlay actualizado con nuevo patrón: ${config.paintPattern}`);
+                }
+              } catch (e) {
+                log('⚠️ Error actualizando overlay con nuevo patrón:', e);
+              }
+            }).catch(error => {
+              log('❌ Error aplicando nuevo patrón:', error);
+            });
+          }
         }
         log(`Configuración actualizada:`, config);
       },
@@ -458,7 +500,11 @@ export async function runImage() {
         
         imageState.running = true;
         imageState.stopFlag = false;
-        imageState.isFirstBatch = true; // Resetear flag de primera pasada
+        // Siempre resetear flag de primera pasada cuando se inicia pintado
+        // independientemente de si es nuevo o reanudación
+        imageState.isFirstBatch = imageState.useAllChargesFirst; 
+        
+        log(`🚀 Iniciando pintado - isFirstBatch: ${imageState.isFirstBatch}, useAllChargesFirst: ${imageState.useAllChargesFirst}`);
         
         ui.setStatus(t('image.startPaintingMsg'), 'success');
         
@@ -582,6 +628,24 @@ export async function runImage() {
           }
         } catch (error) {
           ui.setStatus(t('image.progressLoadError', { error: error.message }), 'error');
+          return false;
+        }
+      },
+      
+      onExportGuard: async () => {
+        try {
+          const { exportForGuard } = await import('./save-load.js');
+          const result = exportForGuard();
+          if (result.success) {
+            ui.setStatus(t('image.guardExportSuccess', { filename: result.filename }), 'success');
+            log(`✅ Exportado para Auto-Guard: ${result.filename}`);
+          } else {
+            ui.setStatus(t('image.guardExportError', { error: result.error }), 'error');
+          }
+          return result.success;
+        } catch (error) {
+          ui.setStatus(t('image.guardExportError', { error: error.message }), 'error');
+          log(`❌ Error exportando para Guard: ${error.message}`);
           return false;
         }
       },

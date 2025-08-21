@@ -162,6 +162,8 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 - ✅ Sélection précise de position
 - ✅ Peinture par lots optimisée
 - ✅ Système de cooldown automatique
+- ✅ 🛡️ Protection du dessin entre les lots (répare les changements avant le lot suivant)
+- ✅ 📐 Motif de peinture : linéaire (début/fin), aléatoire, centre → extérieur, coins d'abord, spirale
 - ✅ **💾 Sauvegarder/Charger le progrès**
 - ✅ **⏸️ Mettre en pause et reprendre les tâches**
 - ✅ Interface 100% traduite
