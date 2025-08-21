@@ -61,12 +61,19 @@ export class BlueMarblelImageProcessor {
     // Detectar colores disponibles del sitio (mejorado)
     const availableColors = this.detectSiteColors();
     
+
+    
     // Construir conjunto de colores permitidos
+    const filteredColors = availableColors
+      .filter(c => c.name && c.name.toLowerCase() !== 'transparent' && Array.isArray(c.rgb));
+    
+
+    
     this.allowedColorsSet = new Set(
-      availableColors
-        .filter(c => c.name && c.name.toLowerCase() !== 'transparent' && Array.isArray(c.rgb))
-        .map(c => `${c.rgb[0]},${c.rgb[1]},${c.rgb[2]}`)
+      filteredColors.map(c => `${c.rgb[0]},${c.rgb[1]},${c.rgb[2]}`)
     );
+    
+
 
     // Asegurar que #deface (marcador de transparencia) se trate como permitido
     const defaceKey = '222,250,206';
@@ -112,11 +119,18 @@ export class BlueMarblelImageProcessor {
     const colors = [];
     
     for (const element of colorElements) {
-      // Filtrar elementos con SVG (probablemente bloqueos)
-      if (element.querySelector('svg')) continue;
-      
       const idStr = element.id.replace('color-', '');
       const id = parseInt(idStr);
+      
+      // Filtrar elementos con SVG (probablemente bloqueos)
+      if (element.querySelector('svg')) {
+        continue;
+      }
+      
+      // Filtrar solo el color 0 (mantener el color blanco ID 5 disponible)
+      if (id === 0) {
+        continue;
+      }
       
       // Obtener color RGB del style
       const backgroundStyle = element.style.backgroundColor;
@@ -129,18 +143,23 @@ export class BlueMarblelImageProcessor {
             parseInt(rgbMatch[2])
           ];
           
-          colors.push({
+          const colorInfo = {
             id,
             element,
             rgb,
             name: element.title || element.getAttribute('aria-label') || `Color ${id}`,
             premium: element.classList.contains('premium') || element.querySelector('.premium')
-          });
+          };
+          
+          colors.push(colorInfo);
         }
       }
     }
     
     log(`[BLUE MARBLE] ${colors.length} colores detectados del sitio`);
+    
+
+    
     return colors;
   }
 
@@ -175,6 +194,8 @@ export class BlueMarblelImageProcessor {
       let deface = 0;
       const paletteMap = new Map();
 
+
+
       for (let y = 0; y < this.imageHeight; y++) {
         for (let x = 0; x < this.imageWidth; x++) {
           const idx = (y * this.imageWidth + x) * 4;
@@ -184,7 +205,7 @@ export class BlueMarblelImageProcessor {
           const a = inspectData[idx + 3];
 
           if (a === 0) continue; // Ignorar píxeles transparentes
-
+          
           const key = `${r},${g},${b}`;
 
           // Contar píxeles #deface (marcador de transparencia)
@@ -192,11 +213,24 @@ export class BlueMarblelImageProcessor {
             deface++;
           }
 
-          // Solo contar colores de la paleta del sitio
-          if (!this.allowedColorsSet.has(key)) continue;
+          // Función de tolerancia para colores muy próximos al blanco
+          let matchedKey = key;
+          let isValidPixel = this.allowedColorsSet.has(key);
+          
+          // Si no es un color exacto, verificar si es muy próximo al blanco
+          if (!isValidPixel && this.allowedColorsSet.has('255,255,255')) {
+            // Tolerancia para píxeles muy próximos al blanco (diferencia máxima de 10 en cada canal)
+            if (r >= 245 && g >= 245 && b >= 245) {
+              matchedKey = '255,255,255';
+              isValidPixel = true;
+            }
+          }
+
+          // Solo contar colores válidos (exactos o con tolerancia)
+          if (!isValidPixel) continue;
 
           required++;
-          paletteMap.set(key, (paletteMap.get(key) || 0) + 1);
+          paletteMap.set(matchedKey, (paletteMap.get(matchedKey) || 0) + 1);
         }
       }
 

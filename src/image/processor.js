@@ -86,13 +86,8 @@ export class ImageProcessor {
           continue;
         }
         
-        // Filtrar píxeles blancos/muy claros si está configurado
-        const isWhite = r > config.WHITE_THRESHOLD && 
-                       g > config.WHITE_THRESHOLD && 
-                       b > config.WHITE_THRESHOLD;
-        if (isWhite) {
-          continue;
-        }
+        // Nota: Removido el filtro automático de píxeles blancos
+        // para permitir el uso del color blanco (ID 5) en las imágenes
         
         // Encontrar el color más cercano en la paleta
         const closestColor = this.findClosestColor({ r, g, b }, availableColors);
@@ -208,8 +203,8 @@ export function detectAvailableColors() {
     const idStr = element.id.replace('color-', '');
     const id = parseInt(idStr);
     
-    // Filtrar colores específicos (0 y 5 según el original)
-    if (id === 0 || id === 5) {
+    // Filtrar solo el color 0 (mantener el color blanco ID 5 disponible)
+    if (id === 0) {
       continue;
     }
     
