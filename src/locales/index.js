@@ -2,13 +2,17 @@ import { es } from './es.js';
 import { en } from './en.js';
 import { fr } from './fr.js';
 import { ru } from './ru.js';
+import { zhHans } from './zh-Hans.js';
+import { zhHant } from './zh-Hant.js';
 
 // Idiomas disponibles
 export const AVAILABLE_LANGUAGES = {
   es: { name: 'Español', flag: '🇪🇸', code: 'es' },
   en: { name: 'English', flag: '🇺🇸', code: 'en' },
   fr: { name: 'Français', flag: '🇫🇷', code: 'fr' },
-  ru: { name: 'Русский', flag: '🇷🇺', code: 'ru' }
+  ru: { name: 'Русский', flag: '🇷🇺', code: 'ru' },
+  zhHans: { name: '简体中文', flag: '🇨🇳', code: 'zh-Hans' },
+  zhHant: { name: '繁體中文', flag: '🇨🇳', code: 'zh-Hant' }
 };
 
 // Todas las traducciones
@@ -16,7 +20,9 @@ const translations = {
   es,
   en,
   fr,
-  ru
+  ru,
+  zhHans,
+  zhHant
 };
 
 // Estado del idioma actual
@@ -29,15 +35,15 @@ let currentTranslations = translations[currentLanguage];
  */
 export function detectBrowserLanguage() {
   const browserLang = window.navigator.language || window.navigator.userLanguage || 'es';
-  
+
   // Extraer solo el código del idioma (ej: 'es-ES' -> 'es')
   const langCode = browserLang.split('-')[0].toLowerCase();
-  
+
   // Verificar si tenemos soporte para este idioma
   if (translations[langCode]) {
     return langCode;
   }
-  
+
   // Fallback a español por defecto
   return 'es';
 }
@@ -68,9 +74,9 @@ export function initializeLanguage() {
   // Prioridad: guardado > navegador > español
   const savedLang = getSavedLanguage();
   const browserLang = detectBrowserLanguage();
-  
+
   let selectedLang = 'es'; // fallback por defecto
-  
+
   if (savedLang && translations[savedLang]) {
     selectedLang = savedLang;
   } else if (browserLang && translations[browserLang]) {
@@ -90,15 +96,15 @@ export function setLanguage(langCode) {
     console.warn(`Idioma '${langCode}' no disponible. Usando '${currentLanguage}'`);
     return;
   }
-  
+
   currentLanguage = langCode;
   currentTranslations = translations[langCode];
   saveLanguage(langCode);
-  
+
   // Emitir evento personalizado para que los módulos puedan reaccionar
   if (typeof window !== 'undefined' && window.CustomEvent) {
-    window.dispatchEvent(new window.CustomEvent('languageChanged', { 
-      detail: { language: langCode, translations: currentTranslations } 
+    window.dispatchEvent(new window.CustomEvent('languageChanged', {
+      detail: { language: langCode, translations: currentTranslations }
     }));
   }
 }
@@ -128,7 +134,7 @@ export function getCurrentTranslations() {
 export function t(key, params = {}) {
   const keys = key.split('.');
   let value = currentTranslations;
-  
+
   // Navegar por la estructura de objetos
   for (const k of keys) {
     if (value && typeof value === 'object' && k in value) {
@@ -138,12 +144,12 @@ export function t(key, params = {}) {
       return key; // Retornar la clave como fallback
     }
   }
-  
+
   if (typeof value !== 'string') {
     console.warn(`Clave de traducción no es string: '${key}'`);
     return key;
   }
-  
+
   // Interpolar parámetros
   return interpolate(value, params);
 }
@@ -158,7 +164,7 @@ function interpolate(text, params) {
   if (!params || Object.keys(params).length === 0) {
     return text;
   }
-  
+
   return text.replace(/\{(\w+)\}/g, (match, key) => {
     return params[key] !== undefined ? params[key] : match;
   });
@@ -173,7 +179,7 @@ export function getSection(section) {
   if (currentTranslations[section]) {
     return currentTranslations[section];
   }
-  
+
   console.warn(`Sección de traducción no encontrada: '${section}'`);
   return {};
 }
