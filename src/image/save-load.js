@@ -274,8 +274,13 @@ export async function loadProgress(file) {
             imageState.pixelsPerBatch = progressData.config.pixelsPerBatch || imageState.pixelsPerBatch;
             imageState.useAllChargesFirst = progressData.config.useAllChargesFirst !== undefined ? 
               progressData.config.useAllChargesFirst : imageState.useAllChargesFirst;
-            imageState.isFirstBatch = progressData.config.isFirstBatch !== undefined ? 
-              progressData.config.isFirstBatch : true; // Por defecto, continuar como no primera pasada
+            
+            // Si useAllChargesFirst está activado, la próxima pasada debería ser como primer lote
+            // Si no está activado o no está definido, continuar como pasada normal
+            imageState.isFirstBatch = imageState.useAllChargesFirst ? true : 
+              (progressData.config.isFirstBatch !== undefined ? progressData.config.isFirstBatch : false);
+              
+            log(`📁 Progreso cargado - useAllChargesFirst: ${imageState.useAllChargesFirst}, isFirstBatch: ${imageState.isFirstBatch}`);
             imageState.maxCharges = progressData.config.maxCharges || imageState.maxCharges;
             
             // Nuevas configuraciones v2.0 (solo si están disponibles)

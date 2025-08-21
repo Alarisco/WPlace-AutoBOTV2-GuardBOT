@@ -452,7 +452,7 @@ export async function createImageUI({ texts, ...handlers }) {
       <div class="config-panel">
         <div class="config-item">
           <label>${texts.batchSize}:</label>
-          <input class="config-input pixels-per-batch" type="number" min="1" max="50" value="20">
+          <input class="config-input pixels-per-batch" type="number" min="1" max="9999" value="20">
         </div>
         <div class="config-item">
           <label>

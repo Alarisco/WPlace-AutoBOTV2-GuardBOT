@@ -75,7 +75,7 @@ export const imageState = {
   pixelsPerBatch: IMAGE_DEFAULTS.PIXELS_PER_BATCH,
   useAllChargesFirst: true, // Usar todas las cargas en la primera pasada
   isFirstBatch: true, // Controlar si es la primera pasada
-  maxCharges: 50, // Cargas máximas del usuario
+  maxCharges: 9999, // Cargas máximas del usuario
   nextBatchCooldown: 0, // Tiempo para el siguiente lote
   inCooldown: false,
   cooldownEndTime: 0,

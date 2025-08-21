@@ -267,14 +267,19 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
       
       // Determinar tamaño del lote basado en configuración
       let pixelsPerBatch;
+      
+      // Debug logging para diagnosticar problema del primer lote
+      log(`🔍 Estado del primer lote - isFirstBatch: ${imageState.isFirstBatch}, useAllChargesFirst: ${imageState.useAllChargesFirst}, availableCharges: ${availableCharges}`);
+      
       if (imageState.isFirstBatch && imageState.useAllChargesFirst && availableCharges > 0) {
         // Primera pasada: usar todas las cargas disponibles
         pixelsPerBatch = Math.min(availableCharges, imageState.remainingPixels.length);
         imageState.isFirstBatch = false; // Marcar que ya no es la primera pasada
-        log(`Primera pasada: usando ${pixelsPerBatch} cargas de ${availableCharges} disponibles`);
+        log(`🚀 Primera pasada: usando ${pixelsPerBatch} cargas de ${availableCharges} disponibles`);
       } else {
         // Pasadas siguientes: usar configuración normal
         pixelsPerBatch = Math.min(imageState.pixelsPerBatch, imageState.remainingPixels.length);
+        log(`⚙️ Pasada normal: usando ${pixelsPerBatch} píxeles (configurado: ${imageState.pixelsPerBatch})`);
       }
       
       if (availableCharges < pixelsPerBatch) {
@@ -716,7 +721,7 @@ async function waitForCooldown(chargesNeeded, onProgress) {
   
   // Simular regeneración de cargas
   imageState.currentCharges = Math.min(
-    imageState.maxCharges || 50, // usar maxCharges del estado
+    imageState.maxCharges || 9999, // usar maxCharges del estado
     imageState.currentCharges + (waitTime / IMAGE_DEFAULTS.CHARGE_REGEN_MS)
   );
 }

@@ -10,13 +10,17 @@ import { isPaletteOpen, autoClickPaintButton } from "../core/dom.js";
 import "./plan-overlay-blue-marble.js";
 
 export async function runImage() {
+  console.log('[WPA-Image] 🚀 runImage() iniciado');
   log('🚀 Iniciando WPlace Auto-Image (versión modular)');
   
   // Inicializar sistema de idiomas
+  console.log('[WPA-Image] 🌍 Inicializando sistema de idiomas');
   initializeLanguage();
+  console.log('[WPA-Image] ✅ Sistema de idiomas inicializado');
   
   // Asegurarse que el estado global existe
   window.__wplaceBot = { ...window.__wplaceBot, imageRunning: true };
+  console.log('[WPA-Image] 🔧 Estado global actualizado');
 
   let currentUserInfo = null; // Variable global para información del usuario
   let originalFetch = window.fetch; // Guardar fetch original globalmente
@@ -114,7 +118,7 @@ export async function runImage() {
         };
         currentUserInfo = userInfo; // Actualizar variable global
         imageState.currentCharges = sessionInfo.data.charges;
-        imageState.maxCharges = sessionInfo.data.maxCharges || 50; // Guardar maxCharges en state
+        imageState.maxCharges = sessionInfo.data.maxCharges || 9999; // Guardar maxCharges en state
         log(`👤 Usuario conectado: ${sessionInfo.data.user.name || 'Anónimo'} - Cargas: ${userInfo.charges}/${userInfo.maxCharges} - Píxeles: ${userInfo.pixels}`);
       } else {
         log('⚠️ No se pudo obtener información del usuario');
@@ -496,7 +500,11 @@ export async function runImage() {
         
         imageState.running = true;
         imageState.stopFlag = false;
-        imageState.isFirstBatch = true; // Resetear flag de primera pasada
+        // Siempre resetear flag de primera pasada cuando se inicia pintado
+        // independientemente de si es nuevo o reanudación
+        imageState.isFirstBatch = imageState.useAllChargesFirst; 
+        
+        log(`🚀 Iniciando pintado - isFirstBatch: ${imageState.isFirstBatch}, useAllChargesFirst: ${imageState.useAllChargesFirst}`);
         
         ui.setStatus(t('image.startPaintingMsg'), 'success');
         
