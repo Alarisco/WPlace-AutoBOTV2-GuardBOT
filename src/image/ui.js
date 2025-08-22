@@ -677,7 +677,7 @@ export async function createImageUI({ texts, ...handlers }) {
   };
   
   // Estado actual de la interfaz
-  let currentState = 'initial';
+  let _currentState = 'initial';
   
   // Referencias a elementos del resize dialog
   const resizeElements = {
@@ -762,7 +762,7 @@ export async function createImageUI({ texts, ...handlers }) {
   
   // Función para cambiar el estado de la interfaz
   function setState(newState) {
-    currentState = newState;
+    _currentState = newState;
     
     // Ocultar todos los botones
     const allButtons = container.querySelectorAll('[data-state]');

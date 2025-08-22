@@ -243,7 +243,7 @@
     // Ancla establecida silenciosamente
   }
 
-  function setAnchorCss(x, y) {
+  function setAnchorCss() {
     // En el sistema de tiles no necesitamos ancla CSS - es solo para compatibilidad
     // Ancla CSS establecida (ignorada en sistema de tiles)
   }

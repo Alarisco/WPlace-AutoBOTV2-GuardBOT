@@ -1,5 +1,3 @@
-import { createLogWindow } from '../log_window/index.js';
-
 export function createGuardUI(texts) {
   // Crear contenedor principal
   const container = document.createElement('div');

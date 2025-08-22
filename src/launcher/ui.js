@@ -6,10 +6,7 @@ import { createLogWindow } from "../log_window/index.js";
 
 export function createLauncherUI({ 
   onSelectBot, 
-  onLaunch, 
-  onClose,
-  updateUserInfo,
-  updateHealthInfo 
+  onLaunch
 }) {
   log('🎛️ Creando interfaz del Launcher');
   

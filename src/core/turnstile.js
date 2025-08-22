@@ -600,7 +600,7 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
 export { handleCaptcha, loadTurnstile, executeTurnstile, detectSitekey, invalidateToken };
 
 // Legacy compatibility function 
-export async function getTurnstileToken(_siteKey) {
+export async function getTurnstileToken(siteKey) {
   log("⚠️ Using legacy getTurnstileToken function, consider migrating to ensureToken()");
   return await ensureToken();
 }
