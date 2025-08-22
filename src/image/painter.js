@@ -1,7 +1,7 @@
 import { log } from "../core/logger.js";
 import { sleep } from "../core/timing.js";
 import { postPixelBatchImage } from "../core/wplace-api.js";
-import { getTurnstileToken, detectSiteKey } from "../core/turnstile.js";
+import { ensureToken } from "../core/turnstile.js";
 import { imageState, IMAGE_DEFAULTS } from "./config.js";
 import { t } from "../locales/index.js";
 import { protectBeforeNextBatch } from "./protection.js";
@@ -178,6 +178,19 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
   
   log(`Iniciando pintado: imagen(${width}x${height}) inicio LOCAL(${localStartX},${localStartY}) tile(${imageState.tileX},${imageState.tileY})`);
   log(`🛡️ Protección: ${imageState.protectionEnabled ? 'habilitada' : 'deshabilitada'}, Patrón: ${imageState.paintPattern}`);
+  
+  // *** NUEVO: Generar token al inicio del proceso ***
+  try {
+    log("🔑 Generando token Turnstile al inicio del proceso...");
+    const initialToken = await ensureToken();
+    if (!initialToken) {
+      log("⚠️ No se pudo generar token inicial, continuando con flujo normal");
+    } else {
+      log("✅ Token inicial generado exitosamente");
+    }
+  } catch (error) {
+    log("⚠️ Error generando token inicial:", error.message);
+  }
   
   // Generar cola de píxeles si no existe
   if (!imageState.remainingPixels || imageState.remainingPixels.length === 0 || (imageState.lastPosition.x === 0 && imageState.lastPosition.y === 0)) {
@@ -481,8 +494,7 @@ export async function paintPixelBatch(batch) {
     }
 
     // Obtener un único token de Turnstile para el conjunto
-    const siteKey = detectSiteKey(IMAGE_DEFAULTS.SITEKEY);
-    const token = await getTurnstileToken(siteKey);
+    const token = await ensureToken();
 
     let totalPainted = 0;
     for (const { coords, colors, tx, ty } of byTile.values()) {
@@ -642,7 +654,7 @@ export async function paintPixelBatch_ORIGINAL(batch) {
     }
     
     // Obtener token de Turnstile
-    const token = await getTurnstileToken(IMAGE_DEFAULTS.SITEKEY);
+    const token = await ensureToken();
     
     // Enviar píxeles usando el formato correcto
     const response = await postPixelBatchImage(tileX, tileY, coords, colors, token);

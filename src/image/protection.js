@@ -1,7 +1,7 @@
 import { log } from "../core/logger.js";
 import { postPixelBatchImage } from "../core/wplace-api.js";
-import { getTurnstileToken, detectSiteKey } from "../core/turnstile.js";
-import { imageState, IMAGE_DEFAULTS } from "./config.js";
+import { ensureToken } from "../core/turnstile.js";
+import { imageState } from "./config.js";
 import { sleep } from "../core/timing.js";
 
 // Globals del navegador
@@ -275,8 +275,8 @@ export async function repairChangedPixels(changedPixels, onProgress) {
  */
 async function repairPixelBatch(tileX, tileY, coords, colors) {
   try {
-    const siteKey = detectSiteKey(IMAGE_DEFAULTS.SITEKEY);
-    const token = await getTurnstileToken(siteKey);
+    // Generate token for protection painting
+    const token = await ensureToken();
     
     // Sanitizar coordenadas para asegurar que están en rango 0-999
     const sanitizedCoords = [];
