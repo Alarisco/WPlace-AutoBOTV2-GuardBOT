@@ -25,7 +25,12 @@ export const en = {
     offline: '🔴 Offline',
     ok: '🟢 OK',
     error: '🔴 Error',
-    unknown: '-'
+    unknown: '-',
+    logWindow: 'Log Window',
+    logWindowTitle: 'Logs - {botName}',
+    downloadLogs: 'Download Logs',
+    clearLogs: 'Clear Logs',
+    closeLogs: 'Close'
   },
 
   // Image Module
@@ -138,7 +143,12 @@ export const en = {
     noChargesForRepair: "⚡ No charges for repair, waiting...",
     protectionPriority: "🛡️ Protection priority activated",
     patternApplied: "Pattern applied",
-    customPattern: "Custom pattern"
+    customPattern: "Custom pattern",
+    logWindow: "Log Window",
+    logWindowTitle: "Logs - {botName}",
+    downloadLogs: "Download Logs",
+    clearLogs: "Clear Logs",
+    closeLogs: "Close"
   },
 
   // Farm module (to be implemented)
@@ -192,7 +202,12 @@ export const en = {
     selectEmptyArea: "⚠️ IMPORTANT: Select an EMPTY area to avoid conflicts",
     noPosition: "No area",
     currentZone: "Zone: ({x},{y})",
-    autoSelectPosition: "🎯 Select an area first. Paint a pixel on the map to set the farming zone"
+    autoSelectPosition: "🎯 Select an area first. Paint a pixel on the map to set the farming zone",
+    logWindow: "Log Window",
+    logWindowTitle: "Logs - {botName}",
+    downloadLogs: "Download Logs",
+    clearLogs: "Clear Logs",
+    closeLogs: "Close"
   },
 
   // Common/Shared
@@ -278,6 +293,11 @@ export const en = {
     upperLeftCaptured: "✅ Upper left corner captured: ({x}, {y})",
     lowerRightCaptured: "✅ Lower right corner captured: ({x}, {y})",
     selectionTimeout: "❌ Selection timeout",
-    selectionError: "❌ Selection error, please try again"
+    selectionError: "❌ Selection error, please try again",
+    logWindow: "Log Window",
+    logWindowTitle: "Logs - {botName}",
+    downloadLogs: "Download Logs",
+    clearLogs: "Clear Logs",
+    closeLogs: "Close"
   }
 };

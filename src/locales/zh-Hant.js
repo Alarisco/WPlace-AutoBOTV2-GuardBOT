@@ -25,7 +25,12 @@ export const zhHant = {
     offline: '🔴 離線',
     ok: '🟢 正常',
     error: '🔴 錯誤',
-    unknown: '-'
+    unknown: '-',
+    logWindow: '📋 日誌視窗',
+    logWindowTitle: '日誌視窗',
+    downloadLogs: '下載日誌',
+    clearLogs: '清除日誌',
+    closeLogs: '關閉'
   },
 
   // 繪圖模塊
@@ -138,7 +143,12 @@ export const zhHant = {
     noChargesForRepair: "⚡ 修復不消耗點數，等待中...",
     protectionPriority: "🛡️ 已啟用保護優先",
     patternApplied: "已套用模式",
-    customPattern: "自訂模式"
+    customPattern: "自訂模式",
+    logWindow: '📋 日誌視窗',
+    logWindowTitle: '日誌視窗',
+    downloadLogs: '下載日誌',
+    clearLogs: '清除日誌',
+    closeLogs: '關閉'
   },
 
   // 農場模塊（待實現）
@@ -192,7 +202,12 @@ export const zhHant = {
     selectEmptyArea: "⚠️ 重要: 請選擇空白區域以避免衝突",
     noPosition: "未選擇區域",
     currentZone: "區域: ({x},{y})",
-    autoSelectPosition: "🎯 請先選擇區域，在地圖上塗一個像素以設置農場區域"
+    autoSelectPosition: "🎯 請先選擇區域，在地圖上塗一個像素以設置農場區域",
+    logWindow: '📋 日誌視窗',
+    logWindowTitle: '日誌視窗',
+    downloadLogs: '下載日誌',
+    clearLogs: '清除日誌',
+    closeLogs: '關閉'
   },
 
   // 公共
@@ -278,6 +293,11 @@ export const zhHant = {
     upperLeftCaptured: "✅ 已捕獲左上角: ({x}, {y})",
     lowerRightCaptured: "✅ 已捕獲右下角: ({x}, {y})",
     selectionTimeout: "❌ 選擇超時",
-    selectionError: "❌ 選擇出錯，請重試"
+    selectionError: "❌ 選擇出錯，請重試",
+    logWindow: '📋 日誌視窗',
+    logWindowTitle: '日誌視窗',
+    downloadLogs: '下載日誌',
+    clearLogs: '清除日誌',
+    closeLogs: '關閉'
   }
 };

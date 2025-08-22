@@ -25,7 +25,12 @@ export const zhHans = {
     offline: '🔴 离线',
     ok: '🟢 正常',
     error: '🔴 错误',
-    unknown: '-'
+    unknown: '-',
+    logWindow: '📋 日志窗口',
+    logWindowTitle: '日志窗口',
+    downloadLogs: '下载日志',
+    clearLogs: '清除日志',
+    closeLogs: '关闭'
   },
 
   // 绘图模块
@@ -138,7 +143,12 @@ export const zhHans = {
     noChargesForRepair: "⚡ 修复不消耗点数，等待中...",
     protectionPriority: "🛡️ 已启用保护优先",
     patternApplied: "已应用模式",
-    customPattern: "自定义模式"
+    customPattern: "自定义模式",
+    logWindow: '📋 日志窗口',
+    logWindowTitle: '日志窗口',
+    downloadLogs: '下载日志',
+    clearLogs: '清除日志',
+    closeLogs: '关闭'
   },
 
   // 农场模块（待实现）
@@ -192,7 +202,12 @@ export const zhHans = {
     selectEmptyArea: "⚠️ 重要: 请选择空白区域以避免冲突",
     noPosition: "未选择区域",
     currentZone: "区域: ({x},{y})",
-    autoSelectPosition: "🎯 请先选择区域，在地图上涂一个像素以设置农场区域"
+    autoSelectPosition: "🎯 请先选择区域，在地图上涂一个像素以设置农场区域",
+    logWindow: '📋 日志窗口',
+    logWindowTitle: '日志窗口',
+    downloadLogs: '下载日志',
+    clearLogs: '清除日志',
+    closeLogs: '关闭'
   },
 
   // 公共
@@ -278,6 +293,11 @@ export const zhHans = {
     upperLeftCaptured: "✅ 已捕获左上角: ({x}, {y})",
     lowerRightCaptured: "✅ 已捕获右下角: ({x}, {y})",
     selectionTimeout: "❌ 选择超时",
-    selectionError: "❌ 选择出错，请重试"
+    selectionError: "❌ 选择出错，请重试",
+    logWindow: '📋 日志窗口',
+    logWindowTitle: '日志窗口',
+    downloadLogs: '下载日志',
+    clearLogs: '清除日志',
+    closeLogs: '关闭'
   }
 };

@@ -25,7 +25,12 @@ export const fr = {
     offline: '🔴 Hors ligne',
     ok: '🟢 OK',
     error: '🔴 Erreur',
-    unknown: '-'
+    unknown: '-',
+    logWindow: 'Fenêtre de Logs',
+    logWindowTitle: 'Logs - {botName}',
+    downloadLogs: 'Télécharger Logs',
+    clearLogs: 'Effacer Logs',
+    closeLogs: 'Fermer'
   },
 
   // Image Module
@@ -138,7 +143,12 @@ export const fr = {
     noChargesForRepair: "⚡ Pas de frais pour la réparation, en attente...",
     protectionPriority: "🛡️ Priorité à la protection activée",
     patternApplied: "Motif appliqué",
-    customPattern: "Motif personnalisé"
+    customPattern: "Motif personnalisé",
+    logWindow: "Fenêtre de Logs",
+    logWindowTitle: "Logs - {botName}",
+    downloadLogs: "Télécharger Logs",
+    clearLogs: "Effacer Logs",
+    closeLogs: "Fermer"
   },
 
   // Farm Module (to be implemented)
@@ -192,7 +202,12 @@ export const fr = {
     selectEmptyArea: "⚠️ IMPORTANT: Sélectionnez une zone VIDE pour éviter les conflits",
     noPosition: "Aucune zone",
     currentZone: "Zone: ({x},{y})",
-    autoSelectPosition: "🎯 Sélectionnez une zone d'abord. Peignez un pixel sur la carte pour définir la zone de farming"
+    autoSelectPosition: "🎯 Sélectionnez une zone d'abord. Peignez un pixel sur la carte pour définir la zone de farming",
+    logWindow: "Fenêtre de Logs",
+    logWindowTitle: "Logs - {botName}",
+    downloadLogs: "Télécharger Logs",
+    clearLogs: "Effacer Logs",
+    closeLogs: "Fermer"
   },
 
     // Common/Shared
@@ -278,6 +293,11 @@ export const fr = {
     upperLeftCaptured: "✅ Coin supérieur gauche capturé: ({x}, {y})",
     lowerRightCaptured: "✅ Coin inférieur droit capturé: ({x}, {y})",
     selectionTimeout: "❌ Délai de sélection dépassé",
-    selectionError: "❌ Erreur de sélection, veuillez réessayer"
+    selectionError: "❌ Erreur de sélection, veuillez réessayer",
+    logWindow: "Fenêtre de Logs",
+    logWindowTitle: "Logs - {botName}",
+    downloadLogs: "Télécharger Logs",
+    clearLogs: "Effacer Logs",
+    closeLogs: "Fermer"
   }
 };

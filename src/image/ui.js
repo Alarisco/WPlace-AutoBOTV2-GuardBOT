@@ -1,5 +1,6 @@
 import { log } from "../core/logger.js";
 import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
+import { createLogWindow } from "../log_window/index.js";
 
 export async function createImageUI({ texts, ...handlers }) {
   log('🎨 Creando interfaz de Auto-Image');
@@ -217,6 +218,11 @@ export async function createImageUI({ texts, ...handlers }) {
     .btn-select {
       background: #f59e0b;
       color: black;
+    }
+    
+    .btn-secondary {
+      background: #6b7280;
+      color: white;
     }
     
     .progress {
@@ -538,6 +544,10 @@ export async function createImageUI({ texts, ...handlers }) {
           ⏹️
           <span>${texts.stopPainting}</span>
         </button>
+        <button class="btn btn-secondary log-window-btn">
+          📋
+          <span>${texts.logWindow || 'Logs'}</span>
+        </button>
       </div>
       
       <div class="progress">
@@ -632,6 +642,7 @@ export async function createImageUI({ texts, ...handlers }) {
     selectPosBtn: container.querySelector('.select-pos-btn'),
     startBtn: container.querySelector('.start-btn'),
     stopBtn: container.querySelector('.stop-btn'),
+    logWindowBtn: container.querySelector('.log-window-btn'),
     progressBar: container.querySelector('.progress-bar'),
     statsArea: container.querySelector('.stats-area'),
     status: container.querySelector('.status'),
@@ -809,6 +820,17 @@ export async function createImageUI({ texts, ...handlers }) {
         elements.startBtn.disabled = false;
         elements.stopBtn.disabled = true;
       }
+    }
+  });
+  
+  // Variable para mantener referencia a la ventana de logs
+  let logWindow = null;
+  
+  elements.logWindowBtn.addEventListener('click', () => {
+    if (!logWindow) {
+      logWindow = createLogWindow('image');
+    } else {
+      logWindow.toggle();
     }
   });
   

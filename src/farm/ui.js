@@ -3,6 +3,7 @@ import { FARM_DEFAULTS, farmState } from "./config.js";
 import { saveFarmCfg, loadFarmCfg, resetFarmCfg } from "../core/storage.js";
 import { dragHeader, clamp } from "../core/utils.js";
 import { t } from "../locales/index.js";
+import { createLogWindow } from "../log_window/index.js";
 
 export function createFarmUI(config, onStart, onStop) {
   const shadowHost = document.createElement('div');
@@ -172,6 +173,14 @@ export function createFarmUI(config, onStart, onStop) {
     
     .wplace-button.stop:hover:not(:disabled) {
       background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+    }
+    
+    .wplace-button.secondary {
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    }
+    
+    .wplace-button.secondary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
     }
     
     .wplace-button.small {
@@ -347,6 +356,7 @@ export function createFarmUI(config, onStart, onStop) {
           <button class="wplace-button stop" id="stop-btn" disabled>⏹️ ${t('farm.stop')}</button>
           <button class="wplace-button small" id="select-position-btn">🌍 ${t('farm.selectPosition')}</button>
           <button class="wplace-button small" id="once-btn">🎨 ${t('farm.paintOnce')}</button>
+          <button class="wplace-button secondary small" id="log-window-btn">📋 ${t('farm.logWindow') || 'Logs'}</button>
         </div>
         
         <!-- Información de la zona seleccionada -->
@@ -454,6 +464,7 @@ export function createFarmUI(config, onStart, onStop) {
     stopBtn: shadow.getElementById('stop-btn'),
     selectPositionBtn: shadow.getElementById('select-position-btn'),
     onceBtn: shadow.getElementById('once-btn'),
+    logWindowBtn: shadow.getElementById('log-window-btn'),
     zoneInfo: shadow.getElementById('zone-info'),
     zoneDisplay: shadow.getElementById('zone-display'),
     healthStatus: shadow.getElementById('health-status'),
@@ -583,6 +594,16 @@ export function createFarmUI(config, onStart, onStop) {
   
   elements.selectPositionBtn?.addEventListener('click', () => {
     selectFarmPosition(config, setStatus, updateZoneDisplay);
+  });
+  
+  // Event listener para el botón de logs
+  let logWindow = null;
+  elements.logWindowBtn?.addEventListener('click', () => {
+    if (!logWindow) {
+      logWindow = createLogWindow('farm');
+    } else {
+      logWindow.toggle();
+    }
   });
   
   elements.colorModeSelect?.addEventListener('change', () => {

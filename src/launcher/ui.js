@@ -2,6 +2,7 @@ import { log } from "../core/logger.js";
 import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
 import { launcherState, LAUNCHER_CONFIG, getLauncherTexts } from "./config.js";
 import { getCurrentLanguage, t } from "../locales/index.js";
+import { createLogWindow } from "../log_window/index.js";
 
 export function createLauncherUI({ 
   onSelectBot, 
@@ -153,6 +154,7 @@ export function createLauncherUI({
       </div>
       <div class="row">
         <button class="btn ghost guard-btn">${texts.autoGuard}</button>
+        <button class="btn ghost log-window-btn">${texts.logWindow}</button>
       </div>
       <div class="card">
         <div class="stat">
@@ -200,6 +202,7 @@ export function createLauncherUI({
     farmBtn: panel.querySelector('.farm-btn'),
     imageBtn: panel.querySelector('.image-btn'),
     guardBtn: panel.querySelector('.guard-btn'),
+    logWindowBtn: panel.querySelector('.log-window-btn'),
     launchBtn: panel.querySelector('.launch-btn'),
     cancelBtn: panel.querySelector('.cancel-btn'),
     closeBtn: panel.querySelector('.close-btn'),
@@ -258,6 +261,15 @@ export function createLauncherUI({
   elements.farmBtn.addEventListener('click', () => selectBot('farm'));
   elements.imageBtn.addEventListener('click', () => selectBot('image'));
   elements.guardBtn.addEventListener('click', () => selectBot('guard'));
+  
+  // Variable para mantener referencia a la ventana de logs
+  let logWindow = null;
+  elements.logWindowBtn.addEventListener('click', () => {
+    if (!logWindow) {
+      logWindow = createLogWindow('launcher');
+    }
+    logWindow.toggle();
+  });
   
   elements.launchBtn.addEventListener('click', async () => {
     if (!selectedBot) return;

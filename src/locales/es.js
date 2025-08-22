@@ -25,7 +25,12 @@ export const es = {
     offline: '🔴 Offline',
     ok: '🟢 OK',
     error: '🔴 Error',
-    unknown: '-'
+    unknown: '-',
+    logWindow: 'Ventana de Logs',
+    logWindowTitle: 'Logs - {botName}',
+    downloadLogs: 'Descargar Logs',
+    clearLogs: 'Limpiar Logs',
+    closeLogs: 'Cerrar'
   },
 
   // Image Module
@@ -126,7 +131,12 @@ export const es = {
     repairing: "🔧 Reparando {count} píxeles alterados...",
     repairCompleted: "✅ Reparación completada: {count} píxeles",
     noChargesForRepair: "⚡ Sin cargas para reparar, esperando...",
-    protectionPriority: "🛡️ Prioridad de protección activada"
+    protectionPriority: "🛡️ Prioridad de protección activada",
+    logWindow: "Ventana de Logs",
+    logWindowTitle: "Logs - {botName}",
+    downloadLogs: "Descargar Logs",
+    clearLogs: "Limpiar Logs",
+    closeLogs: "Cerrar"
   },
 
   // Farm Module (por implementar)
@@ -180,7 +190,12 @@ export const es = {
     selectEmptyArea: "⚠️ IMPORTANTE: Selecciona una zona DESPOBLADA para evitar conflictos",
     noPosition: "Sin zona",
     currentZone: "Zona: ({x},{y})",
-    autoSelectPosition: "🎯 Selecciona una zona primero. Pinta un píxel en el mapa para establecer la zona de farming"
+    autoSelectPosition: "🎯 Selecciona una zona primero. Pinta un píxel en el mapa para establecer la zona de farming",
+    logWindow: "Ventana de Logs",
+    logWindowTitle: "Logs - {botName}",
+    downloadLogs: "Descargar Logs",
+    clearLogs: "Limpiar Logs",
+    closeLogs: "Cerrar"
   },
 
   // Common/Shared
@@ -266,6 +281,11 @@ export const es = {
     upperLeftCaptured: "✅ Esquina superior izquierda capturada: ({x}, {y})",
     lowerRightCaptured: "✅ Esquina inferior derecha capturada: ({x}, {y})",
     selectionTimeout: "❌ Tiempo agotado para selección",
-    selectionError: "❌ Error en selección, inténtalo de nuevo"
+    selectionError: "❌ Error en selección, inténtalo de nuevo",
+    logWindow: "Ventana de Logs",
+    logWindowTitle: "Logs - {botName}",
+    downloadLogs: "Descargar Logs",
+    clearLogs: "Limpiar Logs",
+    closeLogs: "Cerrar"
   }
 };

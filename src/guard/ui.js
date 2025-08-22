@@ -1,3 +1,5 @@
+import { createLogWindow } from '../log_window/index.js';
+
 export function createGuardUI(texts) {
   // Crear contenedor principal
   const container = document.createElement('div');
@@ -73,6 +75,10 @@ export function createGuardUI(texts) {
         <button id="stopBtn" style="width: 100%; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;" disabled>
           ⏹️ ${texts.stopProtection}
         </button>
+        
+        <button id="logWindowBtn" style="width: 100%; padding: 8px; background: #6b7280; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 10px; font-size: 13px;">
+          📋 ${texts.logWindow || 'Logs'}
+        </button>
       </div>
       
       <!-- Estadísticas -->
@@ -144,6 +150,7 @@ export function createGuardUI(texts) {
     y2Input: container.querySelector('#y2Input'),
     startBtn: container.querySelector('#startBtn'),
     stopBtn: container.querySelector('#stopBtn'),
+    logWindowBtn: container.querySelector('#logWindowBtn'),
     closeBtn: container.querySelector('#closeBtn'),
     initSection: container.querySelector('#initSection'),
     areaSection: container.querySelector('#areaSection'),

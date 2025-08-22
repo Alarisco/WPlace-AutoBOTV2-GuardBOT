@@ -3,6 +3,7 @@ import { getSession } from "../core/wplace-api.js";
 import { guardState, GUARD_DEFAULTS } from "./config.js";
 import { detectAvailableColors, analyzeAreaPixels, checkForChanges } from "./processor.js";
 import { createGuardUI, showConfirmDialog } from "./ui.js";
+import { createLogWindow } from "../log_window/index.js";
 import { saveProgress, loadProgress, hasProgress } from "./save-load.js";
 import { initializeLanguage, getSection, t } from "../locales/index.js";
 import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
@@ -186,6 +187,16 @@ function setupEventListeners() {
     if (guardState.checkInterval) {
       clearInterval(guardState.checkInterval);
       guardState.checkInterval = null;
+    }
+  });
+  
+  // Event listener para el botón de logs
+  let logWindow = null;
+  elements.logWindowBtn.addEventListener('click', () => {
+    if (!logWindow) {
+      logWindow = createLogWindow('guard');
+    } else {
+      logWindow.toggle();
     }
   });
   
