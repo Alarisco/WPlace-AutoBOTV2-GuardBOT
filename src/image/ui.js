@@ -512,41 +512,64 @@ export async function createImageUI({ texts, ...handlers }) {
       </div>
       
       <div class="controls">
-        <button class="btn btn-primary init-btn">
-          🤖
-          <span>${texts.initBot}</span>
-        </button>
-        <button class="btn btn-upload upload-btn" disabled>
+        <!-- Estado inicial: Solo 3 botones principales -->
+        <button class="btn btn-upload upload-btn" data-state="initial">
           📤
           <span>${texts.uploadImage}</span>
         </button>
-        <button class="btn btn-load load-progress-btn" disabled>
+        <button class="btn btn-load load-progress-btn" data-state="initial">
           📁
           <span>${texts.loadProgress}</span>
         </button>
-        <button class="btn btn-load export-guard-btn" disabled style="background: #8b5cf6;">
-          🛡️
-          <span>Exportar para Guard</span>
+        <button class="btn btn-secondary log-window-btn" data-state="initial,load-progress,upload-image">
+          📋
+          <span>${texts.logWindow || 'Logs'}</span>
         </button>
-        <button class="btn btn-primary resize-btn" disabled>
-          🔄
-          <span>${texts.resizeImage}</span>
+        
+        <!-- Flujo de carga de progreso -->
+        <button class="btn btn-load load-progress-btn-flow" data-state="load-progress" style="display: none;">
+          📁
+          <span>${texts.loadProgress}</span>
         </button>
-        <button class="btn btn-select select-pos-btn" disabled>
-          🎯
-          <span>${texts.selectPosition}</span>
-        </button>
-        <button class="btn btn-start start-btn" disabled>
+        <button class="btn btn-start start-btn" data-state="load-progress" style="display: none;">
           ▶️
           <span>${texts.startPainting}</span>
         </button>
-        <button class="btn btn-stop stop-btn" disabled>
+        <button class="btn btn-stop stop-btn" data-state="load-progress" style="display: none;">
           ⏹️
           <span>${texts.stopPainting}</span>
         </button>
-        <button class="btn btn-secondary log-window-btn">
-          📋
-          <span>${texts.logWindow || 'Logs'}</span>
+        <button class="btn btn-load export-guard-btn" data-state="load-progress" style="background: #8b5cf6; display: none;">
+          🛡️
+          <span>Exportar para Guard</span>
+        </button>
+        
+        <!-- Flujo de subida de imagen -->
+        <button class="btn btn-load export-guard-btn-upload" data-state="upload-image" style="background: #8b5cf6; display: none;">
+          🛡️
+          <span>Exportar para Guard</span>
+        </button>
+        <button class="btn btn-primary resize-btn" data-state="upload-image" style="display: none;">
+          🔄
+          <span>${texts.resizeImage}</span>
+        </button>
+        <button class="btn btn-select select-pos-btn" data-state="upload-image" style="display: none;">
+          🎯
+          <span>${texts.selectPosition}</span>
+        </button>
+        <button class="btn btn-start start-btn-upload" data-state="upload-image" style="display: none;">
+          ▶️
+          <span>${texts.startPainting}</span>
+        </button>
+        <button class="btn btn-stop stop-btn-upload" data-state="upload-image" style="display: none;">
+          ⏹️
+          <span>${texts.stopPainting}</span>
+        </button>
+        
+        <!-- Botón de inicialización oculto por defecto -->
+        <button class="btn btn-primary init-btn" style="display: none;">
+          🤖
+          <span>${texts.initBot}</span>
         </button>
       </div>
       
@@ -637,17 +660,24 @@ export async function createImageUI({ texts, ...handlers }) {
     initBtn: container.querySelector('.init-btn'),
     uploadBtn: container.querySelector('.upload-btn'),
     loadProgressBtn: container.querySelector('.load-progress-btn'),
+    loadProgressBtnFlow: container.querySelector('.load-progress-btn-flow'),
     exportGuardBtn: container.querySelector('.export-guard-btn'),
+    exportGuardBtnUpload: container.querySelector('.export-guard-btn-upload'),
     resizeBtn: container.querySelector('.resize-btn'),
     selectPosBtn: container.querySelector('.select-pos-btn'),
     startBtn: container.querySelector('.start-btn'),
+    startBtnUpload: container.querySelector('.start-btn-upload'),
     stopBtn: container.querySelector('.stop-btn'),
+    stopBtnUpload: container.querySelector('.stop-btn-upload'),
     logWindowBtn: container.querySelector('.log-window-btn'),
     progressBar: container.querySelector('.progress-bar'),
     statsArea: container.querySelector('.stats-area'),
     status: container.querySelector('.status'),
     content: container.querySelector('.content')
   };
+  
+  // Estado actual de la interfaz
+  let currentState = 'initial';
   
   // Referencias a elementos del resize dialog
   const resizeElements = {
@@ -730,10 +760,28 @@ export async function createImageUI({ texts, ...handlers }) {
     }
   });
   
+  // Función para cambiar el estado de la interfaz
+  function setState(newState) {
+    currentState = newState;
+    
+    // Ocultar todos los botones
+    const allButtons = container.querySelectorAll('[data-state]');
+    allButtons.forEach(btn => {
+      btn.style.display = 'none';
+    });
+    
+    // Mostrar botones del estado actual
+    const stateButtons = container.querySelectorAll(`[data-state*="${newState}"]`);
+    stateButtons.forEach(btn => {
+      btn.style.display = 'flex';
+    });
+    
+    log(`🔄 Estado cambiado a: ${newState}`);
+  }
+  
   // Función para habilitar botones después de inicialización exitosa
   function enableButtonsAfterInit() {
-    elements.uploadBtn.disabled = false;
-    elements.loadProgressBtn.disabled = false;
+    // Ya no es necesaria, se maneja con estados
   }
   
   elements.initBtn.addEventListener('click', async () => {
@@ -755,8 +803,7 @@ export async function createImageUI({ texts, ...handlers }) {
     if (fileInput.files.length > 0 && handlers.onUploadImage) {
       const success = await handlers.onUploadImage(fileInput.files[0]);
       if (success) {
-        elements.selectPosBtn.disabled = false;
-        elements.resizeBtn.disabled = false;
+        setState('upload-image');
       }
     }
   });
@@ -769,11 +816,14 @@ export async function createImageUI({ texts, ...handlers }) {
     if (progressFileInput.files.length > 0 && handlers.onLoadProgress) {
       const success = await handlers.onLoadProgress(progressFileInput.files[0]);
       if (success) {
-        elements.selectPosBtn.disabled = false;
-        elements.startBtn.disabled = false;
-        elements.resizeBtn.disabled = false;
+        setState('load-progress');
       }
     }
+  });
+  
+  // Event listener para el botón de cargar progreso en el flujo
+  elements.loadProgressBtnFlow.addEventListener('click', () => {
+    progressFileInput.click();
   });
   
   elements.resizeBtn.addEventListener('click', () => {
@@ -782,15 +832,33 @@ export async function createImageUI({ texts, ...handlers }) {
     }
   });
   
-  elements.selectPosBtn.addEventListener('click', async () => {
-    if (handlers.onSelectPosition) {
-      elements.selectPosBtn.disabled = true;
-      const success = await handlers.onSelectPosition();
-      if (success) {
-        elements.startBtn.disabled = false;
-      }
-      elements.selectPosBtn.disabled = false;
+  // Event listeners para botones de exportar a Guard (ambos flujos)
+  elements.exportGuardBtn.addEventListener('click', () => {
+    if (handlers.onExportGuard) {
+      handlers.onExportGuard();
     }
+  });
+  
+  elements.exportGuardBtnUpload.addEventListener('click', () => {
+    if (handlers.onExportGuard) {
+      handlers.onExportGuard();
+    }
+  });
+  
+  // Event listeners para botones de selección de posición (ambos flujos)
+  const handleSelectPosition = async (btn, startBtn) => {
+    if (handlers.onSelectPosition) {
+      btn.disabled = true;
+      const success = await handlers.onSelectPosition();
+      if (success && startBtn) {
+        startBtn.disabled = false;
+      }
+      btn.disabled = false;
+    }
+  };
+  
+  elements.selectPosBtn.addEventListener('click', () => {
+    handleSelectPosition(elements.selectPosBtn, elements.startBtnUpload);
   });
 
   // Checkbox mostrar overlay
@@ -801,26 +869,45 @@ export async function createImageUI({ texts, ...handlers }) {
     window.__WPA_PLAN_OVERLAY__.setEnabled(isEnabled);
   });
   
-  elements.startBtn.addEventListener('click', async () => {
+  // Event listeners para botones de start/stop (ambos flujos)
+  const handleStartPainting = async (startBtn, stopBtn) => {
     if (handlers.onStartPainting) {
-      elements.startBtn.disabled = true;
-      elements.stopBtn.disabled = false;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
       const success = await handlers.onStartPainting();
       if (!success) {
-        elements.startBtn.disabled = false;
-        elements.stopBtn.disabled = true;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
       }
     }
-  });
+  };
   
-  elements.stopBtn.addEventListener('click', async () => {
+  const handleStopPainting = async (startBtn, stopBtn) => {
     if (handlers.onStopPainting) {
       const shouldStop = await handlers.onStopPainting();
       if (shouldStop) {
-        elements.startBtn.disabled = false;
-        elements.stopBtn.disabled = true;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
       }
     }
+  };
+  
+  // Flujo de carga de progreso
+  elements.startBtn.addEventListener('click', () => {
+    handleStartPainting(elements.startBtn, elements.stopBtn);
+  });
+  
+  elements.stopBtn.addEventListener('click', () => {
+    handleStopPainting(elements.startBtn, elements.stopBtn);
+  });
+  
+  // Flujo de subida de imagen
+  elements.startBtnUpload.addEventListener('click', () => {
+    handleStartPainting(elements.startBtnUpload, elements.stopBtnUpload);
+  });
+  
+  elements.stopBtnUpload.addEventListener('click', () => {
+    handleStopPainting(elements.startBtnUpload, elements.stopBtnUpload);
   });
   
   // Variable para mantener referencia a la ventana de logs
@@ -1041,11 +1128,24 @@ export async function createImageUI({ texts, ...handlers }) {
     elements.initBtn.style.display = visible ? 'flex' : 'none';
   }
   
+  // Función para resetear al estado inicial
+  function resetToInitialState() {
+    setState('initial');
+    // Resetear estados de botones
+    const allButtons = container.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      btn.disabled = false;
+    });
+  }
+  
   function destroy() {
     host.remove();
   }
   
   log('✅ Interfaz de Auto-Image creada');
+  
+  // Inicializar en estado inicial
+  setState('initial');
   
   return {
     setStatus,
@@ -1055,6 +1155,8 @@ export async function createImageUI({ texts, ...handlers }) {
     setInitialized,
     setInitButtonVisible,
     enableButtonsAfterInit,
+    setState,
+    resetToInitialState,
     showResizeDialog,
     closeResizeDialog,
     destroy
