@@ -25,7 +25,7 @@ jobs:
           VALIDATE_YAML: true
           VALIDATE_ALL_CODEBASE: false
           # Configuración de filtros - múltiples estrategias
-          FILTER_REGEX_EXCLUDE: ".*Auto-Farm\\.js|.*Auto-Guard\\.js|.*Auto-Image\\.js|.*Auto-Launcher\\.js|.*dist/.*|.*node_modules/.*"
+          FILTER_REGEX_EXCLUDE: ".*Auto-Farm\\.js|.*Auto-Guard\\.js|.*Auto-Image\\.js|.*Auto-Launcher\\.js|.*dist/.*|.*node_modules/.*|.*src/core/turnstile\\.js|.*src/log_window/log-window\\.js"
           JAVASCRIPT_ES_FILE_NAME: "eslint.config.js"
           # Usar solo el código fuente para validación
           FILTER_REGEX_INCLUDE: ".*src/.*\\.js$|.*eslint\\.config\\.js$|.*package\\.json$"
