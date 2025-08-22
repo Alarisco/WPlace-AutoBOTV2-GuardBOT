@@ -267,8 +267,10 @@ export function createLauncherUI({
   elements.logWindowBtn.addEventListener('click', () => {
     if (!logWindow) {
       logWindow = createLogWindow('launcher');
+      logWindow.show();
+    } else {
+      logWindow.toggle();
     }
-    logWindow.toggle();
   });
   
   elements.launchBtn.addEventListener('click', async () => {

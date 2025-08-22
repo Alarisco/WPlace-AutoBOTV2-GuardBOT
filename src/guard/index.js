@@ -195,6 +195,7 @@ function setupEventListeners() {
   elements.logWindowBtn.addEventListener('click', () => {
     if (!logWindow) {
       logWindow = createLogWindow('guard');
+      logWindow.show();
     } else {
       logWindow.toggle();
     }

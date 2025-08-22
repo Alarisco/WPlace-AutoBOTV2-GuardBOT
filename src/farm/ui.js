@@ -601,6 +601,7 @@ export function createFarmUI(config, onStart, onStop) {
   elements.logWindowBtn?.addEventListener('click', () => {
     if (!logWindow) {
       logWindow = createLogWindow('farm');
+      logWindow.show();
     } else {
       logWindow.toggle();
     }

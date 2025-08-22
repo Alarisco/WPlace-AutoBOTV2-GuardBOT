@@ -829,6 +829,7 @@ export async function createImageUI({ texts, ...handlers }) {
   elements.logWindowBtn.addEventListener('click', () => {
     if (!logWindow) {
       logWindow = createLogWindow('image');
+      logWindow.show();
     } else {
       logWindow.toggle();
     }

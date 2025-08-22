@@ -41,7 +41,7 @@ export class BlueMarblelImageProcessor {
           this.imageHeight = this.bitmap.height;
           this.totalPixels = this.imageWidth * this.imageHeight;
           
-          log(`[BLUE MARBLE] Imagen cargada: ${this.imageWidth}×${this.imageHeight} = ${this.totalPixels.toLocaleString()} píxeles`);
+          log(`[BLUE MARBLE] Imagen cargada: ${this.imageWidth}×${this.imageHeight}`);
           resolve();
         } catch (error) {
           reject(error);
@@ -168,7 +168,7 @@ export class BlueMarblelImageProcessor {
    */
   setCoords(tileX, tileY, pixelX, pixelY) {
     this.coords = [tileX, tileY, pixelX, pixelY];
-    log(`[BLUE MARBLE] Coordenadas establecidas: tile(${tileX},${tileY}) pixel(${pixelX},${pixelY})`);
+    // Coordenadas establecidas silenciosamente
   }
 
   /**
@@ -179,7 +179,7 @@ export class BlueMarblelImageProcessor {
       throw new Error('Imagen no cargada. Llama a load() primero.');
     }
 
-    log('[BLUE MARBLE] Analizando píxeles de la imagen...');
+    // Analizando píxeles...
 
     try {
       // Crear canvas de inspección a escala 1:1
@@ -244,10 +244,7 @@ export class BlueMarblelImageProcessor {
       }
       this.colorPalette = paletteObj;
 
-      log(`[BLUE MARBLE] Análisis completado:`);
-      log(`  - Píxeles requeridos: ${required.toLocaleString()}`);
-      log(`  - Píxeles #deface: ${deface.toLocaleString()}`);
-      log(`  - Colores únicos: ${paletteMap.size}`);
+      log(`[BLUE MARBLE] Análisis: ${required.toLocaleString()} píxeles, ${paletteMap.size} colores`);
 
       return {
         totalPixels: this.totalPixels,
@@ -261,7 +258,7 @@ export class BlueMarblelImageProcessor {
       // Fallback si OffscreenCanvas no está disponible
       this.requiredPixelCount = Math.max(0, this.totalPixels);
       this.defacePixelCount = 0;
-      log('[BLUE MARBLE] Fallback: usando total de píxeles como requeridos');
+      // Fallback aplicado
       
       return {
         totalPixels: this.totalPixels,
@@ -281,7 +278,7 @@ export class BlueMarblelImageProcessor {
       throw new Error('Imagen no cargada. Llama a load() primero.');
     }
 
-    log('[BLUE MARBLE] Creando tiles de template...');
+    // Creando tiles...
 
     const templateTiles = {};
     const templateTilesBuffers = {};
@@ -397,8 +394,7 @@ export class BlueMarblelImageProcessor {
     this.templateTiles = templateTiles;
     this.templateTilesBuffers = templateTilesBuffers;
 
-    log(`[BLUE MARBLE] Tiles creados: ${Object.keys(templateTiles).length} tiles`);
-    log(`[BLUE MARBLE] Prefijos registrados: ${this.tilePrefixes.size} tiles únicos`);
+    log(`[BLUE MARBLE] ${Object.keys(templateTiles).length} tiles creados`);
 
     return { templateTiles, templateTilesBuffers };
   }
@@ -411,7 +407,7 @@ export class BlueMarblelImageProcessor {
       throw new Error('Imagen no cargada. Llama a load() primero.');
     }
 
-    log('[BLUE MARBLE] Generando cola de píxeles...');
+    // Generando cola...
 
     const queue = [];
     const baseX = this.coords[0] * 1000 + (this.coords[2] || 0); // Coordenada global base X
@@ -481,7 +477,7 @@ export class BlueMarblelImageProcessor {
       }
     }
 
-    log(`[BLUE MARBLE] Cola generada: ${queue.length} píxeles válidos`);
+    log(`[BLUE MARBLE] Cola: ${queue.length} píxeles`);
     return queue;
   }
 
