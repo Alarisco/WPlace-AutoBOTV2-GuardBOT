@@ -1,4 +1,4 @@
-import { getTurnstileToken } from "../core/turnstile.js";
+import { ensureToken } from "../core/turnstile.js";
 import { postPixelBatchImage } from "../core/wplace-api.js";
 import { generateMultipleCoords, generateMultipleColors } from "./coords.js";
 import { sleep, sleepWithCountdown } from "../core/timing.js";
@@ -107,7 +107,7 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
   
   setStatus(`🌾 Farmeando ${pixelCount} píxeles en radio ${cfg.FARM_RADIUS}px desde (${cfg.BASE_X},${cfg.BASE_Y}) tile(${cfg.TILE_X},${cfg.TILE_Y})...`, 'status');
   
-  const t = await getTurnstileToken(cfg.SITEKEY);
+  const t = await ensureToken();
   // Usar el mismo formato que Auto-Image: text/plain con { colors, coords, t }
   const r = await postPixelBatchImage(cfg.TILE_X, cfg.TILE_Y, coords, colors, t);
 

@@ -1,6 +1,6 @@
 import { log } from "../core/logger.js";
 import { postPixelBatchImage } from "../core/wplace-api.js";
-import { getTurnstileToken } from "../core/turnstile.js";
+import { ensureToken } from "../core/turnstile.js";
 import { guardState, GUARD_DEFAULTS } from "./config.js";
 import { sleep } from "../core/timing.js";
 
@@ -397,7 +397,7 @@ export async function repairChanges(changes) {
 // Pintar múltiples píxeles en un solo tile
 async function paintPixelBatch(tileX, tileY, coords, colors) {
   try {
-    const token = await getTurnstileToken(GUARD_DEFAULTS.SITEKEY);
+    const token = await ensureToken();
     
     const response = await postPixelBatchImage(
       tileX, 

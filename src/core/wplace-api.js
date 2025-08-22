@@ -1,4 +1,6 @@
 import { fetchWithTimeout } from "./http.js";
+import { ensureToken } from "./turnstile.js";
+import { log } from "./logger.js";
 
 const BASE = "https://backend.wplace.live";
 
@@ -117,7 +119,7 @@ export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
   }
 }
 
-// Post píxel para farm (versión corregida con formato original)
+// Post píxel para farm (replicado del ejemplo con manejo de 403)
 export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   try {
     const body = JSON.stringify({ 
@@ -138,6 +140,69 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
     });
 
     clearTimeout(timeoutId);
+
+    if (response.status === 403) {
+      try { await response.json(); } catch (_) { }
+      console.error("❌ 403 Forbidden. Turnstile token might be invalid or expired.");
+      
+      // Try to generate a new token and retry once
+      try {
+        console.log("🔄 Regenerating Turnstile token after 403...");
+        const newToken = await ensureToken(true); // Force new token generation
+        
+        // Retry the request with new token
+        const retryBody = JSON.stringify({ 
+          colors: colors, 
+          coords: coords, 
+          t: newToken 
+        });
+        
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), 15000);
+
+        const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: retryBody,
+          signal: retryController.signal
+        });
+
+        clearTimeout(retryTimeoutId);
+        
+        if (retryResponse.status === 403) {
+          return {
+            status: 403,
+            json: { error: 'Fresh token expired or invalid after retry' },
+            success: false
+          };
+        }
+        
+        let retryData = null;
+        try {
+          const text = await retryResponse.text();
+          if (text) {
+            retryData = JSON.parse(text);
+          }
+        } catch {
+          retryData = {}; // Ignorar errores de JSON parse
+        }
+        
+        return {
+          status: retryResponse.status,
+          json: retryData,
+          success: retryResponse.ok
+        };
+        
+      } catch (retryError) {
+        console.error("❌ Token regeneration failed:", retryError);
+        return {
+          status: 403,
+          json: { error: 'Token regeneration failed' },
+          success: false
+        };
+      }
+    }
 
     let responseData = null;
     try {
@@ -163,14 +228,17 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   }
 }
 
-// Post píxel para Auto-Image (formato original correcto)
+// Post píxel para Auto-Image (replicado del ejemplo con manejo de 403)
 export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstileToken) {
   try {
+    // Prepare exact body format as used in example
     const body = JSON.stringify({ 
       colors: colors, 
       coords: coords, 
       t: turnstileToken 
     });
+    
+    log(`[API] Sending batch to tile ${tileX},${tileY} with ${colors.length} pixels, token: ${turnstileToken ? turnstileToken.substring(0, 50) + '...' : 'null'}`);
     
     const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: 'POST',
@@ -179,20 +247,113 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
       body: body
     });
 
+    log(`[API] Response: ${response.status} ${response.statusText}`);
+
+    if (response.status === 403) {
+      try { await response.json(); } catch (_) { }
+      console.error("❌ 403 Forbidden. Turnstile token might be invalid or expired.");
+      
+      // Try to generate a new token and retry once
+      try {
+        console.log("🔄 Regenerating Turnstile token after 403...");
+        
+        // Force invalidation of current token and get completely fresh one
+        const newToken = await ensureToken(true); // Force new token generation
+        
+        if (!newToken) {
+          return {
+            status: 403,
+            json: { error: 'Could not generate new token' },
+            success: false,
+            painted: 0
+          };
+        }
+        
+        // Retry the request with new token
+        const retryBody = JSON.stringify({ 
+          colors: colors, 
+          coords: coords, 
+          t: newToken 
+        });
+        
+        log(`[API] Retrying with fresh token: ${newToken.substring(0, 50)}...`);
+        
+        const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: retryBody
+        });
+        
+        log(`[API] Retry response: ${retryResponse.status} ${retryResponse.statusText}`);
+        
+        if (retryResponse.status === 403) {
+          return {
+            status: 403,
+            json: { error: 'Fresh token still expired or invalid after retry' },
+            success: false,
+            painted: 0
+          };
+        }
+        
+        let retryData = null;
+        try {
+          const text = await retryResponse.text();
+          if (text.trim()) {
+            retryData = JSON.parse(text);
+          } else {
+            retryData = {}; // Empty response
+          }
+        } catch (parseError) {
+          log(`[API] Warning: Could not parse retry response JSON: ${parseError.message}`);
+          retryData = {}; // Use empty object if JSON parse fails
+        }
+        
+        const painted = retryData?.painted || 0;
+        log(`[API] Retry result: ${painted} pixels painted`);
+        
+        return {
+          status: retryResponse.status,
+          json: retryData,
+          success: retryResponse.ok,
+          painted: painted
+        };
+        
+      } catch (retryError) {
+        console.error("❌ Token regeneration failed:", retryError);
+        return {
+          status: 403,
+          json: { error: 'Token regeneration failed: ' + retryError.message },
+          success: false,
+          painted: 0
+        };
+      }
+    }
+
     let responseData = null;
     try {
-      responseData = await response.json();
-    } catch {
-      responseData = {}; // Ignorar errores de JSON parse
+      const text = await response.text();
+      if (text.trim()) {
+        responseData = JSON.parse(text);
+      } else {
+        responseData = {}; // Empty response
+      }
+    } catch (parseError) {
+      log(`[API] Warning: Could not parse response JSON: ${parseError.message}`);
+      responseData = {}; // Use empty object if JSON parse fails
     }
+
+    const painted = responseData?.painted || 0;
+    log(`[API] Success: ${painted} pixels painted`);
 
     return {
       status: response.status,
       json: responseData,
       success: response.ok,
-      painted: responseData?.painted || 0
+      painted: painted
     };
   } catch (error) {
+    log(`[API] Network error: ${error.message}`);
     return {
       status: 0,
       json: { error: error.message },
