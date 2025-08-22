@@ -22,7 +22,7 @@
 
   function injectStyles() {
     // No necesitamos estilos CSS adicionales - Blue Marble usa el sistema de tiles nativo
-    console.log('[PLAN OVERLAY] Blue Marble tile system initialized');
+    // Sistema inicializado silenciosamente
   }
 
   // === SISTEMA DE INTERCEPCIÓN DE FETCH (como Blue Marble) ===
@@ -45,7 +45,7 @@
           !endpointName.includes('openfreemap') && 
           !endpointName.includes('maps')) {
 
-        console.log('[PLAN OVERLAY] Intercepting tile request:', endpointName);
+        // Interceptando tile request silenciosamente
 
         try {
           const blob = await cloned.blob();
@@ -65,7 +65,7 @@
       return response;
     };
 
-    console.log('[PLAN OVERLAY] Fetch interception started');
+    // Intercepción de fetch iniciada
   }
 
   function stopFetchInterception() {
@@ -74,7 +74,7 @@
     window.fetch = state.originalFetch;
     state.isIntercepting = false;
 
-    console.log('[PLAN OVERLAY] Fetch interception stopped');
+    // Intercepción de fetch detenida
   }
 
   // === PROCESAMIENTO DE TILES (como Blue Marble) ===
@@ -94,7 +94,7 @@
       return tileBlob;
     }
 
-    console.log(`[PLAN OVERLAY] Processing tile: ${tileX},${tileY}`);
+    // Procesando tile silenciosamente
 
     // Verificar si este tile contiene píxeles de nuestro plan
     const tilePixels = getPixelsForTile(tileX, tileY);
@@ -102,7 +102,7 @@
       return tileBlob; // No hay píxeles en este tile
     }
 
-    console.log(`[PLAN OVERLAY] Found ${tilePixels.length} pixels for tile ${tileX},${tileY}`);
+    // Píxeles encontrados para tile (log reducido)
 
     // Procesar el tile (como Blue Marble)
     const drawSize = state.tileSize * state.drawMult;
@@ -182,13 +182,13 @@
       stopFetchInterception();
     }
     
-    console.log(`[PLAN OVERLAY] setEnabled: ${state.enabled}`);
+    // Estado habilitado/deshabilitado silenciosamente
   }
 
   function setPlan(planItems, opts = {}) {
     if (!planItems || planItems.length === 0) {
       state.pixelPlan = null;
-      console.log('[PLAN OVERLAY] Plan cleared');
+      // Plan limpiado silenciosamente
       return;
     }
 
@@ -226,7 +226,7 @@
     state.imageWidth = opts.imageWidth || null;
     state.imageHeight = opts.imageHeight || null;
 
-    console.log(`[PLAN OVERLAY] Plan set: ${pixels.length} pixels`);
+    // Plan establecido silenciosamente
     
     if (typeof opts.enabled === 'boolean') {
       setEnabled(opts.enabled);
@@ -235,29 +235,29 @@
 
   function setNextBatchCount(count) {
     state.nextBatchCount = Math.max(0, Number(count || 0));
-    console.log(`[PLAN OVERLAY] Next batch count: ${state.nextBatchCount}`);
+    // Contador de próximo lote actualizado
   }
 
   function setAnchor(anchor) {
     state.anchor = anchor;
-    console.log('[PLAN OVERLAY] Anchor set:', anchor);
+    // Ancla establecida silenciosamente
   }
 
   function setAnchorCss(x, y) {
     // En el sistema de tiles no necesitamos ancla CSS - es solo para compatibilidad
-    console.log('[PLAN OVERLAY] CSS anchor set (ignored in tile system):', { x, y });
+    // Ancla CSS establecida (ignorada en sistema de tiles)
   }
 
   function endSelectionMode() {
     // En el sistema de tiles no hay modo selección - es solo para compatibilidad
-    console.log('[PLAN OVERLAY] Selection mode ended (ignored in tile system)');
+    // Modo selección terminado (ignorado en sistema de tiles)
   }
 
   function cleanup() {
     stopFetchInterception();
     state.pixelPlan = null;
     state.fetchedBlobQueue.clear();
-    console.log('[PLAN OVERLAY] Cleanup completed');
+    // Limpieza completada
   }
 
   // === API GLOBAL (compatible con la anterior) ===
@@ -275,5 +275,5 @@
     get state() { return state; }
   };
 
-  console.log('[PLAN OVERLAY] Blue Marble tile system ready');
+  // Sistema Blue Marble listo
 })();
