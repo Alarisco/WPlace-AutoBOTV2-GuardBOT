@@ -142,7 +142,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
     clearTimeout(timeoutId);
 
     if (response.status === 403) {
-      try { await response.json(); } catch (_) { }
+      try { await response.json(); } catch { /* Ignore JSON parsing errors */ }
       console.error("❌ 403 Forbidden. Turnstile token might be invalid or expired.");
       
       // Try to generate a new token and retry once
@@ -250,7 +250,7 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
     log(`[API] Response: ${response.status} ${response.statusText}`);
 
     if (response.status === 403) {
-      try { await response.json(); } catch (_) { }
+      try { await response.json(); } catch { /* Ignore JSON parsing errors */ }
       console.error("❌ 403 Forbidden. Turnstile token might be invalid or expired.");
       
       // Try to generate a new token and retry once

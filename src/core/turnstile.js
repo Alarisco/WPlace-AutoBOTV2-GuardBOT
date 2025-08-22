@@ -249,7 +249,7 @@ async function createNewTurnstileWidgetInvisible(sitekey, action) {
   return new Promise((resolve) => {
     try {
       if (_turnstileWidgetId && window.turnstile?.remove) {
-        try { window.turnstile.remove(_turnstileWidgetId); } catch {}
+        try { window.turnstile.remove(_turnstileWidgetId); } catch { /* Ignore removal errors */ }
       }
       const container = ensureTurnstileContainer();
       container.innerHTML = '';
@@ -284,7 +284,7 @@ async function createNewTurnstileWidgetInteractive(sitekey, action) {
   return new Promise((resolve, reject) => {
     try {
       if (_turnstileWidgetId && window.turnstile?.remove) {
-        try { window.turnstile.remove(_turnstileWidgetId); } catch {}
+        try { window.turnstile.remove(_turnstileWidgetId); } catch { /* Ignore removal errors */ }
       }
 
       const overlay = ensureTurnstileOverlayContainer();
@@ -305,7 +305,7 @@ async function createNewTurnstileWidgetInteractive(sitekey, action) {
         callback: (token) => {
           clearTimeout(timeoutId);
           // Hide overlay after success
-          try { overlay.remove(); } catch {}
+          try { overlay.remove(); } catch { /* Ignore removal errors */ }
           log('✅ Interactive Turnstile solved');
           resolve(token);
         },
@@ -576,7 +576,7 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
               window.postMessage({ source: 'turnstile-capture', token: capturedToken }, '*');
             }
           }
-        } catch (_) { /* ignore */ }
+        } catch { /* ignore */ }
       }
     }
 
@@ -600,7 +600,7 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
 export { handleCaptcha, loadTurnstile, executeTurnstile, detectSitekey, invalidateToken };
 
 // Legacy compatibility function 
-export async function getTurnstileToken(siteKey) {
+export async function getTurnstileToken(_siteKey) {
   log("⚠️ Using legacy getTurnstileToken function, consider migrating to ensureToken()");
   return await ensureToken();
 }

@@ -26,53 +26,7 @@ async function getTileImageForVerification(tileX, tileY) {
   }
 }
 
-/**
- * Verificar si un píxel ya tiene el color correcto en el canvas
- */
-async function _verifyPixelColor(pixel) {
-  try {
-    const tileBlob = await getTileImageForVerification(pixel.tileX, pixel.tileY);
-    if (!tileBlob) return false; // Si no podemos obtener el tile, asumimos que necesita pintarse
-    
-    // Crear canvas para analizar la imagen
-    const img = new window.Image();
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    return new Promise((resolve) => {
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        
-        // Obtener color actual del píxel
-        const pixelIndex = (pixel.localY * canvas.width + pixel.localX) * 4;
-        const currentR = imageData.data[pixelIndex];
-        const currentG = imageData.data[pixelIndex + 1];
-        const currentB = imageData.data[pixelIndex + 2];
-        
-        // Comparar con el color objetivo
-        const targetColor = pixel.color;
-        const tolerance = 5; // Tolerancia para pequeñas diferencias de compresión
-        
-        const isCorrectColor = 
-          Math.abs(currentR - targetColor.r) <= tolerance &&
-          Math.abs(currentG - targetColor.g) <= tolerance &&
-          Math.abs(currentB - targetColor.b) <= tolerance;
-        
-        resolve(isCorrectColor);
-      };
-      
-      img.onerror = () => resolve(false); // Si hay error, asumimos que necesita pintarse
-      img.src = window.URL.createObjectURL(tileBlob);
-    });
-  } catch (error) {
-    log(`Error verificando color del píxel:`, error);
-    return false; // Si hay error, asumimos que necesita pintarse
-  }
-}
+
 
 /**
  * Filtrar píxeles que ya tienen el color correcto (verificación inteligente)
@@ -522,7 +476,7 @@ export async function paintPixelBatch(batch) {
           if (y < minY) minY = y; if (y > maxY) maxY = y;
         }
         log(`[IMG] Enviando tile ${tx},${ty}: ${colors.length} px | x:[${minX},${maxX}] y:[${minY},${maxY}]`);
-      } catch (e) {
+      } catch {
         // noop (solo diagnóstico)
       }
 

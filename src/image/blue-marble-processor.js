@@ -103,7 +103,7 @@ export class BlueMarblelImageProcessor {
           name: transparent.name 
         });
       }
-    } catch (_error) {
+    } catch {
       // Ignorar errores al procesar transparencias
     }
 
@@ -257,7 +257,7 @@ export class BlueMarblelImageProcessor {
         colorPalette: paletteObj
       };
 
-    } catch (_err) {
+    } catch {
       // Fallback si OffscreenCanvas no está disponible
       this.requiredPixelCount = Math.max(0, this.totalPixels);
       this.defacePixelCount = 0;

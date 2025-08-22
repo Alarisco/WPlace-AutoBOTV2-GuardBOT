@@ -153,7 +153,7 @@ export async function detectChangesInDrawnArea(paintedPixelsList) {
   const currentState = await analyzeDrawnPixels(paintedPixelsList);
   const changes = [];
 
-  for (const [_key, pixelInfo] of currentState) {
+  for (const [, pixelInfo] of currentState) {
     if (!pixelInfo.isCorrect) {
       changes.push({
         imageX: pixelInfo.imageX,
