@@ -1,11 +1,89 @@
 import { log } from "../core/logger.js";
 import { sleep } from "../core/timing.js";
-import { postPixelBatchImage } from "../core/wplace-api.js";
+import { postPixelBatchImage, getSession } from "../core/wplace-api.js";
 import { ensureToken } from "../core/turnstile.js";
 import { imageState, IMAGE_DEFAULTS } from "./config.js";
 import { t } from "../locales/index.js";
 import { protectBeforeNextBatch } from "./protection.js";
 import { applyPaintPattern } from "./patterns.js";
+
+// Variables para monitoreo de cargas
+let chargeMonitorInterval = null;
+let _lastChargeCheck = 0;
+const CHARGE_CHECK_INTERVAL = 10000; // 10 segundos
+
+/**
+ * Monitorear cargas periódicamente y continuar pintando si hay píxeles pendientes
+ */
+async function startChargeMonitoring() {
+  if (chargeMonitorInterval) {
+    window.clearInterval(chargeMonitorInterval);
+  }
+  
+  chargeMonitorInterval = window.setInterval(async () => {
+    try {
+      // Solo verificar si hay píxeles pendientes y no estamos pintando activamente
+      if (imageState.remainingPixels.length > 0 && !imageState.running) {
+        const sessionResult = await getSession();
+        
+        if (sessionResult.success && sessionResult.data.charges > 0) {
+          const availableCharges = Math.floor(sessionResult.data.charges);
+          log(`🔄 Cargas detectadas: ${availableCharges}. Continuando pintado automáticamente...`);
+          
+          // Actualizar estado de cargas
+          imageState.currentCharges = sessionResult.data.charges;
+          imageState.maxCharges = sessionResult.data.maxCharges;
+          
+          // Reanudar pintado automáticamente
+          if (window.imageBot && typeof window.imageBot.onStartPainting === 'function') {
+            window.imageBot.onStartPainting();
+          }
+        }
+      }
+    } catch (error) {
+      log(`Error en monitoreo de cargas: ${error.message}`);
+    }
+  }, CHARGE_CHECK_INTERVAL);
+  
+  log(`✅ Monitoreo de cargas iniciado (cada ${CHARGE_CHECK_INTERVAL/1000}s)`);
+}
+
+/**
+ * Detener monitoreo de cargas
+ */
+function stopChargeMonitoring() {
+  if (chargeMonitorInterval) {
+    window.clearInterval(chargeMonitorInterval);
+    chargeMonitorInterval = null;
+    log(`⏹️ Monitoreo de cargas detenido`);
+  }
+}
+
+/**
+ * Verificar cargas antes de cada lote y esperar si es necesario
+ */
+async function ensureSufficientCharges(requiredCharges, onProgress) {
+  const sessionResult = await getSession();
+  
+  if (sessionResult.success) {
+    const availableCharges = Math.floor(sessionResult.data.charges);
+    imageState.currentCharges = sessionResult.data.charges;
+    imageState.maxCharges = sessionResult.data.maxCharges;
+    
+    if (availableCharges < requiredCharges) {
+      log(`⏳ Cargas insuficientes: ${availableCharges}/${requiredCharges}. Esperando...`);
+      await waitForCooldown(requiredCharges - availableCharges, onProgress);
+      
+      // Verificar nuevamente después del cooldown
+      return await ensureSufficientCharges(requiredCharges, onProgress);
+    }
+    
+    return true;
+  }
+  
+  log(`⚠️ No se pudo verificar cargas, continuando con valor cached: ${imageState.currentCharges}`);
+  return imageState.currentCharges >= requiredCharges;
+}
 
 /**
  * Obtener imagen de tile desde la API para verificación de píxeles
@@ -133,6 +211,9 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
   log(`Iniciando pintado: imagen(${width}x${height}) inicio LOCAL(${localStartX},${localStartY}) tile(${imageState.tileX},${imageState.tileY})`);
   log(`🛡️ Protección: ${imageState.protectionEnabled ? 'habilitada' : 'deshabilitada'}, Patrón: ${imageState.paintPattern}`);
   
+  // Iniciar monitoreo de cargas
+  startChargeMonitoring();
+  
   // *** NUEVO: Generar token al inicio del proceso ***
   try {
     log("🔑 Generando token Turnstile al inicio del proceso...");
@@ -249,17 +330,15 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
         log(`⚙️ Pasada normal: usando ${pixelsPerBatch} píxeles (configurado: ${imageState.pixelsPerBatch})`);
       }
       
-      if (availableCharges < pixelsPerBatch) {
-        log(`Cargas insuficientes: ${availableCharges}/${pixelsPerBatch} necesarias`);
-        await waitForCooldown(pixelsPerBatch - availableCharges, onProgress);
-        // Volver a verificar cargas después del cooldown
-        availableCharges = Math.floor(imageState.currentCharges);
-        // Recalcular el tamaño del lote si es necesario
-        if (!imageState.isFirstBatch) {
-          pixelsPerBatch = Math.min(imageState.pixelsPerBatch, imageState.remainingPixels.length, availableCharges);
-        }
-        continue;
+      // Usar la nueva función de verificación de cargas
+      const hasEnoughCharges = await ensureSufficientCharges(pixelsPerBatch, onProgress);
+      if (!hasEnoughCharges) {
+        log(`⚠️ No se pudieron obtener suficientes cargas, pausando pintado`);
+        break;
       }
+      
+      // Actualizar availableCharges después de la verificación
+      availableCharges = Math.floor(imageState.currentCharges);
       
   // Tomar el siguiente lote de píxeles
       const initialBatch = imageState.remainingPixels.splice(0, pixelsPerBatch);
@@ -404,6 +483,7 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
     
     if (imageState.stopFlag) {
       log(`Pintado pausado en píxel imagen(${imageState.lastPosition.x},${imageState.lastPosition.y})`);
+      // Mantener monitoreo activo para reanudar automáticamente
       if (onComplete) {
         onComplete(false, imageState.paintedPixels);
       }
@@ -411,6 +491,8 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
       log(`Pintado completado: ${imageState.paintedPixels} píxeles pintados`);
       imageState.lastPosition = { x: 0, y: 0 };
       imageState.remainingPixels = [];
+      // Detener monitoreo al completar
+      stopChargeMonitoring();
       // Limpiar overlay del plan al completar
       try {
         if (window.__WPA_PLAN_OVERLAY__) {
@@ -429,6 +511,7 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
     }
   } catch (error) {
     log('Error en proceso de pintado:', error);
+    stopChargeMonitoring();
     if (onError) {
       onError(error);
     }
@@ -489,7 +572,23 @@ export async function paintPixelBatch(batch) {
           status: resp.status
         };
       }
-      totalPainted += resp.painted || 0;
+      
+      // Verificar que realmente se pintaron píxeles
+      const actualPainted = resp.painted || 0;
+      if (actualPainted === 0 && colors.length > 0) {
+        log(`⚠️ API devolvió 200 OK pero painted=0 para ${colors.length} píxeles en tile ${tx},${ty}`);
+        // Considerar esto como un fallo parcial para activar reintentos
+        return {
+          success: false,
+          painted: totalPainted,
+          error: `API devolvió painted=0 para ${colors.length} píxeles`,
+          status: 200,
+          shouldRetry: true
+        };
+      }
+      
+      totalPainted += actualPainted;
+      log(`✅ Tile ${tx},${ty}: ${actualPainted}/${colors.length} píxeles pintados exitosamente`);
     }
 
     return { success: true, painted: totalPainted };
@@ -770,21 +869,26 @@ function calculateEstimatedTime() {
   return Math.ceil(totalWaitTime + executionTime);
 }
 
-export { calculateEstimatedTime };
+export { calculateEstimatedTime, startChargeMonitoring, stopChargeMonitoring };
 
 export function stopPainting() {
   imageState.stopFlag = true;
   imageState.running = false;
+  stopChargeMonitoring();
   log('🛑 Deteniendo proceso de pintado...');
 }
 
 export function pausePainting() {
   imageState.stopFlag = true;
+  stopChargeMonitoring();
   log('⏸️ Pausando proceso de pintado...');
 }
 
 export function resumePainting() {
   imageState.stopFlag = false;
   imageState.running = true;
+  if (imageState.remainingPixels.length > 0) {
+    startChargeMonitoring();
+  }
   log('▶️ Reanudando proceso de pintado...');
 }
