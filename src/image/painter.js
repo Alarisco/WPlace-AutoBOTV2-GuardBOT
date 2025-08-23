@@ -108,8 +108,63 @@ async function getTileImageForVerification(tileX, tileY) {
 
 /**
  * Filtrar píxeles que ya tienen el color correcto (verificación inteligente)
+ * Implementa llenado recursivo para mantener el tamaño del lote configurado
  */
-async function filterPixelsThatNeedPainting(batch) {
+async function filterPixelsThatNeedPainting(initialBatch, targetBatchSize = null) {
+  const desiredBatchSize = targetBatchSize || initialBatch.length;
+  let currentBatch = [...initialBatch];
+  let filteredBatch = [];
+  let totalSkippedCount = 0;
+  let iterations = 0;
+  const maxIterations = 5; // Evitar bucles infinitos
+  
+  log(`🔍 Iniciando verificación inteligente para lote de ${desiredBatchSize} píxeles`);
+  
+  while (filteredBatch.length < desiredBatchSize && currentBatch.length > 0 && iterations < maxIterations) {
+    iterations++;
+    log(`🔄 Iteración ${iterations}: verificando ${currentBatch.length} píxeles`);
+    
+    const verificationResult = await verifyPixelBatch(currentBatch);
+    const newValidPixels = verificationResult.filteredBatch;
+    const skippedInThisIteration = verificationResult.skippedCount;
+    
+    // Agregar píxeles válidos al lote final
+    filteredBatch.push(...newValidPixels);
+    totalSkippedCount += skippedInThisIteration;
+    
+    log(`✅ Iteración ${iterations}: ${newValidPixels.length} píxeles válidos, ${skippedInThisIteration} omitidos`);
+    
+    // Si ya tenemos suficientes píxeles, terminar
+    if (filteredBatch.length >= desiredBatchSize) {
+      filteredBatch = filteredBatch.slice(0, desiredBatchSize);
+      break;
+    }
+    
+    // Si necesitamos más píxeles, tomar del pool restante
+    const pixelsNeeded = desiredBatchSize - filteredBatch.length;
+    if (pixelsNeeded > 0 && imageState.remainingPixels.length > 0) {
+      const additionalPixels = imageState.remainingPixels.splice(0, pixelsNeeded);
+      currentBatch = additionalPixels;
+      log(`🔄 Necesitamos ${pixelsNeeded} píxeles más, tomando ${additionalPixels.length} adicionales`);
+    } else {
+      // No hay más píxeles disponibles
+      break;
+    }
+  }
+  
+  log(`🎯 Verificación completada: ${filteredBatch.length}/${desiredBatchSize} píxeles válidos, ${totalSkippedCount} omitidos en ${iterations} iteraciones`);
+  
+  return { 
+    filteredBatch, 
+    skippedCount: totalSkippedCount,
+    iterations 
+  };
+}
+
+/**
+ * Verificar un lote de píxeles sin llenado recursivo (función auxiliar)
+ */
+async function verifyPixelBatch(batch) {
   const pixelsByTile = new Map();
   
   // Agrupar píxeles por tile para optimizar verificaciones
@@ -139,66 +194,82 @@ async function filterPixelsThatNeedPainting(batch) {
       const img = new window.Image();
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
+      let objectUrl = null;
       
-      await new Promise((resolve) => {
-        img.onload = () => {
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-          
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          
-          for (const pixel of tilePixels) {
-            // Verificar si las coordenadas están dentro del tile
-            if (pixel.localX >= 0 && pixel.localX < canvas.width && 
-                pixel.localY >= 0 && pixel.localY < canvas.height) {
+      try {
+        objectUrl = window.URL.createObjectURL(tileBlob);
+        
+        await new Promise((resolve, reject) => {
+          img.onload = () => {
+            try {
+              canvas.width = img.width;
+              canvas.height = img.height;
+              ctx.drawImage(img, 0, 0);
               
-              const pixelIndex = (pixel.localY * canvas.width + pixel.localX) * 4;
-              const currentR = imageData.data[pixelIndex];
-              const currentG = imageData.data[pixelIndex + 1];
-              const currentB = imageData.data[pixelIndex + 2];
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
               
-              // Comparar con el color objetivo
-              const targetColor = pixel.color;
-              const tolerance = 5; // Tolerancia para pequeñas diferencias de compresión
-              
-              const isCorrectColor = 
-                Math.abs(currentR - targetColor.r) <= tolerance &&
-                Math.abs(currentG - targetColor.g) <= tolerance &&
-                Math.abs(currentB - targetColor.b) <= tolerance;
-              
-              if (isCorrectColor) {
-                skippedCount++;
-                log(`💡 Píxel ya correcto: (${pixel.localX},${pixel.localY}) en tile (${tileX},${tileY}) - RGB actual: (${currentR},${currentG},${currentB}) = objetivo: (${targetColor.r},${targetColor.g},${targetColor.b})`);
-              } else {
-                filteredBatch.push(pixel);
+              for (const pixel of tilePixels) {
+                // Verificar si las coordenadas están dentro del tile
+                if (pixel.localX >= 0 && pixel.localX < canvas.width && 
+                    pixel.localY >= 0 && pixel.localY < canvas.height) {
+                  
+                  const pixelIndex = (pixel.localY * canvas.width + pixel.localX) * 4;
+                  const currentR = imageData.data[pixelIndex];
+                  const currentG = imageData.data[pixelIndex + 1];
+                  const currentB = imageData.data[pixelIndex + 2];
+                  
+                  // Comparar con el color objetivo
+                  const targetColor = pixel.color;
+                  const tolerance = 5; // Tolerancia para pequeñas diferencias de compresión
+                  
+                  const isCorrectColor = 
+                    Math.abs(currentR - targetColor.r) <= tolerance &&
+                    Math.abs(currentG - targetColor.g) <= tolerance &&
+                    Math.abs(currentB - targetColor.b) <= tolerance;
+                  
+                  if (isCorrectColor) {
+                    skippedCount++;
+                    log(`💡 Píxel ya correcto: (${pixel.localX},${pixel.localY}) en tile (${tileX},${tileY}) - RGB actual: (${currentR},${currentG},${currentB}) = objetivo: (${targetColor.r},${targetColor.g},${targetColor.b})`);
+                  } else {
+                    log(`🎯 Píxel necesita pintura: (${pixel.localX},${pixel.localY}) en tile (${tileX},${tileY}) - RGB actual: (${currentR},${currentG},${currentB}) vs objetivo: (${targetColor.r},${targetColor.g},${targetColor.b})`);
+                    filteredBatch.push(pixel);
+                  }
+                } else {
+                  // Si está fuera del tile, incluirlo (no debería pasar)
+                  log(`⚠️ Píxel fuera del tile: (${pixel.localX},${pixel.localY}) en tile (${tileX},${tileY}) de tamaño ${canvas.width}x${canvas.height}`);
+                  filteredBatch.push(pixel);
+                }
               }
-            } else {
-              // Si está fuera del tile, incluirlo (no debería pasar)
-              filteredBatch.push(pixel);
+              resolve();
+            } catch (error) {
+              reject(error);
             }
-          }
-          resolve();
-        };
-        
-        img.onerror = () => {
-          // Si hay error cargando la imagen, incluir todos los píxeles
-          filteredBatch.push(...tilePixels);
-          resolve();
-        };
-        
-        img.src = window.URL.createObjectURL(tileBlob);
-      });
+          };
+          
+          img.onerror = (error) => {
+            log(`Error cargando imagen del tile ${tileKey}:`, error);
+            // Si hay error cargando la imagen, incluir todos los píxeles
+            filteredBatch.push(...tilePixels);
+            resolve();
+          };
+          
+          img.src = objectUrl;
+        });
+      } finally {
+        // Limpiar recursos
+        if (objectUrl) {
+          window.URL.revokeObjectURL(objectUrl);
+        }
+        // Limpiar canvas
+        canvas.width = 0;
+        canvas.height = 0;
+      }
       
     } catch (error) {
       log(`Error verificando tile ${tileKey}:`, error);
       // Si hay error, incluir todos los píxeles del tile
       filteredBatch.push(...tilePixels);
     }
-  }
-  
-  if (skippedCount > 0) {
-    log(`💡 Verificación inteligente: ${skippedCount} píxeles ya tenían el color correcto y se omitieron. Lote reducido de ${batch.length} a ${filteredBatch.length} píxeles.`);
   }
   
   return { filteredBatch, skippedCount };
@@ -349,7 +420,7 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
       
       // *** NUEVA FUNCIONALIDAD: Verificación inteligente de píxeles ***
       if (imageState.smartVerification) {
-        const verificationResult = await filterPixelsThatNeedPainting(initialBatch);
+        const verificationResult = await filterPixelsThatNeedPainting(initialBatch, pixelsPerBatch);
         batch = verificationResult.filteredBatch;
         skippedCount = verificationResult.skippedCount;
         
@@ -367,7 +438,7 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
           continue;
         }
         
-        log(`Pintando lote filtrado de ${batch.length} píxeles (${skippedCount} omitidos)...`);
+        log(`🎯 Lote inteligente completado: ${batch.length} píxeles para pintar (${skippedCount} omitidos, ${verificationResult.iterations} iteraciones)`);
       } else {
         log(`Pintando lote de ${batch.length} píxeles...`);
       }

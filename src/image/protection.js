@@ -144,33 +144,109 @@ export async function analyzeDrawnPixels(paintedPixelsList) {
 
 /**
  * Detectar cambios en píxeles ya pintados
+ * Compara contra los colores originales aplicados por el bot
  */
 export async function detectChangesInDrawnArea(paintedPixelsList) {
   if (!paintedPixelsList || paintedPixelsList.length === 0) {
     return [];
   }
 
-  const currentState = await analyzeDrawnPixels(paintedPixelsList);
+  log(`🔍 Verificando ${paintedPixelsList.length} píxeles pintados para detectar cambios`);
+  
   const changes = [];
+  const tileMap = new Map(); // Agrupar píxeles por tile para optimizar requests
 
-  for (const [, pixelInfo] of currentState) {
-    if (!pixelInfo.isCorrect) {
-      changes.push({
-        imageX: pixelInfo.imageX,
-        imageY: pixelInfo.imageY,
-        localX: pixelInfo.localX,
-        localY: pixelInfo.localY,
-        tileX: pixelInfo.tileX,
-        tileY: pixelInfo.tileY,
-        expectedColor: pixelInfo.expectedColor,
-        currentColor: pixelInfo.currentColor,
-        currentRGB: pixelInfo.currentRGB
+  // Agrupar píxeles por tile
+  for (const pixel of paintedPixelsList) {
+    const tileKey = `${pixel.tileX},${pixel.tileY}`;
+    if (!tileMap.has(tileKey)) {
+      tileMap.set(tileKey, []);
+    }
+    tileMap.get(tileKey).push(pixel);
+  }
+
+  // Analizar cada tile
+  for (const [tileKey, tilePixels] of tileMap) {
+    const [tileX, tileY] = tileKey.split(',').map(Number);
+    
+    try {
+      const tileBlob = await getTileImage(tileX, tileY);
+      if (!tileBlob) {
+        log(`⚠️ No se pudo obtener tile ${tileX},${tileY} para verificación de protección`);
+        continue;
+      }
+
+      // Crear canvas para analizar la imagen
+      const img = new Image();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = URL.createObjectURL(tileBlob);
       });
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // Verificar cada píxel pintado en este tile
+      for (const pixel of tilePixels) {
+        const { localX, localY } = pixel;
+        
+        if (localX >= 0 && localX < canvas.width && 
+            localY >= 0 && localY < canvas.height) {
+          
+          const pixelIndex = (localY * canvas.width + localX) * 4;
+          const currentR = data[pixelIndex];
+          const currentG = data[pixelIndex + 1];
+          const currentB = data[pixelIndex + 2];
+          const currentA = data[pixelIndex + 3];
+          
+          if (currentA > 0) { // Píxel visible
+            // Comparar directamente con el color original aplicado por el bot
+            const originalColor = pixel.color;
+            const tolerance = 5; // Tolerancia para pequeñas diferencias de compresión
+            
+            const isOriginalColor = 
+              Math.abs(currentR - originalColor.r) <= tolerance &&
+              Math.abs(currentG - originalColor.g) <= tolerance &&
+              Math.abs(currentB - originalColor.b) <= tolerance;
+            
+            if (!isOriginalColor) {
+              // El píxel ha sido alterado - debe restaurarse al color original
+              changes.push({
+                imageX: pixel.imageX,
+                imageY: pixel.imageY,
+                localX: pixel.localX,
+                localY: pixel.localY,
+                tileX: pixel.tileX,
+                tileY: pixel.tileY,
+                originalColor: pixel.color, // Color que el bot aplicó originalmente
+                currentRGB: { r: currentR, g: currentG, b: currentB },
+                paintedAt: pixel.paintedAt || Date.now()
+              });
+              
+              log(`🚨 Píxel alterado detectado: (${localX},${localY}) en tile (${tileX},${tileY}) - Original: RGB(${originalColor.r},${originalColor.g},${originalColor.b}) vs Actual: RGB(${currentR},${currentG},${currentB})`);
+            }
+          }
+        }
+      }
+
+      URL.revokeObjectURL(img.src);
+    } catch (error) {
+      log(`❌ Error analizando tile ${tileX},${tileY} para protección:`, error);
     }
   }
 
   if (changes.length > 0) {
-    log(`🚨 Detectados ${changes.length} píxeles alterados en el área dibujada`);
+    log(`🚨 Detectados ${changes.length} píxeles alterados que necesitan restauración a sus colores originales`);
+  } else {
+    log(`✅ Todos los píxeles pintados mantienen sus colores originales`);
   }
 
   return changes;
@@ -231,7 +307,7 @@ export async function repairChangedPixels(changedPixels, onProgress) {
       
       for (const change of tileChanges) {
         coords.push(change.localX, change.localY);
-        colors.push(change.expectedColor.id);
+        colors.push(change.originalColor.id); // Usar el color original aplicado por el bot
       }
       
       const result = await repairPixelBatch(tileX, tileY, coords, colors);
