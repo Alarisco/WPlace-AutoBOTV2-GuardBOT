@@ -1,5 +1,6 @@
 // === [Procesador de imágenes basado en Blue Marble] ===
 import { log } from "../core/logger.js";
+import { ColorUtils } from "./color-utils.js";
 
 /**
  * Procesador de imágenes con arquitectura Blue Marble
@@ -198,20 +199,24 @@ export class BlueMarblelImageProcessor {
             deface++;
           }
 
-          // Función de tolerancia para colores muy próximos al blanco
+          // Verificar si es un color exacto primero
           let matchedKey = key;
           let isValidPixel = this.allowedColorsSet.has(key);
           
-          // Si no es un color exacto, verificar si es muy próximo al blanco
-          if (!isValidPixel && this.allowedColorsSet.has('255,255,255')) {
-            // Tolerancia para píxeles muy próximos al blanco (diferencia máxima de 10 en cada canal)
-            if (r >= 240 && g >= 240 && b >= 240) {
-              matchedKey = '255,255,255';
+          // Si no es exacto, usar algoritmo LAB para encontrar el color más cercano
+          if (!isValidPixel && this.allowedColors && this.allowedColors.length > 0) {
+            const closestColor = ColorUtils.findClosestPaletteColor(r, g, b, this.allowedColors, {
+              useLegacyRgb: false, // Usar algoritmo LAB avanzado
+              whiteThreshold: 240
+            });
+            
+            if (closestColor) {
+              matchedKey = `${closestColor.r},${closestColor.g},${closestColor.b}`;
               isValidPixel = true;
             }
           }
 
-          // Solo contar colores válidos (exactos o con tolerancia)
+          // Solo contar colores válidos
           if (!isValidPixel) continue;
 
           required++;
@@ -421,24 +426,28 @@ export class BlueMarblelImageProcessor {
 
         const colorKey = `${r},${g},${b}`;
         
-        // Aplicar la misma lógica de tolerancia que en analyzePixels
+        // Verificar si es un color exacto primero
         let finalColorKey = colorKey;
         let finalR = r, finalG = g, finalB = b;
         let isValidPixel = this.allowedColorsSet.has(colorKey);
         
-        // Si no es un color exacto, verificar si es muy próximo al blanco
-        if (!isValidPixel && this.allowedColorsSet.has('255,255,255')) {
-          // Tolerancia para píxeles muy próximos al blanco (diferencia máxima de 10 en cada canal)
-          if (r >= 240 && g >= 240 && b >= 240) {
-            finalColorKey = '255,255,255';
-            finalR = 255;
-            finalG = 255;
-            finalB = 255;
+        // Si no es exacto, usar algoritmo LAB para encontrar el color más cercano
+        if (!isValidPixel && this.allowedColors && this.allowedColors.length > 0) {
+          const closestColor = ColorUtils.findClosestPaletteColor(r, g, b, this.allowedColors, {
+            useLegacyRgb: false, // Usar algoritmo LAB avanzado
+            whiteThreshold: 240
+          });
+          
+          if (closestColor) {
+            finalR = closestColor.r;
+            finalG = closestColor.g;
+            finalB = closestColor.b;
+            finalColorKey = `${finalR},${finalG},${finalB}`;
             isValidPixel = true;
           }
         }
         
-        // Solo incluir colores válidos (exactos o con tolerancia)
+        // Solo incluir colores válidos
         if (!isValidPixel) continue;
 
         // Calcular coordenadas globales
@@ -593,27 +602,13 @@ export class BlueMarblelImageProcessor {
 import { detectAvailableColors } from "./processor.js";
 export { detectAvailableColors };
 
-export function findClosestColor(rgb, palette) {
-  if (!palette || palette.length === 0) return null;
-  
-  let closestColor = null;
-  let minDistance = Infinity;
-  
-  for (const color of palette) {
-    const colorRgb = color.rgb || color;
-    const distance = Math.sqrt(
-      Math.pow(rgb.r - colorRgb.r, 2) +
-      Math.pow(rgb.g - colorRgb.g, 2) +
-      Math.pow(rgb.b - colorRgb.b, 2)
-    );
-    
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestColor = color;
-    }
-  }
-  
-  return closestColor;
+export function findClosestColor(rgb, palette, options = {}) {
+  // Usar las nuevas utilidades de color avanzadas
+  return ColorUtils.findClosestColor(rgb, palette, {
+    useLegacyRgb: false, // Usar algoritmo LAB por defecto
+    whiteThreshold: 240,
+    ...options
+  });
 }
 
 export function generatePixelQueue(imageData, startPosition, tileX, tileY) {

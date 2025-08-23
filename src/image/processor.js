@@ -1,4 +1,5 @@
 import { log } from "../core/logger.js";
+import { ColorUtils } from "./color-utils.js";
 
 export class ImageProcessor {
   constructor(imageSrc) {
@@ -89,8 +90,12 @@ export class ImageProcessor {
         // Nota: Removido el filtro automático de píxeles blancos
         // para permitir el uso del color blanco (ID 5) en las imágenes
         
-        // Encontrar el color más cercano en la paleta
-        const closestColor = this.findClosestColor({ r, g, b }, availableColors);
+        // Encontrar el color más cercano usando algoritmo LAB avanzado
+        const closestColor = ColorUtils.findClosestPaletteColor(r, g, b, availableColors, {
+          useLegacyRgb: false, // Usar algoritmo LAB
+          whiteThreshold: 240
+        });
+        
         if (closestColor) {
           processedPixels.push({
             x,
@@ -112,49 +117,23 @@ export class ImageProcessor {
     };
   }
   
-  findClosestColor(rgb, palette) {
-    if (!palette || palette.length === 0) return null;
-    
-    let closestColor = null;
-    let minDistance = Infinity;
-    
-    for (const color of palette) {
-      const distance = Math.sqrt(
-        Math.pow(rgb.r - color.r, 2) +
-        Math.pow(rgb.g - color.g, 2) +
-        Math.pow(rgb.b - color.b, 2)
-      );
-      
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestColor = color;
-      }
-    }
-    
-    return closestColor;
+  findClosestColor(rgb, palette, options = {}) {
+    // Usar las nuevas utilidades de color avanzadas
+    return ColorUtils.findClosestColor(rgb, palette, {
+      useLegacyRgb: false, // Usar algoritmo LAB por defecto
+      whiteThreshold: 240,
+      ...options
+    });
   }
 }
 
-export function findClosestColor(rgb, palette) {
-  if (!palette || palette.length === 0) return null;
-  
-  let closestColor = null;
-  let minDistance = Infinity;
-  
-  for (const color of palette) {
-    const distance = Math.sqrt(
-      Math.pow(rgb.r - color.r, 2) +
-      Math.pow(rgb.g - color.g, 2) +
-      Math.pow(rgb.b - color.b, 2)
-    );
-    
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestColor = color;
-    }
-  }
-  
-  return closestColor;
+export function findClosestColor(rgb, palette, options = {}) {
+  // Usar las nuevas utilidades de color avanzadas
+  return ColorUtils.findClosestColor(rgb, palette, {
+    useLegacyRgb: false, // Usar algoritmo LAB por defecto
+    whiteThreshold: 240,
+    ...options
+  });
 }
 
 export function generatePixelQueue(imageData, startPosition, tileX, tileY) {
