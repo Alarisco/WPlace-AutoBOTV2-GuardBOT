@@ -335,7 +335,10 @@ export async function runImage() {
                           // Regenerar cola de píxeles con coordenadas actualizadas
                           const pixelQueue = processor.generatePixelQueue();
                           imageState.remainingPixels = pixelQueue;
-                          imageState.totalPixels = pixelQueue.length;
+                          // No sobrescribir totalPixels si ya fue establecido por el análisis inicial
+                          if (!imageState.totalPixels || imageState.totalPixels === 0) {
+                            imageState.totalPixels = pixelQueue.length;
+                          }
                           
                           log(`✅ Cola de píxeles generada: ${pixelQueue.length} píxeles para overlay`);
                         }
@@ -681,21 +684,22 @@ export async function runImage() {
             processor: processor,
             width: newWidth,
             height: newHeight,
-            validPixelCount: analysisResult.validPixelCount,
-            totalPixels: analysisResult.totalPixels,
-            unknownPixels: analysisResult.unknownPixels
+            // Mantener compatibilidad: usar requiredPixels como validPixelCount
+            validPixelCount: analysisResult.requiredPixels,
+            requiredPixels: analysisResult.requiredPixels,
+            totalPixels: analysisResult.totalPixels
           };
           
-          imageState.totalPixels = analysisResult.validPixelCount;
+          imageState.totalPixels = analysisResult.requiredPixels;
           imageState.paintedPixels = 0;
           imageState.remainingPixels = []; // Resetear cola al redimensionar
           imageState.lastPosition = { x: 0, y: 0 };
           
           // Actualizar UI
-          ui.updateProgress(0, analysisResult.validPixelCount, currentUserInfo);
+          ui.updateProgress(0, analysisResult.requiredPixels, currentUserInfo);
           ui.setStatus(t('image.resizeSuccess', { width: newWidth, height: newHeight }), 'success');
           
-          log(`✅ Imagen redimensionada: ${analysisResult.validPixelCount} píxeles válidos de ${analysisResult.totalPixels} totales`);
+          log(`✅ Imagen redimensionada: ${analysisResult.requiredPixels} píxeles válidos de ${analysisResult.totalPixels} totales`);
 
           // Actualizar overlay si ya hay posición seleccionada
           try {
@@ -706,7 +710,11 @@ export async function runImage() {
               // Regenerar cola de píxeles con Blue Marble
               const pixelQueue = processor.generatePixelQueue();
               imageState.remainingPixels = pixelQueue;
-              imageState.totalPixels = pixelQueue.length;
+              // Evitar sobrescribir totalPixels aquí; ya fue establecido por el análisis anterior
+              // Mantener imageState.totalPixels basado en requiredPixels para un progreso consistente
+              // if (!imageState.totalPixels || imageState.totalPixels === 0) {
+              //   imageState.totalPixels = pixelQueue.length;
+              // }
               
               // Actualizar overlay con nueva cola
               window.__WPA_PLAN_OVERLAY__.setPlan(pixelQueue, {
