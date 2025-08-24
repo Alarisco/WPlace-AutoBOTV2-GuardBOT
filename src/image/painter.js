@@ -116,7 +116,7 @@ async function filterPixelsThatNeedPainting(initialBatch, targetBatchSize = null
   let filteredBatch = [];
   let totalSkippedCount = 0;
   let iterations = 0;
-  const maxIterations = 5; // Evitar bucles infinitos
+  const maxIterations = 3; // Evitar bucles infinitos (máximo 3 iteraciones)
   
   log(`🔍 Iniciando verificación inteligente para lote de ${desiredBatchSize} píxeles`);
   
@@ -177,6 +177,7 @@ async function verifyPixelBatch(batch) {
   }
   
   const filteredBatch = [];
+  const skippedPixels = [];
   let skippedCount = 0;
   
   for (const [tileKey, tilePixels] of pixelsByTile) {
@@ -218,20 +219,19 @@ async function verifyPixelBatch(batch) {
                   const currentG = imageData.data[pixelIndex + 1];
                   const currentB = imageData.data[pixelIndex + 2];
                   
-                  // Comparar con el color objetivo
+                  // Comparar con el color objetivo (coincidencia EXACTA)
                   const targetColor = pixel.color;
-                  const tolerance = 5; // Tolerancia para pequeñas diferencias de compresión
-                  
-                  const isCorrectColor = 
-                    Math.abs(currentR - targetColor.r) <= tolerance &&
-                    Math.abs(currentG - targetColor.g) <= tolerance &&
-                    Math.abs(currentB - targetColor.b) <= tolerance;
+                  const isCorrectColor =
+                    currentR === targetColor.r &&
+                    currentG === targetColor.g &&
+                    currentB === targetColor.b;
                   
                   if (isCorrectColor) {
                     skippedCount++;
-                    log(`💡 Píxel ya correcto: (${pixel.localX},${pixel.localY}) en tile (${tileX},${tileY}) - RGB actual: (${currentR},${currentG},${currentB}) = objetivo: (${targetColor.r},${targetColor.g},${targetColor.b})`);
+                    skippedPixels.push(pixel);
+                    log(`💡 Píxel ya correcto: (${pixel.localX},${pixel.localY}) en tile (${tileX},${tileY}) - RGB actual EXACTO`);
                   } else {
-                    log(`🎯 Píxel necesita pintura: (${pixel.localX},${pixel.localY}) en tile (${tileX},${tileY}) - RGB actual: (${currentR},${currentG},${currentB}) vs objetivo: (${targetColor.r},${targetColor.g},${targetColor.b})`);
+                    log(`🎯 Píxel necesita pintura: (${pixel.localX},${pixel.localY}) en tile (${tileX},${tileY}) - RGB actual != objetivo`);
                     filteredBatch.push(pixel);
                   }
                 } else {
@@ -272,9 +272,83 @@ async function verifyPixelBatch(batch) {
     }
   }
   
-  return { filteredBatch, skippedCount };
+  return { filteredBatch, skippedCount, skippedPixels };
 }
 
+// Revalidación final del lote justo antes del envío, con un único relleno para mantener tamaño.
+async function revalidateAndTopUpBatch(selectedBatch, targetBatchSize) {
+  log(`🔎 Revalidación final del lote (objetivo: ${targetBatchSize})`);
+  const { filteredBatch, skippedCount } = await verifyPixelBatch(selectedBatch);
+  let finalBatch = [...filteredBatch];
+  let totalSkipped = skippedCount;
+
+  // Intento único de relleno para mantener el tamaño configurado
+  if (finalBatch.length < targetBatchSize && imageState.remainingPixels.length > 0) {
+    const need = Math.min(targetBatchSize - finalBatch.length, imageState.remainingPixels.length);
+    const candidates = imageState.remainingPixels.splice(0, need);
+    const topUp = await verifyPixelBatch(candidates);
+    finalBatch.push(...topUp.filteredBatch);
+    totalSkipped += topUp.skippedCount;
+    log(`🔁 Relleno final: +${topUp.filteredBatch.length} válidos, ${topUp.skippedCount} omitidos`);
+  }
+
+  log(`✅ Revalidación final completada: ${finalBatch.length}/${targetBatchSize} para pintar`);
+  return { finalBatch, skippedAdded: totalSkipped };
+}
+async function prevalidateAllPixelsOnStart(onProgress) {
+  try {
+    if (!imageState.remainingPixels || imageState.remainingPixels.length === 0) return;
+    if (imageState.__prevalidated) return; // evitar repetir
+
+    log(`🧮 Prevalidando ${imageState.remainingPixels.length} píxeles antes de la primera pasada (coincidencia EXACTA)`);
+    const { filteredBatch, skippedCount, skippedPixels } = await verifyPixelBatch(imageState.remainingPixels);
+
+    if (skippedCount > 0) {
+      // Marcar progreso y registrar en el mapa de protección
+      imageState.paintedPixels += skippedCount;
+      for (const pixel of skippedPixels) {
+        const key = `${pixel.imageX},${pixel.imageY}`;
+        imageState.drawnPixelsMap.set(key, {
+          imageX: pixel.imageX,
+          imageY: pixel.imageY,
+          localX: pixel.localX,
+          localY: pixel.localY,
+          tileX: pixel.tileX,
+          tileY: pixel.tileY,
+          color: pixel.color,
+          paintedAt: Date.now(),
+          skipped: true // validado como ya correcto
+        });
+      }
+
+      // Actualizar cola restante a solo los que necesitan pintura
+      imageState.remainingPixels = filteredBatch;
+
+      log(`✅ Prevalidación: ${skippedCount} píxeles ya correctos, ${filteredBatch.length} pendientes`);
+
+      // Actualizar overlay y progreso
+      try {
+        if (window.__WPA_PLAN_OVERLAY__) {
+          window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
+            enabled: true,
+            nextBatchCount: imageState.pixelsPerBatch
+          });
+        }
+      } catch(e) { log('⚠️ Error actualizando overlay tras prevalidación:', e); }
+
+      if (onProgress) {
+        const percentage = Math.round((imageState.paintedPixels / imageState.totalPixels) * 100);
+        onProgress(imageState.paintedPixels, imageState.totalPixels, `💡 ${skippedCount} píxeles ya correctos antes de iniciar - Progreso: ${percentage}%`);
+      }
+    } else {
+      log('ℹ️ Prevalidación: ningún píxel ya correcto');
+    }
+
+    imageState.__prevalidated = true;
+  } catch (e) {
+    log('⚠️ Error durante prevalidación inicial:', e);
+  }
+}
 export async function processImage(imageData, startPosition, onProgress, onComplete, onError) {
   const { width, height } = imageData;
   const { x: localStartX, y: localStartY } = startPosition;
@@ -318,14 +392,15 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
       });
     }
     
+    // Reiniciar flag de prevalidación cuando (re)generamos la cola
+    imageState.__prevalidated = false;
+
     log(`Cola generada: ${imageState.remainingPixels.length} píxeles pendientes`);
     // Actualizar overlay del plan al (re)generar la cola
     try {
       if (window.__WPA_PLAN_OVERLAY__) {
         window.__WPA_PLAN_OVERLAY__.injectStyles();
-        window.__WPA_PLAN_OVERLAY__.setEnabled(true); // Asegurar que esté activado
-        
-        // Configurar ancla con la posición de inicio si está disponible
+        window.__WPA_PLAN_OVERLAY__.setEnabled(true);
         if (imageState.startPosition && imageState.tileX !== undefined && imageState.tileY !== undefined) {
           window.__WPA_PLAN_OVERLAY__.setAnchor({
             tileX: imageState.tileX,
@@ -334,18 +409,21 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
             pxY: imageState.startPosition.y
           });
         }
-        
         window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
           enabled: true,
           nextBatchCount: imageState.pixelsPerBatch
         });
-        
-        log(`✅ Plan overlay actualizado con ${imageState.remainingPixels.length} píxeles en cola`);
       }
     } catch (e) {
       log('⚠️ Error actualizando plan overlay:', e);
     }
+
+    // (ANTES) NUEVO: Prevalidar toda la cola antes de comenzar a pintar
+    // await prevalidateAllPixelsOnStart(onProgress);
   }
+  
+  // Asegurar prevalidación incluso si la cola venía preconstruida (desde imagen/JSON)
+  await prevalidateAllPixelsOnStart(onProgress);
   
   try {
     while (imageState.remainingPixels.length > 0 && !imageState.stopFlag) {
@@ -443,6 +521,31 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
         log(`Pintando lote de ${batch.length} píxeles...`);
       }
       
+      // Revalidación final del lote para sustituir cambios de última hora y rellenar una vez
+      try {
+        const beforeLen = batch.length;
+        const { finalBatch, skippedAdded } = await revalidateAndTopUpBatch(batch, pixelsPerBatch);
+        if (skippedAdded > 0) {
+          skippedCount += skippedAdded;
+          log(`🔎 Revalidación final: ${beforeLen} -> ${finalBatch.length} píxeles; ${skippedAdded} omitidos adicionales`);
+        }
+        batch = finalBatch;
+
+        // Si tras la revalidación no quedan píxeles por pintar, continuar
+        if (batch.length === 0) {
+          log(`💡 Todos los píxeles del lote quedaron correctos tras la revalidación final. Continuando...`);
+          imageState.paintedPixels += skippedCount;
+          if (onProgress) {
+            const percentage = Math.round((imageState.paintedPixels / imageState.totalPixels) * 100);
+            onProgress(imageState.paintedPixels, imageState.totalPixels, 
+              `💡 ${skippedCount} píxeles ya correctos - Progreso: ${percentage}%`);
+          }
+          continue;
+        }
+      } catch (e) {
+        log(`⚠️ Error en revalidación final del lote:`, e);
+      }
+      
       // Actualizar overlay del plan para reflejar el lote siguiente resaltado
       try {
         if (window.__WPA_PLAN_OVERLAY__) {
@@ -497,7 +600,7 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
                 tileY: pixel.tileY,
                 color: pixel.color,
                 paintedAt: Date.now(),
-                skipped: true // Marcar como omitido por verificación inteligente
+                skipped: true // Marcar como omitido por verificación inteligente/final
               });
             }
           }

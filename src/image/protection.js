@@ -208,14 +208,13 @@ export async function detectChangesInDrawnArea(paintedPixelsList) {
           const currentA = data[pixelIndex + 3];
           
           if (currentA > 0) { // Píxel visible
-            // Comparar directamente con el color original aplicado por el bot
+            // Comparar directamente con el color original aplicado por el bot (coincidencia EXACTA)
             const originalColor = pixel.color;
-            const tolerance = 5; // Tolerancia para pequeñas diferencias de compresión
-            
-            const isOriginalColor = 
-              Math.abs(currentR - originalColor.r) <= tolerance &&
-              Math.abs(currentG - originalColor.g) <= tolerance &&
-              Math.abs(currentB - originalColor.b) <= tolerance;
+            const isOriginalColor = (
+              currentR === originalColor.r &&
+              currentG === originalColor.g &&
+              currentB === originalColor.b
+            );
             
             if (!isOriginalColor) {
               // El píxel ha sido alterado - debe restaurarse al color original
