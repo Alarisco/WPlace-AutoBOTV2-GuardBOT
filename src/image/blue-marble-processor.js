@@ -31,6 +31,7 @@ export class BlueMarblelImageProcessor {
     this.templateTiles = {};
     this.templateTilesBuffers = {};
     this.tilePrefixes = new Set();
+    this.selectedColors = null; // Colores seleccionados por el usuario
   }
 
   async load() {
@@ -595,6 +596,31 @@ export class BlueMarblelImageProcessor {
       width: this.imageWidth,
       height: this.imageHeight
     };
+  }
+  
+  /**
+   * Establecer colores seleccionados por el usuario
+   */
+  setSelectedColors(selectedColors) {
+    this.selectedColors = selectedColors;
+    
+    if (selectedColors && selectedColors.length > 0) {
+      // Actualizar el set de colores permitidos
+      this.allowedColorsSet = new Set(selectedColors.map(c => c.id));
+      
+      // Actualizar el mapa de paleta de colores
+      this.colorPalette = {};
+      selectedColors.forEach(color => {
+        this.colorPalette[color.id] = color.rgb;
+      });
+      
+      log(`🎨 [BLUE MARBLE] Paleta actualizada con ${selectedColors.length} colores seleccionados`);
+      
+      // Limpiar caché de imageData para forzar recálculo con nueva paleta
+      this.imageDataCache = null;
+    } else {
+      log(`🎨 [BLUE MARBLE] Usando todos los colores disponibles`);
+    }
   }
 }
 

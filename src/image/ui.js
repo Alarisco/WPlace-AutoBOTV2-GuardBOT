@@ -1,6 +1,8 @@
 import { log } from "../core/logger.js";
 import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
 import { createLogWindow } from "../log_window/index.js";
+import { createPaintingStatsWindow } from "./painting-stats.js";
+import { createColorPaletteSelector } from "./color-palette-selector.js";
 
 export async function createImageUI({ texts, ...handlers }) {
   log('🎨 Creando interfaz de Auto-Image');
@@ -521,6 +523,10 @@ export async function createImageUI({ texts, ...handlers }) {
           📁
           <span>${texts.loadProgress}</span>
         </button>
+        <button class="btn btn-secondary stats-btn" data-state="initial">
+          📊
+          <span>Estadísticas</span>
+        </button>
         <button class="btn btn-secondary log-window-btn" data-state="initial,load-progress,upload-image">
           📋
           <span>${texts.logWindow || 'Logs'}</span>
@@ -669,6 +675,7 @@ export async function createImageUI({ texts, ...handlers }) {
     startBtnUpload: container.querySelector('.start-btn-upload'),
     stopBtn: container.querySelector('.stop-btn'),
     stopBtnUpload: container.querySelector('.stop-btn-upload'),
+    statsBtn: container.querySelector('.stats-btn'),
     logWindowBtn: container.querySelector('.log-window-btn'),
     progressBar: container.querySelector('.progress-bar'),
     statsArea: container.querySelector('.stats-area'),
@@ -910,12 +917,32 @@ export async function createImageUI({ texts, ...handlers }) {
   // Variable para mantener referencia a la ventana de logs
   let logWindow = null;
   
+  // Variable para mantener referencia a la ventana de estadísticas
+  let statsWindow = null;
+  
   elements.logWindowBtn.addEventListener('click', () => {
     if (!logWindow) {
       logWindow = createLogWindow('image');
       logWindow.show();
     } else {
       logWindow.toggle();
+    }
+  });
+  
+  elements.statsBtn.addEventListener('click', () => {
+    if (!statsWindow) {
+      statsWindow = createPaintingStatsWindow();
+      
+      // Configurar callback de actualización
+      statsWindow.setRefreshCallback(() => {
+        if (handlers.onRefreshStats) {
+          handlers.onRefreshStats();
+        }
+      });
+      
+      statsWindow.show();
+    } else {
+      statsWindow.toggle();
     }
   });
   
@@ -938,6 +965,32 @@ export async function createImageUI({ texts, ...handlers }) {
     resizeElements.widthValue.textContent = width;
     resizeElements.heightValue.textContent = height;
     resizeElements.preview.src = processor.img.src;
+    
+    // Crear selector de paleta de colores si no existe
+    if (!resizeElements.colorPaletteSelector) {
+      // Obtener colores disponibles de los handlers
+      const availableColors = handlers.getAvailableColors ? handlers.getAvailableColors() : [];
+      
+      resizeElements.colorPaletteSelector = createColorPaletteSelector(
+        resizeElements.container.querySelector('.resize-buttons').parentNode,
+        availableColors
+      );
+      
+      // Configurar callback para cambios en la selección
+      resizeElements.colorPaletteSelector.onSelectionChange((selectedColorIds) => {
+        if (handlers.onColorSelectionChange) {
+          handlers.onColorSelectionChange(selectedColorIds);
+        }
+      });
+      
+      // Mover la paleta antes de los botones
+      const buttonsDiv = resizeElements.container.querySelector('.resize-buttons');
+      buttonsDiv.parentNode.insertBefore(resizeElements.colorPaletteSelector.element, buttonsDiv);
+    } else {
+      // Actualizar colores disponibles
+      const availableColors = handlers.getAvailableColors ? handlers.getAvailableColors() : [];
+      resizeElements.colorPaletteSelector.updateAvailableColors(availableColors);
+    }
     
     // Mostrar modal
     resizeElements.overlay.style.display = 'block';
@@ -980,9 +1033,10 @@ export async function createImageUI({ texts, ...handlers }) {
     const onConfirm = () => {
       const newWidth = parseInt(resizeElements.widthSlider.value);
       const newHeight = parseInt(resizeElements.heightSlider.value);
+      const selectedColors = resizeElements.colorPaletteSelector.getSelectedColors();
       
       if (handlers.onConfirmResize) {
-        handlers.onConfirmResize(processor, newWidth, newHeight);
+        handlers.onConfirmResize(processor, newWidth, newHeight, selectedColors);
       }
       
       closeResizeDialog();
@@ -1136,7 +1190,28 @@ export async function createImageUI({ texts, ...handlers }) {
   }
   
   function destroy() {
+    if (logWindow) {
+      logWindow.destroy();
+    }
+    if (statsWindow) {
+      statsWindow.destroy();
+    }
     host.remove();
+  }
+  
+  // Función para actualizar las estadísticas desde el código principal
+  function updateStatsWindow(data) {
+    if (statsWindow && statsWindow.isVisible()) {
+      if (data.userInfo) {
+        statsWindow.updateUserStats(data.userInfo);
+      }
+      if (data.imageInfo) {
+        statsWindow.updateImageStats(data.imageInfo);
+      }
+      if (data.availableColors) {
+        statsWindow.updateColorsStats(data.availableColors);
+      }
+    }
   }
   
   log('✅ Interfaz de Auto-Image creada');
@@ -1156,6 +1231,7 @@ export async function createImageUI({ texts, ...handlers }) {
     resetToInitialState,
     showResizeDialog,
     closeResizeDialog,
+    updateStatsWindow,
     destroy
   };
 }

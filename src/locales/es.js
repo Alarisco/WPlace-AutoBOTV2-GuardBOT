@@ -136,7 +136,23 @@ export const es = {
     logWindowTitle: "Logs - {botName}",
     downloadLogs: "Descargar Logs",
     clearLogs: "Limpiar Logs",
-    closeLogs: "Cerrar"
+    closeLogs: "Cerrar",
+    // Nuevas funcionalidades
+    paintingStats: "Estadísticas de Pintado",
+    userInfo: "Información del Usuario",
+    imageProgress: "Progreso de la Imagen",
+    availableColors: "Colores Disponibles",
+    refreshStats: "Actualizar Estadísticas",
+    noImageLoaded: "No hay imagen cargada",
+    cooldown: "Tiempo de espera",
+    totalColors: "Total de Colores",
+    colorPalette: "Paleta de Colores",
+    showAllColors: "Mostrar Todos los Colores (incluyendo no disponibles)",
+    selectAllColors: "Seleccionar Todos",
+    unselectAllColors: "Deseleccionar Todos",
+    noAvailable: "No disponible",
+    colorSelected: "Color seleccionado",
+    statsUpdated: "✅ Estadísticas actualizadas: {count} colores disponibles"
   },
 
   // Farm Module (por implementar)

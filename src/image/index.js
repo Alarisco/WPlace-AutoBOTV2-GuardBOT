@@ -656,12 +656,22 @@ export async function runImage() {
         }
       },
       
-      onConfirmResize: async (processor, newWidth, newHeight) => {
+      onConfirmResize: async (processor, newWidth, newHeight, selectedColors) => {
         log(`🔄 Redimensionando imagen de ${processor.getDimensions().width}x${processor.getDimensions().height} a ${newWidth}x${newHeight}`);
+        log(`🎨 Colores seleccionados: ${selectedColors ? selectedColors.length : 'todos'}`);
         
         try {
           // Redimensionar la imagen usando Blue Marble
           await processor.resize(newWidth, newHeight);
+          
+          // Actualizar colores seleccionados si se proporcionaron
+          if (selectedColors && selectedColors.length > 0) {
+            const selectedColorObjects = imageState.availableColors.filter(color => 
+              selectedColors.includes(color.id)
+            );
+            processor.setSelectedColors(selectedColorObjects);
+            log(`🎨 Paleta actualizada con ${selectedColors.length} colores seleccionados`);
+          }
           
           // Reanalizar imagen con nuevo tamaño usando Blue Marble
           const analysisResult = await processor.analyzePixels();
@@ -720,6 +730,76 @@ export async function runImage() {
           log(`❌ Error redimensionando imagen: ${error.message}`);
           ui.setStatus(t('image.imageError'), 'error');
         }
+      },
+      
+      // Funciones para el manejo de estadísticas
+      onRefreshStats: async () => {
+        log('🔄 Actualizando estadísticas...');
+        
+        try {
+          // Obtener información actualizada del usuario
+          const sessionInfo = await getSession();
+          let userInfo = null;
+          
+          if (sessionInfo.success && sessionInfo.data.user) {
+            userInfo = {
+              username: sessionInfo.data.user.name || 'Anónimo',
+              charges: sessionInfo.data.charges,
+              maxCharges: sessionInfo.data.maxCharges,
+              pixels: sessionInfo.data.user.pixelsPainted || 0,
+              cooldown: sessionInfo.data.cooldown || 0
+            };
+            currentUserInfo = userInfo;
+            
+            // Actualizar estado global también
+            imageState.currentCharges = sessionInfo.data.charges;
+            imageState.maxCharges = sessionInfo.data.maxCharges || 9999;
+          }
+          
+          // Actualizar colores disponibles
+          const colors = detectAvailableColors();
+          if (colors.length > 0) {
+            imageState.availableColors = colors;
+            imageState.colorsChecked = true;
+          }
+          
+          // Preparar información de la imagen
+          let imageInfo = null;
+          if (imageState.imageLoaded) {
+            imageInfo = {
+              loaded: true,
+              totalPixels: imageState.totalPixels,
+              paintedPixels: imageState.paintedPixels,
+              estimatedTime: imageState.estimatedTime,
+              originalName: imageState.originalImageName
+            };
+          }
+          
+          // Actualizar ventana de estadísticas
+          ui.updateStatsWindow({
+            userInfo,
+            imageInfo,
+            availableColors: colors.length > 0 ? colors : imageState.availableColors
+          });
+          
+          // También actualizar la UI principal
+          ui.updateProgress(imageState.paintedPixels, imageState.totalPixels, userInfo);
+          
+          log(`✅ Estadísticas actualizadas: ${colors.length > 0 ? colors.length : (imageState.availableColors?.length || 0)} colores disponibles`);
+        } catch (error) {
+          log('❌ Error actualizando estadísticas:', error);
+        }
+      },
+      
+      // Función para obtener colores disponibles (usada por el selector de paleta)
+      getAvailableColors: () => {
+        return imageState.availableColors || [];
+      },
+      
+      // Función para manejar cambios en la selección de colores
+      onColorSelectionChange: (selectedColorIds) => {
+        log(`🎨 Selección de colores cambiada: ${selectedColorIds.length} colores seleccionados`);
+        // Esta información se usará en onConfirmResize
       }
     });
 
