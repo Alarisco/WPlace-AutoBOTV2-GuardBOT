@@ -1,13 +1,15 @@
 import { log } from "../core/logger.js";
 import { getSession } from "../core/wplace-api.js";
 import { guardState, GUARD_DEFAULTS } from "./config.js";
-import { detectAvailableColors, analyzeAreaPixels, checkForChanges } from "./processor.js";
+import { detectAvailableColors, analyzeAreaPixels, checkForChanges, startChargeMonitoring, stopChargeMonitoring } from "./processor.js";
 import { createGuardUI, showConfirmDialog } from "./ui.js";
 import { createLogWindow } from "../log_window/index.js";
 import { saveProgress, loadProgress, hasProgress } from "./save-load.js";
 import { initializeLanguage, getSection, t } from "../locales/index.js";
 import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
 import { sleep } from "../core/timing.js";
+import { guardOverlay } from "./overlay.js";
+
 
 // Globals del navegador
 const { setInterval, clearInterval } = window;
@@ -190,6 +192,8 @@ function setupEventListeners() {
     }
   });
   
+
+  
   // Event listener para el botón de logs
   let logWindow = null;
   elements.logWindowBtn.addEventListener('click', () => {
@@ -200,6 +204,9 @@ function setupEventListeners() {
       logWindow.toggle();
     }
   });
+  
+  // Event listener para el botón de reposicionamiento
+  elements.repositionBtn.addEventListener('click', () => startRepositioning());
   
   // Eventos para save/load/delete
   elements.saveBtn.addEventListener('click', async () => {
@@ -243,9 +250,21 @@ function setupEventListeners() {
     e.target.value = guardState.minChargesToWait;
   });
 
+  elements.protectionPatternSelect.addEventListener('change', (e) => {
+    guardState.protectionPattern = e.target.value;
+    log(`🎯 Patrón de protección cambiado a: ${e.target.value}`);
+  });
+
+  elements.colorComparisonSelect.addEventListener('change', (e) => {
+    guardState.config.colorComparisonMethod = e.target.value;
+    log(`🎨 Método de comparación de color cambiado a: ${e.target.value}`);
+  });
+
   // Actualizar inputs con valores del estado
   elements.pixelsPerBatchInput.value = guardState.pixelsPerBatch;
   elements.minChargesInput.value = guardState.minChargesToWait;
+  elements.protectionPatternSelect.value = guardState.protectionPattern;
+  elements.colorComparisonSelect.value = guardState.config.colorComparisonMethod;
 }
 
 async function initializeGuard(isAutoInit = false) {
@@ -355,9 +374,9 @@ async function selectAreaStepByStep() {
                 const tileX = parseInt(tileMatch[1]);
                 const tileY = parseInt(tileMatch[2]);
                 
-                // Calcular coordenadas globales
-                const globalX = tileX * 3000 + localX;
-                const globalY = tileY * 3000 + localY;
+                // Calcular coordenadas globales usando TILE_SIZE correcto
+                const globalX = tileX * GUARD_DEFAULTS.TILE_SIZE + localX;
+                const globalY = tileY * GUARD_DEFAULTS.TILE_SIZE + localY;
                 
                 if (selectionPhase === 'upperLeft') {
                   // Capturar esquina superior izquierda
@@ -440,13 +459,17 @@ async function captureAreaFromCoordinates(upperLeft, lowerRight) {
     
     guardState.ui.updateStatus(t('guard.capturingArea'), 'info');
     
-    const pixelMap = await analyzeAreaPixels(area);
+    const pixelMap = await analyzeAreaPixels(area, { allowVirtual: true });
     
     guardState.protectionArea = area;
     guardState.originalPixels = pixelMap;
     guardState.changes.clear();
     
-    guardState.ui.updateProgress(0, pixelMap.size);
+    // Detectar si el área es virtual (todos los píxeles son blancos con ID 5)
+    const isVirtual = pixelMap.size > 0 && Array.from(pixelMap.values())
+      .every(pixel => pixel.colorId === 5 && pixel.r === 255 && pixel.g === 255 && pixel.b === 255);
+    
+    guardState.ui.updateProgress(pixelMap.size, 0, isVirtual);
     guardState.ui.updateStatus(t('guard.areaCaptured', { count: pixelMap.size }), 'success');
     guardState.ui.enableStartBtn();
     
@@ -473,6 +496,9 @@ async function startGuard() {
   // Configurar intervalo de verificación
   guardState.checkInterval = setInterval(checkForChanges, GUARD_DEFAULTS.CHECK_INTERVAL);
   
+  // Iniciar monitoreo de cargas
+  startChargeMonitoring();
+  
   // Primera verificación inmediata
   await checkForChanges();
 }
@@ -485,10 +511,302 @@ function stopGuard() {
     guardState.checkInterval = null;
   }
   
+  // Detener monitoreo de cargas
+  stopChargeMonitoring();
+  
   if (guardState.ui) {
     guardState.ui.setRunningState(false);
     guardState.ui.updateStatus(t('guard.protectionStopped'), 'warning');
   }
   
   log('⏹️ Protección detenida');
+}
+
+// Variables para el sistema de reposicionamiento
+let repositionState = {
+  isRepositioning: false,
+  originalPixels: null,
+  originalArea: null,
+  overlayEnabled: false
+};
+
+// Función para iniciar el reposicionamiento
+async function startRepositioning() {
+  if (!guardState.protectionArea || !guardState.originalPixels || guardState.originalPixels.size === 0) {
+    guardState.ui.updateStatus('❌ No hay área protegida para reposicionar', 'error');
+    log('❌ No hay área capturada para reposicionar');
+    return;
+  }
+
+  log('📍 Iniciando reposicionamiento del área protegida...');
+  
+  // Guardar estado original
+  repositionState.originalPixels = new Map(guardState.originalPixels);
+  repositionState.originalArea = { ...guardState.protectionArea };
+  repositionState.isRepositioning = true;
+  
+  // Mostrar instrucciones
+  const statusDiv = document.createElement('div');
+  statusDiv.id = 'repositionStatus';
+  statusDiv.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: #fff;
+    padding: 15px 20px;
+    border-radius: 8px;
+    border: 2px solid #8b5cf6;
+    z-index: 100003;
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  `;
+  statusDiv.innerHTML = `
+    <div style="text-align: center;">
+      <div style="font-weight: bold; margin-bottom: 8px;">📍 Reposicionamiento Activo</div>
+      <div style="font-size: 14px; color: #cbd5e0;">Pinta un píxel en la nueva esquina superior izquierda</div>
+    </div>
+  `;
+  document.body.appendChild(statusDiv);
+  
+  // Interceptar clicks para capturar nueva posición
+  await captureNewPosition(statusDiv);
+}
+
+// Función para capturar la nueva posición
+async function captureNewPosition(statusDiv) {
+  return new Promise((resolve) => {
+    let positionCaptured = false;
+    
+    // Interceptar fetch para detectar pintado
+    const originalFetch = window.fetch;
+    window.fetch = async function(...args) {
+      const response = await originalFetch.apply(this, args);
+      
+      if (!repositionState.isRepositioning || positionCaptured) {
+        return response;
+      }
+      
+      // Detectar request de pintado de WPlace
+      const url = args[0]?.url || args[0];
+      if (url && url.includes('/s0/pixel/') && args[1]?.method === 'POST') {
+        try {
+          log('🔍 Request interceptado:', url);
+          
+          // Extraer coordenadas del tile de la URL
+          const urlMatch = url.match(/\/s0\/pixel\/(\d+)\/(\d+)/);
+          if (urlMatch) {
+            const tileX = parseInt(urlMatch[1]);
+            const tileY = parseInt(urlMatch[2]);
+            
+            // Extraer coordenadas del request body
+            const requestBody = args[1]?.body;
+            log('🔍 Request body:', requestBody);
+            
+            if (requestBody) {
+              const bodyData = JSON.parse(requestBody);
+              log('🔍 Body data:', bodyData);
+              const coords = bodyData.coords;
+              
+              if (coords && coords.length > 0) {
+                positionCaptured = true;
+                log('🔍 Coords array structure:', coords, 'Length:', coords.length);
+                
+                // Las coordenadas pueden estar en diferentes formatos
+                let relativeX, relativeY;
+                
+                if (coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+                  // Formato: [x, y] como números separados
+                  relativeX = coords[0];
+                  relativeY = coords[1];
+                  log('🔍 Coordenadas como números separados:', relativeX, relativeY);
+                } else if (Array.isArray(coords[0])) {
+                  // Formato: [[x, y]]
+                  relativeX = coords[0][0];
+                  relativeY = coords[0][1];
+                  log('🔍 Coordenadas como array anidado:', relativeX, relativeY);
+                } else if (typeof coords[0] === 'object' && coords[0].x !== undefined) {
+                  // Formato: [{x, y}]
+                  relativeX = coords[0].x;
+                  relativeY = coords[0].y;
+                  log('🔍 Coordenadas como objeto:', relativeX, relativeY);
+                } else {
+                  log('❌ Formato de coordenadas no reconocido:', coords);
+                  return;
+                }
+                
+                // Las coordenadas en el body son relativas al tile, convertir a absolutas
+                const newX = tileX * 1000 + relativeX;
+                const newY = tileY * 1000 + relativeY;
+                
+                log(`📍 Nueva posición capturada: (${newX}, ${newY})`);
+                log(`📐 Tile: (${tileX}, ${tileY}), Relativa: (${relativeX}, ${relativeY})`);
+                
+                // Restaurar fetch original
+                window.fetch = originalFetch;
+                
+                // Calcular offset y reposicionar área
+                await repositionArea(newX, newY, statusDiv);
+                resolve();
+              }
+            }
+          }
+        } catch (error) {
+          log('❌ Error capturando nueva posición:', error);
+        }
+      }
+      
+      return response;
+    };
+    
+    // Timeout de 30 segundos
+    setTimeout(() => {
+      if (!positionCaptured) {
+        window.fetch = originalFetch;
+        repositionState.isRepositioning = false;
+        statusDiv.remove();
+        log('⏰ Timeout en captura de nueva posición');
+        resolve();
+      }
+    }, 30000);
+  });
+}
+
+// Función para reposicionar el área
+async function repositionArea(newX, newY, statusDiv) {
+  // Calcular offset basado en la esquina superior izquierda original
+  const originalArea = repositionState.originalArea;
+  const offsetX = newX - originalArea.x1;
+  const offsetY = newY - originalArea.y1;
+  
+  log(`📐 Calculando offset: (${offsetX}, ${offsetY})`);
+  
+  // Crear nueva área con las posiciones actualizadas
+  const newArea = {
+    x1: originalArea.x1 + offsetX,
+    y1: originalArea.y1 + offsetY,
+    x2: originalArea.x2 + offsetX,
+    y2: originalArea.y2 + offsetY,
+    tileX: Math.floor((originalArea.x1 + offsetX) / GUARD_DEFAULTS.TILE_SIZE),
+    tileY: Math.floor((originalArea.y1 + offsetY) / GUARD_DEFAULTS.TILE_SIZE)
+  };
+  
+  // Crear nuevos píxeles con las posiciones actualizadas
+  const newPixels = new Map();
+  repositionState.originalPixels.forEach((colorData, key) => {
+    const [x, y] = key.split(',').map(Number);
+    const newKey = `${x + offsetX},${y + offsetY}`;
+    newPixels.set(newKey, colorData);
+  });
+  
+  // Mostrar overlay de confirmación
+  await showRepositionOverlay(newArea, newPixels, statusDiv);
+}
+
+// Función para mostrar el overlay de reposicionamiento
+async function showRepositionOverlay(newArea, newPixels, statusDiv) {
+  repositionState.overlayEnabled = true;
+  
+  // Mostrar overlay visual en el canvas
+  guardOverlay.showProtectionArea(newArea);
+  log('🎯 Overlay visual activado para vista previa de reposicionamiento');
+  
+  // Actualizar el status con botones de confirmación
+  statusDiv.innerHTML = `
+    <div style="text-align: center;">
+      <div style="font-weight: bold; margin-bottom: 8px;">📍 Vista Previa de Reposicionamiento</div>
+      <div style="font-size: 14px; color: #cbd5e0; margin-bottom: 8px;">Nueva área: (${newArea.x1}, ${newArea.y1}) → (${newArea.x2}, ${newArea.y2})</div>
+      <div style="font-size: 14px; color: #cbd5e0; margin-bottom: 15px;">¿Confirmar nueva posición?</div>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button id="confirmReposition" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+          ✅ Aceptar
+        </button>
+        <button id="retryReposition" style="padding: 8px 16px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+          🔄 Repetir
+        </button>
+        <button id="cancelReposition" style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+          ❌ Cancelar
+        </button>
+      </div>
+    </div>
+  `;
+  
+  // Event listeners para los botones
+  statusDiv.querySelector('#confirmReposition').addEventListener('click', () => {
+    confirmRepositioning(newArea, newPixels, statusDiv);
+  });
+  
+  statusDiv.querySelector('#retryReposition').addEventListener('click', () => {
+    retryRepositioning(statusDiv);
+  });
+  
+  statusDiv.querySelector('#cancelReposition').addEventListener('click', () => {
+    cancelRepositioning(statusDiv);
+  });
+}
+
+// Función para confirmar el reposicionamiento
+function confirmRepositioning(newArea, newPixels, statusDiv) {
+  // Actualizar el estado permanentemente
+  guardState.protectionArea = newArea;
+  guardState.originalPixels = newPixels;
+  
+  // Actualizar la UI con las nuevas coordenadas
+  guardState.ui.updateCoordinates({
+    x1: newArea.x1,
+    y1: newArea.y1,
+    x2: newArea.x2,
+    y2: newArea.y2
+  });
+  
+  // Actualizar estadísticas
+  guardState.ui.updateProgress(0, newPixels.size);
+  
+  // Ocultar overlay visual
+  guardOverlay.hideProtectionArea();
+  log('🎯 Overlay visual desactivado tras confirmar reposicionamiento');
+  
+  // Limpiar estado de reposicionamiento
+  cleanupRepositioning(statusDiv);
+  
+  guardState.ui.updateStatus('✅ Área reposicionada correctamente', 'success');
+  log('✅ Reposicionamiento confirmado');
+}
+
+// Función para reintentar el reposicionamiento
+function retryRepositioning(statusDiv) {
+  // Ocultar overlay visual actual
+  guardOverlay.hideProtectionArea();
+  log('🎯 Overlay visual desactivado para reintentar reposicionamiento');
+  
+  // Limpiar overlay
+  cleanupRepositioning(statusDiv);
+  
+  // Reiniciar proceso
+  startRepositioning();
+}
+
+// Función para cancelar el reposicionamiento
+function cancelRepositioning(statusDiv) {
+  // Ocultar overlay visual
+  guardOverlay.hideProtectionArea();
+  log('🎯 Overlay visual desactivado tras cancelar reposicionamiento');
+  
+  // Limpiar todo
+  cleanupRepositioning(statusDiv);
+  
+  guardState.ui.updateStatus('❌ Reposicionamiento cancelado', 'warning');
+  log('❌ Reposicionamiento cancelado');
+}
+
+// Función para limpiar el estado de reposicionamiento
+function cleanupRepositioning(statusDiv) {
+  repositionState.isRepositioning = false;
+  repositionState.originalPixels = null;
+  repositionState.originalArea = null;
+  repositionState.overlayEnabled = false;
+  
+  // Remover elementos UI
+  statusDiv.remove();
 }

@@ -1,5 +1,6 @@
 import { guardState } from './config.js';
 import { log } from '../core/logger.js';
+import { loadJsonWithConversion } from './json-converter.js';
 
 // Función para dividir el área de protección en múltiples partes
 function splitProtectionArea(area, splitCount) {
@@ -141,106 +142,113 @@ export function saveProgress(filename = null, splitCount = null) {
 }
 
 export async function loadProgress(file) {
-  return new Promise((resolve) => {
-    try {
-      const reader = new window.FileReader();
-      
-      reader.onload = async (e) => {
-        try {
-          const progressData = JSON.parse(e.target.result);
-          
-          // Validar estructura del archivo
-          const requiredFields = ['protectionData', 'originalPixels', 'colors'];
-          const missingFields = requiredFields.filter(field => !(field in progressData));
-          
-          if (missingFields.length > 0) {
-            throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
-          }
-          
-          // Verificar compatibilidad de colores
-          if (guardState.availableColors.length > 0) {
-            const savedColorIds = progressData.colors.map(c => c.id);
-            const currentColorIds = guardState.availableColors.map(c => c.id);
-            const commonColors = savedColorIds.filter(id => currentColorIds.includes(id));
-            
-            if (commonColors.length < savedColorIds.length * 0.8) {
-              log('⚠️ Los colores guardados no coinciden completamente con los actuales');
-            }
-          }
-          
-          // Restaurar estado
-          if (progressData.protectionData) {
-            guardState.protectionArea = progressData.protectionData.area;
-          } else if (progressData.protectionArea) {
-            // Compatibilidad con formato anterior
-            guardState.protectionArea = progressData.protectionArea;
-          }
-          
-          // Convertir array de píxeles de vuelta a Map
-          guardState.originalPixels = new Map();
-          for (const pixelData of progressData.originalPixels) {
-            const { key, ...pixelInfo } = pixelData;
-            guardState.originalPixels.set(key, pixelInfo);
-          }
-          
-          // Restaurar estadísticas si están disponibles
-          if (progressData.progress) {
-            guardState.totalRepaired = progressData.progress.totalRepaired || 0;
-            guardState.lastCheck = progressData.progress.lastCheck || 0;
-          } else if (progressData.statistics) {
-            // Compatibilidad con formato anterior
-            guardState.totalRepaired = progressData.statistics.totalRepaired || 0;
-            guardState.lastCheck = progressData.statistics.lastCheck || 0;
-          }
-          
-          // Limpiar cambios previos
-          guardState.changes.clear();
-          
-          // Actualizar UI con los datos cargados
-          if (guardState.ui) {
-            guardState.ui.updateCoordinates({
-              x1: guardState.protectionArea.x1,
-              y1: guardState.protectionArea.y1,
-              x2: guardState.protectionArea.x2,
-              y2: guardState.protectionArea.y2
-            });
-            
-            guardState.ui.updateProgress(0, guardState.originalPixels.size);
-            guardState.ui.updateStats({
-              repaired: guardState.totalRepaired
-            });
-            
-            guardState.ui.enableStartBtn();
-          }
-          
-          log(`✅ Progreso cargado: ${guardState.originalPixels.size} píxeles protegidos`);
-          
-          resolve({ 
-            success: true, 
-            data: progressData,
-            protectedPixels: guardState.originalPixels.size,
-            area: guardState.protectionArea
-          });
-          
-        } catch (parseError) {
-          log('❌ Error parseando archivo de progreso:', parseError);
-          resolve({ success: false, error: parseError.message });
-        }
-      };
-      
-      reader.onerror = () => {
-        const error = 'Error leyendo archivo';
-        log('❌', error);
-        resolve({ success: false, error });
-      };
-      
-      reader.readAsText(file);
-      
-    } catch (error) {
-      log('❌ Error cargando progreso:', error);
-      resolve({ success: false, error: error.message });
+  try {
+    // Usar la nueva función de conversión automática
+    const loadResult = await loadJsonWithConversion(file);
+    
+    if (!loadResult.success) {
+      log('❌ Error cargando archivo:', loadResult.error);
+      return { success: false, error: loadResult.error };
     }
-  });
+    
+    const progressData = loadResult.data;
+    
+    // Mostrar información de conversión si aplica
+    if (loadResult.converted) {
+      log('🔄 JSON de Auto-Image convertido automáticamente');
+      log(`📊 Estadísticas: ${loadResult.stats.protectedPixels} píxeles a proteger de ${loadResult.stats.originalPixels} originales`);
+    }
+    
+    // Validar estructura del archivo
+    const requiredFields = ['protectionData', 'originalPixels', 'colors'];
+    const missingFields = requiredFields.filter(field => !(field in progressData));
+    
+    if (missingFields.length > 0) {
+      throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
+    }
+    
+    // Verificar compatibilidad de colores
+    if (guardState.availableColors.length > 0) {
+      const savedColorIds = progressData.colors.map(c => c.id);
+      const currentColorIds = guardState.availableColors.map(c => c.id);
+      const commonColors = savedColorIds.filter(id => currentColorIds.includes(id));
+      
+      if (commonColors.length < savedColorIds.length * 0.8) {
+        log('⚠️ Los colores guardados no coinciden completamente con los actuales');
+      }
+    }
+    
+    // Si no hay colores detectados aún, poblarlos desde el archivo
+    if (!guardState.availableColors || guardState.availableColors.length === 0) {
+      guardState.availableColors = Array.isArray(progressData.colors)
+        ? progressData.colors.map(c => ({ id: c.id, r: c.r, g: c.g, b: c.b }))
+        : [];
+      log(`🎨 Colores cargados desde archivo: ${guardState.availableColors.length}`);
+    }
+    
+    // Restaurar estado
+    if (progressData.protectionData) {
+      guardState.protectionArea = progressData.protectionData.area;
+      // Establecer si es área virtual basándose en los metadatos
+      guardState.isVirtualArea = progressData.protectionData.virtualArea || false;
+    } else if (progressData.protectionArea) {
+      // Compatibilidad con formato anterior
+      guardState.protectionArea = progressData.protectionArea;
+      guardState.isVirtualArea = false;
+    }
+    
+    // Convertir array de píxeles de vuelta a Map
+    guardState.originalPixels = new Map();
+    for (const pixelData of progressData.originalPixels) {
+      const { key, ...pixelInfo } = pixelData;
+      guardState.originalPixels.set(key, pixelInfo);
+    }
+    
+    // Restaurar estadísticas si están disponibles
+    if (progressData.progress) {
+      guardState.totalRepaired = progressData.progress.totalRepaired || 0;
+      guardState.lastCheck = progressData.progress.lastCheck || 0;
+    } else if (progressData.statistics) {
+      // Compatibilidad con formato anterior
+      guardState.totalRepaired = progressData.statistics.totalRepaired || 0;
+      guardState.lastCheck = progressData.statistics.lastCheck || 0;
+    }
+    
+    // Limpiar cambios previos
+    guardState.changes.clear();
+    
+    // Actualizar UI con los datos cargados
+    if (guardState.ui) {
+      guardState.ui.updateCoordinates({
+        x1: guardState.protectionArea.x1,
+        y1: guardState.protectionArea.y1,
+        x2: guardState.protectionArea.x2,
+        y2: guardState.protectionArea.y2
+      });
+      
+      guardState.ui.updateProgress(guardState.originalPixels.size, 0);
+      guardState.ui.updateStats({
+        repaired: guardState.totalRepaired
+      });
+      
+      guardState.ui.enableStartBtn();
+    }
+    
+    log(`✅ Progreso cargado: ${guardState.originalPixels.size} píxeles protegidos`);
+    
+    return { 
+      success: true, 
+      data: progressData,
+      protectedPixels: guardState.originalPixels.size,
+      area: guardState.protectionArea,
+      converted: loadResult.converted || false,
+      stats: loadResult.stats
+    };
+    
+  } catch (error) {
+    log('❌ Error cargando progreso:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 export function clearProgress() {

@@ -2,6 +2,7 @@
 // Sistema de visualización basado en intercepción de tiles como Auto-Image.js
 
 import { log } from '../core/logger.js';
+import { guardState } from './config.js';
 
 // Globals del navegador
 const { setTimeout, Request, Response, createImageBitmap, OffscreenCanvas } = window;
@@ -9,10 +10,11 @@ const { setTimeout, Request, Response, createImageBitmap, OffscreenCanvas } = wi
 class GuardOverlay {
   constructor() {
     this.isEnabled = false;
+    this.displayEnabled = false; // Modo Display (negativo + diferencias)
     this.protectionArea = null;
     this.originalFetch = null;
     this.isIntercepting = false;
-    this.TILE_SIZE = 3000; // Tamaño de tile en WPlace
+    this.TILE_SIZE = 1000; // Tamaño de tile en WPlace
   }
 
   initialize() {
@@ -37,6 +39,19 @@ class GuardOverlay {
     this.isEnabled = false;
     this.stopFetchInterception();
     log('🔍 Ocultando área de protección');
+  }
+
+  // Nuevo: mostrar/ocultar modo Display
+  showDisplay(area) {
+    this.displayEnabled = true;
+    this.showProtectionArea(area);
+    log('🖼️ Display activado');
+  }
+
+  hideDisplay() {
+    this.displayEnabled = false;
+    this.hideProtectionArea();
+    log('🖼️ Display desactivado');
   }
 
   // === SISTEMA DE INTERCEPCIÓN DE FETCH (como Auto-Image.js) ===
@@ -221,49 +236,65 @@ class GuardOverlay {
     // Guardar estado del contexto
     context.save();
 
-    // Dibujar overlay rojo con MENOS transparencia (más visible)
-    context.fillStyle = 'rgba(255, 0, 0, 0.5)'; // 50% opacidad en lugar de 15%
-    context.fillRect(renderX1, renderY1, renderWidth, renderHeight);
+    if (this.displayEnabled) {
+      // 1) Modo Display: aplicar negativo (invertir colores) SOLO dentro del área
+      context.globalCompositeOperation = 'difference';
+      context.fillStyle = 'white'; // difference con blanco = invertido
+      context.fillRect(renderX1, renderY1, renderWidth, renderHeight);
+      context.globalCompositeOperation = 'source-over';
 
-    // Dibujar borde MUY visible
-    context.strokeStyle = 'rgba(255, 0, 0, 1.0)'; // Totalmente opaco
-    context.lineWidth = Math.max(3, 4 * Math.max(scaleX, scaleY)); // Línea más gruesa
-    context.strokeRect(renderX1, renderY1, renderWidth, renderHeight);
+      // 2) Resaltar píxeles que no coinciden en ROJO sólido usando guardState.changes
+      if (guardState?.changes && guardState.changes.size > 0) {
+        context.fillStyle = 'rgba(255, 0, 0, 0.9)';
+        for (const [_key, change] of guardState.changes) {
+          const orig = change.original;
+          if (!orig) continue;
+          if (orig.tileX !== tileX || orig.tileY !== tileY) continue; // Solo este tile
+          // Asegurar que cae en el recorte local
+          if (orig.localX < localX1 || orig.localX >= localX2 || orig.localY < localY1 || orig.localY >= localY2) continue;
 
-    // Agregar patrón de cuadrícula para hacerlo más visible
-    context.strokeStyle = 'rgba(255, 255, 0, 0.8)'; // Líneas amarillas
-    context.lineWidth = Math.max(1, 2 * Math.max(scaleX, scaleY));
-    
-    // Líneas verticales cada 10 píxeles
-    for (let i = 0; i <= renderWidth; i += 10 * scaleX) {
-      context.beginPath();
-      context.moveTo(renderX1 + i, renderY1);
-      context.lineTo(renderX1 + i, renderY1 + renderHeight);
-      context.stroke();
-    }
-    
-    // Líneas horizontales cada 10 píxeles
-    for (let i = 0; i <= renderHeight; i += 10 * scaleY) {
-      context.beginPath();
-      context.moveTo(renderX1, renderY1 + i);
-      context.lineTo(renderX1 + renderWidth, renderY1 + i);
-      context.stroke();
-    }
+          const px = orig.localX * scaleX;
+          const py = orig.localY * scaleY;
+          // Pintar el rectángulo del píxel
+          context.fillRect(px, py, Math.max(1, scaleX), Math.max(1, scaleY));
+        }
+      }
 
-    // Agregar etiqueta MUY visible en el centro
-    if (renderWidth > 20 && renderHeight > 20) {
-      const centerX = renderX1 + renderWidth / 2;
-      const centerY = renderY1 + renderHeight / 2;
+      // Borde sutil para delimitar área en modo Display
+      context.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      context.lineWidth = Math.max(1, 1.5 * Math.max(scaleX, scaleY));
+      context.strokeRect(renderX1, renderY1, renderWidth, renderHeight);
+
+      // Etiqueta removida
+    } else {
+      // Modo Overlay clásico (área roja con cuadrícula)
+      context.fillStyle = 'rgba(255, 0, 0, 0.5)'; // 50% opacidad
+      context.fillRect(renderX1, renderY1, renderWidth, renderHeight);
+
+      context.strokeStyle = 'rgba(255, 0, 0, 1.0)'; // Totalmente opaco
+      context.lineWidth = Math.max(1, 1.5 * Math.max(scaleX, scaleY));
+      context.strokeRect(renderX1, renderY1, renderWidth, renderHeight);
+
+      context.strokeStyle = 'rgba(255, 255, 0, 0.8)'; // Líneas amarillas
+      context.lineWidth = Math.max(0.5, 1 * Math.max(scaleX, scaleY));
       
-      // Fondo para el texto
-      context.fillStyle = 'rgba(0, 0, 0, 0.8)';
-      context.fillRect(centerX - 50, centerY - 10, 100, 20);
+      // Líneas verticales cada 10 píxeles
+      for (let i = 0; i <= renderWidth; i += 10 * scaleX) {
+        context.beginPath();
+        context.moveTo(renderX1 + i, renderY1);
+        context.lineTo(renderX1 + i, renderY1 + renderHeight);
+        context.stroke();
+      }
       
-      // Texto
-      context.fillStyle = 'white';
-      context.font = `bold ${Math.max(12, 16 * Math.max(scaleX, scaleY))}px Arial`;
-      context.textAlign = 'center';
-      context.fillText('🛡️ GUARD', centerX, centerY + 5);
+      // Líneas horizontales cada 10 píxeles
+      for (let i = 0; i <= renderHeight; i += 10 * scaleY) {
+        context.beginPath();
+        context.moveTo(renderX1, renderY1 + i);
+        context.lineTo(renderX1 + renderWidth, renderY1 + i);
+        context.stroke();
+      }
+
+      // Etiqueta removida
     }
 
     // Restaurar estado del contexto
@@ -289,6 +320,7 @@ class GuardOverlay {
     this.stopFetchInterception();
     this.protectionArea = null;
     this.isEnabled = false;
+    this.displayEnabled = false;
     log('🗑️ Overlay destruido');
   }
 

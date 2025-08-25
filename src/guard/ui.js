@@ -1,3 +1,5 @@
+import { hasProgress } from './save-load.js';
+
 export function createGuardUI(texts) {
   // Crear contenedor principal
   const container = document.createElement('div');
@@ -70,12 +72,18 @@ export function createGuardUI(texts) {
           ▶️ ${texts.startProtection}
         </button>
         
-        <button id="stopBtn" style="width: 100%; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;" disabled>
+        <button id="stopBtn" style="width: 100%; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-bottom: 10px;" disabled>
           ⏹️ ${texts.stopProtection}
         </button>
+
+
         
-        <button id="logWindowBtn" style="width: 100%; padding: 8px; background: #6b7280; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 10px; font-size: 13px;">
+        <button id="logWindowBtn" style="width: 100%; padding: 8px; background: #6b7280; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 0; font-size: 13px;">
           📋 ${texts.logWindow || 'Logs'}
+        </button>
+        
+        <button id="repositionBtn" style="width: 100%; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 5px; font-size: 13px;" disabled>
+          📍 Reposicionar
         </button>
       </div>
       
@@ -90,8 +98,26 @@ export function createGuardUI(texts) {
         <div style="font-size: 13px; margin-bottom: 5px;">
           <span>⚡ ${texts.charges}: </span><span id="chargesCount">0</span>
         </div>
-        <div style="font-size: 13px;">
+        <div style="font-size: 13px; margin-bottom: 5px;">
           <span>🛠️ ${texts.repairedPixels}: </span><span id="repairedCount">0</span>
+        </div>
+        <div id="countdownSection" style="font-size: 13px; margin-bottom: 5px; display: none;">
+          <span>⏰ Próximo lote en: </span><span id="countdownTimer">--</span>
+        </div>
+        
+        <!-- Estadísticas de Análisis -->
+        <hr style="border: none; border-top: 1px solid #4a5568; margin: 10px 0;">
+        <div style="font-size: 13px; margin-bottom: 5px;">
+          <span style="color: #10b981;">✅ Píxeles Correctos: </span><span id="correctPixelsCount">-</span>
+        </div>
+        <div style="font-size: 13px; margin-bottom: 5px;">
+          <span style="color: #ef4444;">❌ Píxeles Incorrectos: </span><span id="incorrectPixelsCount">-</span>
+        </div>
+        <div style="font-size: 13px; margin-bottom: 5px;">
+          <span style="color: #f59e0b;">⚪ Píxeles Faltantes: </span><span id="missingPixelsCount">-</span>
+        </div>
+        <div style="font-size: 13px;">
+          <span style="color: #8b5cf6;">🎯 Precisión: </span><span id="accuracyCount">-</span>
         </div>
       </div>
       
@@ -110,10 +136,38 @@ export function createGuardUI(texts) {
           </div>
         </div>
         
+        <div style="margin-bottom: 10px;">
+          <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #cbd5e0;">🎯 Patrón de Protección:</label>
+          <select id="protectionPatternSelect" style="width: 100%; padding: 5px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db; font-size: 13px;">
+            <option value="random">🎲 Aleatorio</option>
+            <option value="line">📏 Línea</option>
+            <option value="center">🎯 Centro</option>
+            <option value="spiral">🌀 Espiral</option>
+            <option value="human">👤 Humano</option>
+          </select>
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+          <div style="flex: 1;">
+            <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #cbd5e0;">🎨 Comparación de Color:</label>
+            <select id="colorComparisonSelect" style="width: 100%; padding: 5px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db; font-size: 13px;">
+              <option value="rgb">RGB (Rápido)</option>
+              <option value="lab">LAB (Preciso)</option>
+            </select>
+          </div>
+          <div style="flex: 1;">
+            <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #cbd5e0;">🎚️ Umbral:</label>
+            <input id="colorThresholdInput" type="number" min="1" max="50" value="10" style="width: 100%; padding: 5px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db; font-size: 13px;">
+          </div>
+        </div>
+        
         <!-- Controles de save/load -->
-        <div style="display: flex; gap: 10px;">
-          <button id="saveBtn" style="width: 100%; padding: 8px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
-            💾 Guardar Protección
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+          <button id="saveBtn" style="flex: 1; padding: 8px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
+            💾 Guardar
+          </button>
+          <button id="analyzeBtn" style="flex: 1; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;" disabled>
+            🔍 Analizar
           </button>
         </div>
       </div>
@@ -148,7 +202,9 @@ export function createGuardUI(texts) {
     y2Input: container.querySelector('#y2Input'),
     startBtn: container.querySelector('#startBtn'),
     stopBtn: container.querySelector('#stopBtn'),
+
     logWindowBtn: container.querySelector('#logWindowBtn'),
+    repositionBtn: container.querySelector('#repositionBtn'),
     closeBtn: container.querySelector('#closeBtn'),
     initSection: container.querySelector('#initSection'),
     areaSection: container.querySelector('#areaSection'),
@@ -156,11 +212,21 @@ export function createGuardUI(texts) {
     changesCount: container.querySelector('#changesCount'),
     chargesCount: container.querySelector('#chargesCount'),
     repairedCount: container.querySelector('#repairedCount'),
+    countdownSection: container.querySelector('#countdownSection'),
+    countdownTimer: container.querySelector('#countdownTimer'),
+    correctPixelsCount: container.querySelector('#correctPixelsCount'),
+    incorrectPixelsCount: container.querySelector('#incorrectPixelsCount'),
+    missingPixelsCount: container.querySelector('#missingPixelsCount'),
+    accuracyCount: container.querySelector('#accuracyCount'),
     statusBar: container.querySelector('#statusBar'),
     areaFileInput: areaFileInput,
     pixelsPerBatchInput: container.querySelector('#pixelsPerBatchInput'),
     minChargesInput: container.querySelector('#minChargesInput'),
-    saveBtn: container.querySelector('#saveBtn')
+    protectionPatternSelect: container.querySelector('#protectionPatternSelect'),
+    colorComparisonSelect: container.querySelector('#colorComparisonSelect'),
+    colorThresholdInput: container.querySelector('#colorThresholdInput'),
+    saveBtn: container.querySelector('#saveBtn'),
+    analyzeBtn: container.querySelector('#analyzeBtn')
   };
 
   // API de la UI
@@ -178,15 +244,47 @@ export function createGuardUI(texts) {
       elements.statusBar.style.color = colors[type] || colors.info;
     },
 
-    updateProgress: (current, total) => {
+    updateProgress: (current, total, isVirtual = false) => {
       elements.changesCount.textContent = current;
-      elements.protectedCount.textContent = total;
+      if (isVirtual && total > 0) {
+        elements.protectedCount.textContent = `${total} (área vacía)`;
+      } else {
+        elements.protectedCount.textContent = total;
+      }
     },
 
     updateStats: (stats) => {
       if (stats.charges !== undefined) elements.chargesCount.textContent = stats.charges;
       if (stats.repaired !== undefined) elements.repairedCount.textContent = stats.repaired;
       if (stats.pending !== undefined) elements.changesCount.textContent = stats.pending;
+    },
+
+    showCountdown: (show = true) => {
+      elements.countdownSection.style.display = show ? 'block' : 'none';
+    },
+
+    updateCountdown: (seconds) => {
+      if (seconds <= 0) {
+        elements.countdownTimer.textContent = '--';
+        ui.showCountdown(false);
+        return;
+      }
+      
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      const timeStr = minutes > 0 
+        ? `${minutes}m ${remainingSeconds}s`
+        : `${remainingSeconds}s`;
+      
+      elements.countdownTimer.textContent = timeStr;
+      ui.showCountdown(true);
+    },
+
+    updateAnalysisStats: (analysisStats) => {
+      if (analysisStats.correct !== undefined) elements.correctPixelsCount.textContent = analysisStats.correct;
+      if (analysisStats.incorrect !== undefined) elements.incorrectPixelsCount.textContent = analysisStats.incorrect;
+      if (analysisStats.missing !== undefined) elements.missingPixelsCount.textContent = analysisStats.missing;
+      if (analysisStats.accuracy !== undefined) elements.accuracyCount.textContent = `${analysisStats.accuracy}%`;
     },
 
     showAreaSection: () => {
@@ -208,12 +306,33 @@ export function createGuardUI(texts) {
 
     enableStartBtn: () => {
       elements.startBtn.disabled = false;
+      // También habilitar el botón de análisis cuando hay un área seleccionada
+      elements.analyzeBtn.disabled = false;
+      // Actualizar estado del botón de reposicionamiento
+      ui.updateRepositionBtn();
+    },
+
+    updateRepositionBtn: () => {
+      // El botón de reposicionamiento solo está disponible si hay progreso (área + píxeles)
+      elements.repositionBtn.disabled = !hasProgress();
     },
 
     setRunningState: (running) => {
       elements.startBtn.disabled = running;
       elements.stopBtn.disabled = !running;
       elements.selectAreaBtn.disabled = running;
+      
+      if (running) {
+        // Deshabilitar reposicionamiento mientras está corriendo
+        elements.repositionBtn.disabled = true;
+      } else {
+        // Actualizar estado basado en si hay progreso
+        ui.updateRepositionBtn();
+        // Mantener el botón de análisis habilitado si hay área protegida
+        if (elements.x1Input.value && elements.y1Input.value && elements.x2Input.value && elements.y2Input.value) {
+          elements.analyzeBtn.disabled = false;
+        }
+      }
     },
 
     updateCoordinates: (coords) => {
@@ -221,6 +340,14 @@ export function createGuardUI(texts) {
       if (coords.y1 !== undefined) elements.y1Input.value = coords.y1;
       if (coords.x2 !== undefined) elements.x2Input.value = coords.x2;
       if (coords.y2 !== undefined) elements.y2Input.value = coords.y2;
+      
+      // Habilitar botón de análisis si todas las coordenadas están definidas
+      if (elements.x1Input.value && elements.y1Input.value && elements.x2Input.value && elements.y2Input.value) {
+        elements.analyzeBtn.disabled = false;
+      }
+      
+      // Actualizar estado del botón de reposicionamiento
+      ui.updateRepositionBtn();
     },
 
     destroy: () => {
@@ -228,6 +355,15 @@ export function createGuardUI(texts) {
       areaFileInput.remove();
     }
   };
+
+  // Event listener para botón de análisis
+  elements.analyzeBtn.addEventListener('click', async () => {
+    const { createAnalysisWindow } = await import('./analysis-window.js');
+    createAnalysisWindow();
+  });
+
+  // Inicializar estado del botón de reposicionamiento
+  ui.updateRepositionBtn();
 
   return ui;
 }
@@ -301,7 +437,7 @@ export function showConfirmDialog(message, title, buttons = {}) {
       });
     }
     
-    // Cerrar con overlay
+    // Cerrar al hacer click fuera
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
         cleanup();
@@ -312,37 +448,31 @@ export function showConfirmDialog(message, title, buttons = {}) {
 }
 
 function makeDraggable(element) {
-  let isDragging = false;
+  const header = element.querySelector('.guard-header');
+  if (!header) return;
+
   let startX, startY, startLeft, startTop;
 
-  const header = element.querySelector('.guard-header');
   header.addEventListener('mousedown', (e) => {
-    if (e.target.id === 'closeBtn') return;
-    
-    isDragging = true;
+    e.preventDefault();
     startX = e.clientX;
     startY = e.clientY;
     startLeft = parseInt(window.getComputedStyle(element).left, 10);
     startTop = parseInt(window.getComputedStyle(element).top, 10);
-    
-    element.style.cursor = 'grabbing';
-  });
 
-  document.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    
-    const deltaX = e.clientX - startX;
-    const deltaY = e.clientY - startY;
-    
-    element.style.left = `${startLeft + deltaX}px`;
-    element.style.top = `${startTop + deltaY}px`;
-    element.style.right = 'auto';
-  });
+    const onMouseMove = (e2) => {
+      const deltaX = e2.clientX - startX;
+      const deltaY = e2.clientY - startY;
+      element.style.left = `${startLeft + deltaX}px`;
+      element.style.top = `${startTop + deltaY}px`;
+    };
 
-  document.addEventListener('mouseup', () => {
-    if (isDragging) {
-      isDragging = false;
-      element.style.cursor = 'default';
-    }
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   });
 }

@@ -1,8 +1,191 @@
 import { log } from "../core/logger.js";
-import { postPixelBatchImage } from "../core/wplace-api.js";
+import { postPixelBatchImage, getSession } from "../core/wplace-api.js";
 import { ensureToken } from "../core/turnstile.js";
 import { guardState, GUARD_DEFAULTS } from "./config.js";
 import { sleep } from "../core/timing.js";
+import { getPixelsByPattern } from "./patterns.js";
+
+// Variables para monitoreo de cargas
+let chargeMonitorInterval = null;
+let _lastChargeCheck = 0;
+let _isRepairing = false; // Evitar bucles infinitos
+let _countdownInterval = null;
+let _nextChargeTime = 0;
+const CHARGE_CHECK_INTERVAL = 30000; // 30 segundos (más conservador que Auto-Image)
+const CHARGE_REGENERATION_TIME = 31000; // 31 segundos por carga
+
+/**
+ * Inicia el contador de tiempo para el próximo lote
+ */
+function startCountdownTimer() {
+  if (_countdownInterval) {
+    window.clearInterval(_countdownInterval);
+  }
+  
+  _countdownInterval = window.setInterval(() => {
+    const now = Date.now();
+    const timeLeft = Math.max(0, Math.ceil((_nextChargeTime - now) / 1000));
+    
+    if (guardState.ui) {
+      guardState.ui.updateCountdown(timeLeft);
+    }
+    
+    if (timeLeft <= 0) {
+      window.clearInterval(_countdownInterval);
+      _countdownInterval = null;
+    }
+  }, 1000);
+}
+
+/**
+ * Detiene el contador de tiempo
+ */
+function stopCountdownTimer() {
+  if (_countdownInterval) {
+    window.clearInterval(_countdownInterval);
+    _countdownInterval = null;
+  }
+  
+  if (guardState.ui) {
+    guardState.ui.showCountdown(false);
+  }
+}
+
+/**
+ * Inicia el monitoreo periódico de cargas
+ */
+export function startChargeMonitoring() {
+  if (chargeMonitorInterval) {
+    log('🔄 Monitoreo de cargas ya está activo');
+    return;
+  }
+
+  log('🔄 Iniciando monitoreo de cargas cada 30 segundos...');
+  
+  chargeMonitorInterval = window.setInterval(async () => {
+    try {
+      // Actualizar cargas en tiempo real
+      const sessionResult = await getSession();
+      
+      if (sessionResult.success) {
+        const availableCharges = Math.floor(sessionResult.data.charges);
+        
+        // Actualizar estado de cargas
+        guardState.currentCharges = sessionResult.data.charges;
+        guardState.maxCharges = sessionResult.data.maxCharges;
+        
+        // Actualizar UI con cargas actuales
+        if (guardState.ui) {
+          guardState.ui.updateStats({ charges: availableCharges });
+        }
+        
+        // Solo verificar si hay cambios pendientes, no estamos reparando activamente, y el Guard está corriendo
+        if (guardState.changes.size > 0 && guardState.running && !_isRepairing) {
+          if (availableCharges >= guardState.minChargesToWait) {
+            log(`🔄 Cargas detectadas: ${availableCharges}. Continuando reparación automáticamente...`);
+            
+            // Detener contador si está activo
+            stopCountdownTimer();
+            
+            // Continuar con la reparación
+            await repairChanges(guardState.changes);
+          }
+        }
+      }
+    } catch (error) {
+      log(`Error en monitoreo de cargas: ${error.message}`);
+    }
+  }, CHARGE_CHECK_INTERVAL);
+}
+
+/**
+ * Detener monitoreo de cargas
+ */
+export function stopChargeMonitoring() {
+  if (chargeMonitorInterval) {
+    window.clearInterval(chargeMonitorInterval);
+    chargeMonitorInterval = null;
+    log('🔄 Monitoreo de cargas detenido');
+  }
+  
+  // También detener el contador
+  stopCountdownTimer();
+}
+
+// Funciones para conversión de color RGB a LAB
+function rgbToXyz(r, g, b) {
+  // Normalizar valores RGB a 0-1
+  r = r / 255;
+  g = g / 255;
+  b = b / 255;
+
+  // Aplicar corrección gamma
+  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+
+  // Convertir a XYZ usando matriz sRGB
+  const x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
+  const y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
+  const z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
+
+  return { x, y, z };
+}
+
+function xyzToLab(x, y, z) {
+  // Usar iluminante D65
+  const xn = 0.95047;
+  const yn = 1.00000;
+  const zn = 1.08883;
+
+  x = x / xn;
+  y = y / yn;
+  z = z / zn;
+
+  const fx = x > 0.008856 ? Math.pow(x, 1/3) : (7.787 * x + 16/116);
+  const fy = y > 0.008856 ? Math.pow(y, 1/3) : (7.787 * y + 16/116);
+  const fz = z > 0.008856 ? Math.pow(z, 1/3) : (7.787 * z + 16/116);
+
+  const l = 116 * fy - 16;
+  const a = 500 * (fx - fy);
+  const b = 200 * (fy - fz);
+
+  return { l, a, b };
+}
+
+function rgbToLab(r, g, b) {
+  const xyz = rgbToXyz(r, g, b);
+  return xyzToLab(xyz.x, xyz.y, xyz.z);
+}
+
+// Función para calcular diferencia Delta E en espacio LAB
+function calculateDeltaE(lab1, lab2) {
+  const deltaL = lab1.l - lab2.l;
+  const deltaA = lab1.a - lab2.a;
+  const deltaB = lab1.b - lab2.b;
+  
+  return Math.sqrt(deltaL * deltaL + deltaA * deltaA + deltaB * deltaB);
+}
+
+// Función para comparar colores usando diferentes métodos
+function compareColors(color1, color2, method = 'rgb', threshold = 10) {
+  if (method === 'lab') {
+    const lab1 = rgbToLab(color1.r, color1.g, color1.b);
+    const lab2 = rgbToLab(color2.r, color2.g, color2.b);
+    const deltaE = calculateDeltaE(lab1, lab2);
+    
+    // Para LAB, un Delta E < 2.3 es imperceptible, < 5 es aceptable
+    return deltaE > (threshold / 2); // Ajustar umbral para LAB
+  } else {
+    // Método RGB original
+    const rDiff = Math.abs(color1.r - color2.r);
+    const gDiff = Math.abs(color1.g - color2.g);
+    const bDiff = Math.abs(color1.b - color2.b);
+    const maxDiff = Math.max(rDiff, gDiff, bDiff);
+    
+    return maxDiff > threshold;
+  }
+}
 
 // Globals del navegador
 const { Image, URL } = window;
@@ -77,13 +260,26 @@ export function findClosestColor(r, g, b, availableColors) {
 }
 
 // Analizar píxeles de un área específica
-export async function analyzeAreaPixels(area) {
+export async function analyzeAreaPixels(area, options = {}) {
+  const { allowVirtual = false } = options;
   const { x1, y1, x2, y2 } = area;
-  const width = x2 - x1;
-  const height = y2 - y1;
+  const width = x2 - x1 + 1; // inclusivo
+  const height = y2 - y1 + 1; // inclusivo
 
   log(`🔍 Analizando área ${width}x${height} desde (${x1},${y1}) hasta (${x2},${y2})`);
   
+  // Asegurar que tenemos colores disponibles antes de analizar
+  if (!guardState.availableColors || guardState.availableColors.length === 0) {
+    const detected = detectAvailableColors();
+    if (detected.length > 0) {
+      guardState.availableColors = detected;
+      log(`🎨 Colores detectados para análisis: ${detected.length}`);
+    } else {
+      log(`⚠️ Sin colores disponibles para análisis. Omitiendo análisis para evitar falsos positivos.`);
+      return new Map();
+    }
+  }
+
   const pixelMap = new Map();
   
   // Obtener tiles únicos que cubren el área
@@ -123,19 +319,23 @@ export async function analyzeAreaPixels(area) {
         // Analizar píxeles en el área especificada de este tile
         const tileStartX = tileX * GUARD_DEFAULTS.TILE_SIZE;
         const tileStartY = tileY * GUARD_DEFAULTS.TILE_SIZE;
-        const tileEndX = tileStartX + GUARD_DEFAULTS.TILE_SIZE;
-        const tileEndY = tileStartY + GUARD_DEFAULTS.TILE_SIZE;
+        const tileEndXExclusive = tileStartX + GUARD_DEFAULTS.TILE_SIZE;
+        const tileEndYExclusive = tileStartY + GUARD_DEFAULTS.TILE_SIZE;
         
-        // Calcular intersección del área con este tile
+        // Calcular intersección del área (inclusiva) con este tile usando fin-exclusivo
+        const areaEndXExclusive = x2 + 1;
+        const areaEndYExclusive = y2 + 1;
         const analyzeStartX = Math.max(x1, tileStartX);
         const analyzeStartY = Math.max(y1, tileStartY);
-        const analyzeEndX = Math.min(x2, tileEndX);
-        const analyzeEndY = Math.min(y2, tileEndY);
+        const analyzeEndXExclusive = Math.min(areaEndXExclusive, tileEndXExclusive);
+        const analyzeEndYExclusive = Math.min(areaEndYExclusive, tileEndYExclusive);
         
-        for (let globalY = analyzeStartY; globalY < analyzeEndY; globalY++) {
-          for (let globalX = analyzeStartX; globalX < analyzeEndX; globalX++) {
-            const localX = globalX - tileStartX;
-            const localY = globalY - tileStartY;
+        for (let globalY = analyzeStartY; globalY < analyzeEndYExclusive; globalY++) {
+          for (let globalX = analyzeStartX; globalX < analyzeEndXExclusive; globalX++) {
+            const localXRaw = globalX - tileStartX;
+            const localYRaw = globalY - tileStartY;
+            const localX = ((localXRaw % 1000) + 1000) % 1000;
+            const localY = ((localYRaw % 1000) + 1000) % 1000;
             
             // Verificar que estamos dentro de los límites del tile
             if (localX >= 0 && localX < GUARD_DEFAULTS.TILE_SIZE && 
@@ -178,36 +378,97 @@ export async function analyzeAreaPixels(area) {
 
   log(`✅ Análisis completado: ${pixelMap.size} píxeles protegidos`);
   
-  // Si no encontramos píxeles, crear píxeles "virtuales" para el área seleccionada
+  // Si no encontramos píxeles en el mapa, crear "virtuales" solo si está permitido (captura)
   if (pixelMap.size === 0) {
-    log(`⚠️ No se encontraron píxeles existentes, creando área virtual para protección`);
-    
-    // Crear entradas virtuales para cada píxel del área
-    for (let globalY = y1; globalY < y2; globalY++) {
-      for (let globalX = x1; globalX < x2; globalX++) {
-        const tileX = Math.floor(globalX / GUARD_DEFAULTS.TILE_SIZE);
-        const tileY = Math.floor(globalY / GUARD_DEFAULTS.TILE_SIZE);
-        const localX = globalX - (tileX * GUARD_DEFAULTS.TILE_SIZE);
-        const localY = globalY - (tileY * GUARD_DEFAULTS.TILE_SIZE);
-        
-        // Usar color blanco por defecto (ID 5) para píxeles vacíos
-        pixelMap.set(`${globalX},${globalY}`, {
-          r: 255, g: 255, b: 255, // Blanco por defecto
-          colorId: 5, // ID correcto del color blanco
-          globalX,
-          globalY,
-          localX,
-          localY,
-          tileX,
-          tileY
-        });
+    if (allowVirtual) {
+      log(`⚠️ No se encontraron píxeles existentes, creando área virtual para protección`);
+      const areaEndXExclusive = x2 + 1;
+      const areaEndYExclusive = y2 + 1;
+      // Crear entradas virtuales para cada píxel del área (inclusivo)
+      for (let globalY = y1; globalY < areaEndYExclusive; globalY++) {
+        for (let globalX = x1; globalX < areaEndXExclusive; globalX++) {
+          const tileX = Math.floor(globalX / GUARD_DEFAULTS.TILE_SIZE);
+          const tileY = Math.floor(globalY / GUARD_DEFAULTS.TILE_SIZE);
+          const localXRaw = globalX - (tileX * GUARD_DEFAULTS.TILE_SIZE);
+          const localYRaw = globalY - (tileY * GUARD_DEFAULTS.TILE_SIZE);
+          const localX = ((localXRaw % 1000) + 1000) % 1000;
+          const localY = ((localYRaw % 1000) + 1000) % 1000;
+          
+          // Usar color blanco por defecto (ID 5) para píxeles vacíos
+          pixelMap.set(`${globalX},${globalY}`, {
+            r: 255, g: 255, b: 255, // Blanco por defecto
+            colorId: 5, // ID correcto del color blanco
+            globalX,
+            globalY,
+            localX,
+            localY,
+            tileX,
+            tileY
+          });
+        }
       }
+      
+      log(`✅ Área virtual creada: ${pixelMap.size} píxeles para proteger`);
+    } else {
+      log(`ℹ️ Análisis vacío y fallback virtual deshabilitado (modo verificación)`);
     }
-    
-    log(`✅ Área virtual creada: ${pixelMap.size} píxeles para proteger`);
   }
   
   return pixelMap;
+}
+
+// Actualizar estadísticas de análisis en la UI principal
+function updateAnalysisStatsInUI(originalPixels, currentPixels) {
+  if (!guardState.ui || !guardState.ui.updateAnalysisStats) {
+    return;
+  }
+
+  const total = originalPixels.size;
+  let correctCount = 0;
+  let incorrectCount = 0;
+  let missingCount = 0;
+
+  if (total === 0) {
+    // No hay píxeles originales para comparar
+    guardState.ui.updateAnalysisStats({
+      correct: 0,
+      incorrect: 0,
+      missing: 0,
+      accuracy: 0
+    });
+    return;
+  }
+
+  // Comparar cada píxel original con el actual
+  for (const [key, originalPixel] of originalPixels) {
+    const currentPixel = currentPixels.get(key);
+    
+    if (!currentPixel) {
+      // Píxel faltante
+      missingCount++;
+    } else {
+      // Comparar colores usando el método configurado
+      const comparisonMethod = guardState.config?.colorComparisonMethod || 'rgb';
+      const threshold = guardState.config?.colorThreshold || 10;
+      
+      const isChanged = compareColors(currentPixel, originalPixel, comparisonMethod, threshold);
+      
+      if (isChanged) {
+        incorrectCount++;
+      } else {
+        correctCount++;
+      }
+    }
+  }
+
+  const accuracy = total > 0 ? ((correctCount / total) * 100).toFixed(1) : 0;
+
+  guardState.ui.updateAnalysisStats({
+    correct: correctCount,
+    incorrect: incorrectCount,
+    missing: missingCount,
+    accuracy: accuracy
+  });
 }
 
 // Detectar cambios en el área protegida
@@ -218,31 +479,76 @@ export async function checkForChanges() {
 
   try {
     const currentPixels = await analyzeAreaPixels(guardState.protectionArea);
+
+    // Si el análisis actual está vacío pero tenemos píxeles originales virtuales,
+    // esto significa que el área sigue vacía como se esperaba
+    if (!currentPixels || currentPixels.size === 0) {
+      if (guardState.isVirtualArea) {
+        // Área virtual sigue vacía como se esperaba, no hay cambios
+        guardState.lastCheck = Date.now();
+        if (guardState.ui) {
+          guardState.ui.updateStatus('✅ Área protegida - sin cambios (área virtual vacía)', 'success');
+        }
+        return;
+      } else {
+        // Tenemos píxeles originales reales pero el análisis actual está vacío
+        // Esto indica que los píxeles fueron borrados
+        log(`🚨 Píxeles originales detectados pero análisis actual vacío - píxeles fueron borrados`);
+      }
+    }
+
     const changes = new Map();
     let changedCount = 0;
 
-    // Comparar píxeles originales vs actuales
-    for (const [key, originalPixel] of guardState.originalPixels) {
-      const currentPixel = currentPixels.get(key);
-      
-      if (!currentPixel) {
-        // Píxel fue borrado
+    if (guardState.isVirtualArea && currentPixels && currentPixels.size > 0) {
+      // Caso especial: área virtual (originalmente vacía) pero ahora tiene píxeles
+      // Todos los píxeles actuales son "intrusos" que deben ser borrados
+      for (const [key, currentPixel] of currentPixels) {
         changes.set(key, {
           timestamp: Date.now(),
-          type: 'deleted',
-          original: originalPixel,
-          current: null
-        });
-        changedCount++;
-      } else if (currentPixel.colorId !== originalPixel.colorId) {
-        // Píxel cambió de color
-        changes.set(key, {
-          timestamp: Date.now(),
-          type: 'changed',
-          original: originalPixel,
+          type: 'intrusion', // Nuevo tipo para píxeles que no deberían estar
+          original: null, // No hay píxel original en área virtual
           current: currentPixel
         });
         changedCount++;
+      }
+    } else {
+      // Comparación normal: píxeles originales vs actuales
+      for (const [key, originalPixel] of guardState.originalPixels) {
+        const currentPixel = currentPixels.get(key);
+        
+        if (!currentPixel) {
+          // Píxel fue borrado
+          changes.set(key, {
+            timestamp: Date.now(),
+            type: 'deleted',
+            original: originalPixel,
+            current: null
+          });
+          changedCount++;
+        } else {
+          // Para píxeles de JSON importado, usar comparación más tolerante
+          // Comparar primero por colorId, y si no coincide, verificar si los colores son similares
+          let isChanged = false;
+          
+          if (currentPixel.colorId !== originalPixel.colorId) {
+            // Usar el método de comparación configurado (RGB o LAB)
+            const comparisonMethod = guardState.config?.colorComparisonMethod || 'rgb';
+            const threshold = guardState.config?.colorThreshold || 10;
+            
+            isChanged = compareColors(currentPixel, originalPixel, comparisonMethod, threshold);
+          }
+          
+          if (isChanged) {
+            changes.set(key, {
+              timestamp: Date.now(),
+              type: 'changed',
+              original: originalPixel,
+              current: currentPixel
+            });
+            changedCount++;
+          }
+        }
       }
     }
 
@@ -253,7 +559,10 @@ export async function checkForChanges() {
       // Actualizar UI
       if (guardState.ui) {
         guardState.ui.updateStatus(`🚨 ${changedCount} cambios detectados`, 'warning');
-        guardState.ui.updateProgress(changes.size, guardState.originalPixels.size);
+        guardState.ui.updateProgress(changes.size, guardState.originalPixels.size, guardState.isVirtualArea);
+        
+        // Actualizar estadísticas de análisis
+        updateAnalysisStatsInUI(guardState.originalPixels, currentPixels);
       }
       
       // Iniciar reparación automática si está habilitada
@@ -265,6 +574,10 @@ export async function checkForChanges() {
       guardState.lastCheck = Date.now();
       if (guardState.ui) {
         guardState.ui.updateStatus('✅ Área protegida - sin cambios', 'success');
+        guardState.ui.updateProgress(0, guardState.originalPixels.size, guardState.isVirtualArea);
+        
+        // Actualizar estadísticas de análisis también cuando no hay cambios
+        updateAnalysisStatsInUI(guardState.originalPixels, currentPixels);
       }
     }
 
@@ -281,6 +594,16 @@ export async function repairChanges(changes) {
   if (changes.size === 0) {
     return;
   }
+  
+  // Evitar bucles infinitos del monitoreo de cargas
+  if (_isRepairing) {
+    log('🔄 Reparación ya en progreso, omitiendo llamada duplicada');
+    return;
+  }
+  
+  _isRepairing = true;
+  
+  try {
 
   const changesArray = Array.from(changes.values());
   const availableCharges = Math.floor(guardState.currentCharges);
@@ -307,26 +630,40 @@ export async function repairChanges(changes) {
     guardState.ui.updateStatus(`🛠️ Reparando ${maxRepairs} píxeles${repairMode}...`, 'info');
   }
   
-  // Procesar píxeles en lotes más pequeños para mejor rendimiento
-  const pixelsToRepair = changesArray.slice(0, maxRepairs);
+  // Seleccionar píxeles usando el patrón configurado
+  const changeKeys = Array.from(changes.keys());
+  const selectedKeys = getPixelsByPattern(guardState.protectionPattern, new Set(changeKeys), maxRepairs);
+  const pixelsToRepair = selectedKeys.map(key => changes.get(key));
   
   // Agrupar cambios por tile para eficiencia
   const changesByTile = new Map();
   
   for (const change of pixelsToRepair) {
-    const original = change.original;
-    const tileKey = `${original.tileX},${original.tileY}`;
+    let targetPixel, targetColorId;
+    
+    if (change.type === 'intrusion') {
+      // Para intrusiones, usar las coordenadas del píxel actual pero pintar de blanco
+      targetPixel = change.current;
+      targetColorId = 5; // Blanco para borrar la intrusión
+    } else {
+      // Para cambios normales, restaurar al color original
+      targetPixel = change.original;
+      targetColorId = change.original.colorId;
+    }
+    
+    const tileKey = `${targetPixel.tileX},${targetPixel.tileY}`;
     
     if (!changesByTile.has(tileKey)) {
       changesByTile.set(tileKey, []);
     }
     
     changesByTile.get(tileKey).push({
-      localX: original.localX,
-      localY: original.localY,
-      colorId: original.colorId,
-      globalX: original.globalX,
-      globalY: original.globalY
+      localX: targetPixel.localX,
+      localY: targetPixel.localY,
+      colorId: targetColorId,
+      globalX: targetPixel.globalX,
+      globalY: targetPixel.globalY,
+      changeType: change.type
     });
   }
   
@@ -382,8 +719,19 @@ export async function repairChanges(changes) {
   if (guardState.ui) {
     if (remainingChanges > 0 && remainingCharges < guardState.minChargesToWait) {
       guardState.ui.updateStatus(`⏳ Esperando ${guardState.minChargesToWait} cargas para continuar (${remainingCharges} actuales)`, 'warning');
+      
+      // Calcular tiempo estimado para la próxima carga
+      const chargesNeeded = guardState.minChargesToWait - remainingCharges;
+      const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
+      _nextChargeTime = Date.now() + timeToWait;
+      
+      // Iniciar contador de tiempo
+      startCountdownTimer();
     } else {
       guardState.ui.updateStatus(`✅ Reparados ${totalRepaired} píxeles correctamente`, 'success');
+      
+      // Detener contador si está activo
+      stopCountdownTimer();
     }
     
     guardState.ui.updateStats({
@@ -392,26 +740,48 @@ export async function repairChanges(changes) {
       pending: remainingChanges
     });
   }
+  
+  } catch (error) {
+    log(`❌ Error en reparación: ${error.message}`);
+  } finally {
+    _isRepairing = false;
+  }
 }
 
 // Pintar múltiples píxeles en un solo tile
 async function paintPixelBatch(tileX, tileY, coords, colors) {
   try {
     const token = await ensureToken();
-    
+
+    // Sanitizar coordenadas a rango 0..999 como en Auto-Image
+    const sanitizedCoords = [];
+    for (let i = 0; i < coords.length; i += 2) {
+      const x = ((Number(coords[i]) % 1000) + 1000) % 1000;
+      const y = ((Number(coords[i + 1]) % 1000) + 1000) % 1000;
+      sanitizedCoords.push(x, y);
+    }
+
+    // Log de diagnóstico (muestra hasta 3 pares)
+    const previewPairs = sanitizedCoords.slice(0, 6).join(',');
+    log(`[API] Enviando lote a tile ${tileX},${tileY} con ${colors.length} píxeles. Ejemplo coords: ${previewPairs}`);
+
     const response = await postPixelBatchImage(
-      tileX, 
-      tileY, 
-      coords, 
-      colors, 
+      tileX,
+      tileY,
+      sanitizedCoords,
+      colors,
       token
     );
-    
+
+    const painted = (typeof response.painted === 'number')
+      ? response.painted
+      : (typeof response.json?.painted === 'number' ? response.json.painted : 0);
+
     return {
       success: response.success,
-      painted: response.painted,
+      painted: painted,
       status: response.status,
-      error: response.success ? null : (response.json?.message || 'Error desconocido')
+      error: response.success ? null : (response.json?.message || response.json?.error || 'Error desconocido')
     };
   } catch (error) {
     return {
