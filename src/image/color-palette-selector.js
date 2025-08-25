@@ -265,6 +265,10 @@ export function createColorPaletteSelector(container, availableColors = []) {
     
     let _availableCount = 0;
     let _totalCount = 0;
+
+    // Determinar si ya existe una selección previa (no debe cambiar durante el render)
+    const hasExistingSelection = selectedColors.size > 0;
+    const nextSelected = new Set();
     
     // Convertir COLOR_MAP a array y filtrar transparente
     const allColors = Object.values(COLOR_MAP).filter(color => color.rgb !== null);
@@ -300,13 +304,14 @@ export function createColorPaletteSelector(container, availableColors = []) {
       if (!isAvailable) {
         swatch.disabled = true;
       }
-      // Selección inicial: si no hay selección previa, activar los disponibles; si ya hay, respetar selección
-      const shouldBeActive = selectedColors.size === 0 ? isAvailable : selectedColors.has(id);
+      // Selección inicial estable: si no hay selección previa, activar todos los disponibles; si ya hay, respetar selección previa
+      const shouldBeActive = hasExistingSelection ? selectedColors.has(id) : isAvailable;
       swatch.classList.toggle('active', shouldBeActive);
+
       if (shouldBeActive) {
-        selectedColors.add(id);
+        nextSelected.add(id);
       } else {
-        selectedColors.delete(id);
+        nextSelected.delete(id);
       }
       
       const nameLabel = document.createElement('span');
@@ -342,6 +347,9 @@ export function createColorPaletteSelector(container, availableColors = []) {
       colorItem.appendChild(nameLabel);
       elements.colorsContainer.appendChild(colorItem);
     });
+
+    // Actualizar el set seleccionado con la selección calculada durante el render
+    selectedColors = nextSelected;
     
     // Sincronizar estado visual después de renderizar
     const swatches = elements.colorsContainer.querySelectorAll('.wplace-color-swatch');

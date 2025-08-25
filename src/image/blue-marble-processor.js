@@ -32,6 +32,11 @@ export class BlueMarblelImageProcessor {
     this.templateTilesBuffers = {};
     this.tilePrefixes = new Set();
     this.selectedColors = null; // Colores seleccionados por el usuario
+    // Copias completas para restaurar cuando no hay selección
+    this.allSiteColors = [];
+    this.initialAllowedColorsSet = null;
+    // Paleta de colores disponibles para matching de cercanía
+    this.allowedColors = [];
   }
 
   async load() {
@@ -93,6 +98,11 @@ export class BlueMarblelImageProcessor {
       premium: false, 
       name: 'Transparent' 
     });
+
+    // Guardar copias para restauración y matching de cercanía
+    this.allSiteColors = filteredColors.map(c => ({ r: c.r, g: c.g, b: c.b, id: c.id, name: c.name, premium: !!c.premium }));
+    this.initialAllowedColorsSet = new Set(this.allowedColorsSet);
+    this.allowedColors = [...this.allSiteColors];
 
     log(`[BLUE MARBLE] Paleta inicializada: ${this.allowedColorsSet.size} colores permitidos`);
     return Array.from(availableColors);
