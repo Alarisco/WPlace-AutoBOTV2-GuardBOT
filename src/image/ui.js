@@ -545,16 +545,9 @@ export async function createImageUI({ texts, ...handlers }) {
           ⏹️
           <span>${texts.stopPainting}</span>
         </button>
-        <button class="btn btn-load export-guard-btn" data-state="load-progress" style="background: #8b5cf6; display: none;">
-          🛡️
-          <span>Exportar para Guard</span>
-        </button>
+
         
         <!-- Flujo de subida de imagen -->
-        <button class="btn btn-load export-guard-btn-upload" data-state="upload-image" style="background: #8b5cf6; display: none;">
-          🛡️
-          <span>Exportar para Guard</span>
-        </button>
         <button class="btn btn-primary resize-btn" data-state="upload-image" style="display: none;">
           🔄
           <span>${texts.resizeImage}</span>
@@ -667,8 +660,7 @@ export async function createImageUI({ texts, ...handlers }) {
     uploadBtn: container.querySelector('.upload-btn'),
     loadProgressBtn: container.querySelector('.load-progress-btn'),
     loadProgressBtnFlow: container.querySelector('.load-progress-btn-flow'),
-    exportGuardBtn: container.querySelector('.export-guard-btn'),
-    exportGuardBtnUpload: container.querySelector('.export-guard-btn-upload'),
+
     resizeBtn: container.querySelector('.resize-btn'),
     selectPosBtn: container.querySelector('.select-pos-btn'),
     startBtn: container.querySelector('.start-btn'),
@@ -836,18 +828,7 @@ export async function createImageUI({ texts, ...handlers }) {
     }
   });
   
-  // Event listeners para botones de exportar a Guard (ambos flujos)
-  elements.exportGuardBtn.addEventListener('click', () => {
-    if (handlers.onExportGuard) {
-      handlers.onExportGuard();
-    }
-  });
-  
-  elements.exportGuardBtnUpload.addEventListener('click', () => {
-    if (handlers.onExportGuard) {
-      handlers.onExportGuard();
-    }
-  });
+
   
   // Event listeners para botones de selección de posición (ambos flujos)
   const handleSelectPosition = async (btn, startBtn) => {

@@ -635,23 +635,7 @@ export async function runImage() {
         }
       },
       
-      onExportGuard: async () => {
-        try {
-          const { exportForGuard } = await import('./save-load.js');
-          const result = exportForGuard();
-          if (result.success) {
-            ui.setStatus(t('image.guardExportSuccess', { filename: result.filename }), 'success');
-            log(`✅ Exportado para Auto-Guard: ${result.filename}`);
-          } else {
-            ui.setStatus(t('image.guardExportError', { error: result.error }), 'error');
-          }
-          return result.success;
-        } catch (error) {
-          ui.setStatus(t('image.guardExportError', { error: error.message }), 'error');
-          log(`❌ Error exportando para Guard: ${error.message}`);
-          return false;
-        }
-      },
+
       
       onResizeImage: () => {
         if (imageState.imageLoaded && imageState.imageData && imageState.imageData.processor) {

@@ -84,10 +84,9 @@ export const ru = {
     progressSaved: "✅ Прогресс сохранен как {filename}",
     progressLoaded: "✅ Прогресс загружен: {painted} из {total} пикселей нарисовано",
     progressLoadError: "❌ Ошибка загрузки прогресса: {error}",
-    exportGuard: "Экспорт в Guard",
+
     progressSaveError: "❌ Ошибка сохранения прогресса: {error}",
-    guardExportSuccess: "✅ Экспортировано для Auto-Guard: {filename}",
-    guardExportError: "❌ Ошибка экспорта для Guard: {error}",
+
     confirmSaveProgress: "Сохранить текущий прогресс перед остановкой?",
     saveProgressTitle: "Сохранить прогресс",
     discardProgress: "Не сохранять прогресс",

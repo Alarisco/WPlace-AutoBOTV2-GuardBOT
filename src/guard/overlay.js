@@ -1,5 +1,5 @@
 // Overlay del área de protección para Auto-Guard.js
-// Sistema de visualización basado en intercepción de tiles como Auto-Image.js
+// Sistema de visualización basado en intercepción de tiles
 
 import { log } from '../core/logger.js';
 import { guardState } from './config.js';
@@ -54,7 +54,7 @@ class GuardOverlay {
     log('🖼️ Display desactivado');
   }
 
-  // === SISTEMA DE INTERCEPCIÓN DE FETCH (como Auto-Image.js) ===
+  // === SISTEMA DE INTERCEPCIÓN DE FETCH ===
   startFetchInterception() {
     if (this.isIntercepting) return;
 

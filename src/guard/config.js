@@ -35,7 +35,7 @@ export const guardState = {
   colorsChecked: false,
   ui: null,
   totalRepaired: 0,
-  isVirtualArea: false, // Indica si el área es virtual (convertida desde Auto-Image)
+
   // Configuración editable
   pixelsPerBatch: GUARD_DEFAULTS.PIXELS_PER_BATCH,
   minChargesToWait: GUARD_DEFAULTS.MIN_CHARGES_TO_WAIT,
