@@ -1,6 +1,5 @@
 import { guardState } from './config.js';
 import { log } from '../core/logger.js';
-import { loadJsonWithConversion } from './json-converter.js';
 
 // Función para dividir el área de protección en múltiples partes
 function splitProtectionArea(area, splitCount) {
@@ -143,21 +142,10 @@ export function saveProgress(filename = null, splitCount = null) {
 
 export async function loadProgress(file) {
   try {
-    // Usar la nueva función de conversión automática
-    const loadResult = await loadJsonWithConversion(file);
+    const text = await file.text();
+    const progressData = JSON.parse(text);
     
-    if (!loadResult.success) {
-      log('❌ Error cargando archivo:', loadResult.error);
-      return { success: false, error: loadResult.error };
-    }
-    
-    const progressData = loadResult.data;
-    
-    // Mostrar información de conversión si aplica
-    if (loadResult.converted) {
-      log('🔄 JSON de Auto-Image convertido automáticamente');
-      log(`📊 Estadísticas: ${loadResult.stats.protectedPixels} píxeles a proteger de ${loadResult.stats.originalPixels} originales`);
-    }
+    log('📁 Archivo cargado correctamente');
     
     // Validar estructura del archivo
     const requiredFields = ['protectionData', 'originalPixels', 'colors'];
@@ -240,9 +228,7 @@ export async function loadProgress(file) {
       success: true, 
       data: progressData,
       protectedPixels: guardState.originalPixels.size,
-      area: guardState.protectionArea,
-      converted: loadResult.converted || false,
-      stats: loadResult.stats
+      area: guardState.protectionArea
     };
     
   } catch (error) {

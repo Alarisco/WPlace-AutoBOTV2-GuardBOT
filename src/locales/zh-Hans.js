@@ -84,10 +84,9 @@ export const zhHans = {
     progressSaved: "✅ 进度已保存为 {filename}",
     progressLoaded: "✅ 已加载进度: {painted}/{total} 像素已绘制",
     progressLoadError: "❌ 加载进度失败: {error}",
-     exportGuard: "导出到 Guard",
+ 
      progressSaveError: "❌ 保存进度失败: {error}",
-    guardExportSuccess: "✅ 已导出到 Auto-Guard: {filename}",
-    guardExportError: "❌ 导出到 Guard 时出错: {error}",
+
     confirmSaveProgress: "在停止之前要保存当前进度吗？",
     saveProgressTitle: "保存进度",
     discardProgress: "放弃",

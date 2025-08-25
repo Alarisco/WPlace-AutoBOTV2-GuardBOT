@@ -11,7 +11,7 @@ let _lastChargeCheck = 0;
 let _isRepairing = false; // Evitar bucles infinitos
 let _countdownInterval = null;
 let _nextChargeTime = 0;
-const CHARGE_CHECK_INTERVAL = 30000; // 30 segundos (más conservador que Auto-Image)
+const CHARGE_CHECK_INTERVAL = 30000; // 30 segundos
 const CHARGE_REGENERATION_TIME = 31000; // 31 segundos por carga
 
 /**
@@ -753,7 +753,7 @@ async function paintPixelBatch(tileX, tileY, coords, colors) {
   try {
     const token = await ensureToken();
 
-    // Sanitizar coordenadas a rango 0..999 como en Auto-Image
+    // Sanitizar coordenadas a rango 0..999
     const sanitizedCoords = [];
     for (let i = 0; i < coords.length; i += 2) {
       const x = ((Number(coords[i]) % 1000) + 1000) % 1000;

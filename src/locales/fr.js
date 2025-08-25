@@ -84,10 +84,9 @@ export const fr = {
     progressSaved: "✅ Progrès sauvegardé sous {filename}",
     progressLoaded: "✅ Progrès chargé: {painted}/{total} pixels peints",
     progressLoadError: "❌ Erreur lors du chargement du progrès: {error}",
-     exportGuard: "Exporter vers Guard",
+ 
      progressSaveError: "❌ Erreur lors de la sauvegarde du progrès: {error}",
-    guardExportSuccess: "✅ Exporté pour Auto-Guard : {filename}",
-    guardExportError: "❌ Erreur lors de l'export pour Guard : {error}",
+
     confirmSaveProgress: "Voulez-vous sauvegarder le progrès actuel avant d'arrêter?",
     saveProgressTitle: "Sauvegarder Progrès",
     discardProgress: "Abandonner",

@@ -115,7 +115,7 @@ export async function runGuard() {
         log('❌ Error en auto-inicio:', error);
         guardState.ui.updateStatus(t('guard.manualInitRequired'), 'warning');
       }
-  }, 1000); // 1s, consistente con Auto-Image
+  }, 1000); // 1s
     
     // Cleanup al cerrar
     window.addEventListener('beforeunload', () => {
