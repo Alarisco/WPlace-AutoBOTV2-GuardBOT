@@ -1042,9 +1042,32 @@ async function waitForCooldown(chargesNeeded, onProgress) {
 }
 
 function generatePixelQueue(imageData, startPosition, baseTileX, baseTileY) {
-  const { pixels } = imageData;
   const { x: localStartX, y: localStartY } = startPosition;
   const queue = [];
+  
+  // Manejar diferentes tipos de imageData
+  let pixels;
+  
+  // Si imageData tiene un método generatePixelQueue (Blue Marble processor)
+  if (imageData && typeof imageData.generatePixelQueue === 'function') {
+    pixels = imageData.generatePixelQueue();
+  }
+  // Si imageData ya tiene pixels como array
+  else if (imageData && Array.isArray(imageData.pixels)) {
+    pixels = imageData.pixels;
+  }
+  // Si imageData.pixels es una función (resultado de getImageData())
+  else if (imageData && typeof imageData.pixels === 'function') {
+    pixels = imageData.pixels();
+  }
+  // Fallback: intentar acceder directamente a pixels
+  else if (imageData && imageData.pixels) {
+    pixels = imageData.pixels;
+  }
+  else {
+    log(`❌ Error: No se pueden obtener píxeles de imageData. Tipo: ${typeof imageData}`, imageData);
+    return [];
+  }
 
   // Verificar si pixels es un array iterable
   if (!Array.isArray(pixels)) {
