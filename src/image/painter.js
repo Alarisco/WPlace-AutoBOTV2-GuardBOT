@@ -7,10 +7,58 @@ import { t } from "../locales/index.js";
 
 import { applyPaintPattern } from "./patterns.js";
 
+// Variables para manejo de visibilidad de página
+let pageVisibilityHandler = null;
+let wasHiddenDuringCooldown = false;
+let cooldownStartTime = null;
+let cooldownDuration = null;
+
 // Variables para monitoreo de cargas
 let chargeMonitorInterval = null;
 let _lastChargeCheck = 0;
 const CHARGE_CHECK_INTERVAL = 30000; // 30 segundos máximo
+
+/**
+ * Configurar manejo de visibilidad de página
+ */
+function setupPageVisibilityHandling() {
+  if (pageVisibilityHandler) {
+    document.removeEventListener('visibilitychange', pageVisibilityHandler);
+  }
+  
+  pageVisibilityHandler = () => {
+    if (document.hidden) {
+      log('📱 Pestaña oculta - pausando timers');
+      if (imageState.inCooldown) {
+        wasHiddenDuringCooldown = true;
+      }
+    } else {
+      log('📱 Pestaña visible - reanudando timers');
+      if (wasHiddenDuringCooldown && imageState.inCooldown) {
+        recalculateCooldownTime();
+        wasHiddenDuringCooldown = false;
+      }
+    }
+  };
+  
+  document.addEventListener('visibilitychange', pageVisibilityHandler);
+}
+
+/**
+ * Recalcular tiempo de cooldown cuando la pestaña vuelve a estar activa
+ */
+function recalculateCooldownTime() {
+  if (!cooldownStartTime || !cooldownDuration) return;
+  
+  const now = Date.now();
+  const elapsed = now - cooldownStartTime;
+  const remaining = Math.max(0, cooldownDuration - elapsed);
+  
+  imageState.nextBatchCooldown = Math.ceil(remaining / 1000);
+  imageState.cooldownEndTime = now + remaining;
+  
+  log(`🔄 Recalculando cooldown: ${Math.ceil(remaining/1000)}s restantes`);
+}
 
 // Variable para controlar logs de monitoreo
 let _lastChargeMonitorLog = 0;
@@ -24,8 +72,16 @@ async function startChargeMonitoring() {
     window.clearInterval(chargeMonitorInterval);
   }
   
+  // Configurar manejo de visibilidad de página
+  setupPageVisibilityHandling();
+  
   chargeMonitorInterval = window.setInterval(async () => {
     try {
+      // Saltar verificación si la pestaña está oculta para ahorrar recursos
+      if (document.hidden) {
+        return;
+      }
+      
       // Solo verificar si hay píxeles pendientes y no estamos pintando activamente
       if (imageState.remainingPixels.length > 0 && !imageState.running) {
         const sessionResult = await getSession();
@@ -75,6 +131,17 @@ function stopChargeMonitoring() {
     chargeMonitorInterval = null;
     log(`⏹️ Monitoreo de cargas detenido`);
   }
+  
+  // Limpiar manejo de visibilidad de página
+  if (pageVisibilityHandler) {
+    document.removeEventListener('visibilitychange', pageVisibilityHandler);
+    pageVisibilityHandler = null;
+  }
+  
+  // Limpiar variables de cooldown
+  cooldownStartTime = null;
+  cooldownDuration = null;
+  wasHiddenDuringCooldown = false;
 }
 
 // Variable para controlar logs repetitivos
@@ -625,9 +692,14 @@ async function waitForCooldown(chargesNeeded, onProgress) {
   
   log(`Esperando ${Math.round(waitTime/1000)}s para obtener ${chargesNeeded} cargas`);
   
+  // Configurar timestamps para manejo de visibilidad
+  const startTime = Date.now();
+  cooldownStartTime = startTime;
+  cooldownDuration = waitTime;
+  
   // Actualizar estado de cooldown
   imageState.inCooldown = true;
-  imageState.cooldownEndTime = Date.now() + waitTime;
+  imageState.cooldownEndTime = startTime + waitTime;
   imageState.nextBatchCooldown = Math.round(waitTime / 1000);
   
   if (onProgress) {
@@ -642,25 +714,35 @@ async function waitForCooldown(chargesNeeded, onProgress) {
     onProgress(imageState.paintedPixels, imageState.totalPixels, message);
   }
   
-  // Contar hacia atrás
-  for (let i = Math.round(waitTime/1000); i > 0; i--) {
+  // Usar timestamps en lugar de contador simple
+  while (true) {
+    const now = Date.now();
+    const elapsed = now - startTime;
+    const remaining = Math.max(0, waitTime - elapsed);
+    
     // Verificar stopFlag al inicio de cada iteración
     if (imageState.stopFlag) {
-      log(`🛑 Bot detenido durante cooldown en ${i}s restantes`);
+      log(`🛑 Bot detenido durante cooldown con ${Math.ceil(remaining/1000)}s restantes`);
       break;
     }
     
-    imageState.nextBatchCooldown = i;
+    // Si ya terminó el cooldown, salir
+    if (remaining <= 0) {
+      break;
+    }
+    
+    const remainingSeconds = Math.ceil(remaining / 1000);
+    imageState.nextBatchCooldown = remainingSeconds;
     
     // Actualizar progreso cada 30 segundos, o en los últimos 30 segundos cada 10 segundos
-    const shouldUpdateProgress = i % 30 === 0 || 
-                                (i <= 30 && i % 10 === 0) ||
-                                i <= 5 ||
-                                i === Math.round(waitTime/1000);
+    const shouldUpdateProgress = remainingSeconds % 30 === 0 || 
+                                (remainingSeconds <= 30 && remainingSeconds % 10 === 0) ||
+                                remainingSeconds <= 5 ||
+                                elapsed < 2000; // Primera actualización
     
     if (onProgress && shouldUpdateProgress) {
-      const minutes = Math.floor(i / 60);
-      const seconds = i % 60;
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
       const timeText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
       const message = t('image.waitingChargesCountdown', {
         current: Math.floor(imageState.currentCharges),
@@ -670,11 +752,16 @@ async function waitForCooldown(chargesNeeded, onProgress) {
       onProgress(imageState.paintedPixels, imageState.totalPixels, message);
     }
     
-    await sleep(1000);
+    // Esperar 1 segundo o el tiempo restante si es menor
+    await sleep(Math.min(1000, remaining));
   }
   
+  // Limpiar variables de cooldown
   imageState.inCooldown = false;
   imageState.nextBatchCooldown = 0;
+  cooldownStartTime = null;
+  cooldownDuration = null;
+  wasHiddenDuringCooldown = false;
   
   // Solo simular regeneración de cargas si el bot no se detuvo
   if (!imageState.stopFlag) {
