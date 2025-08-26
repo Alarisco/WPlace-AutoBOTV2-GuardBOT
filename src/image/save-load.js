@@ -67,7 +67,6 @@ export function saveProgress(filename = null) {
         isFirstBatch: imageState.isFirstBatch,
         maxCharges: imageState.maxCharges,
         // Nuevas configuraciones v2.0
-        protectionEnabled: imageState.protectionEnabled,
         paintPattern: imageState.paintPattern
       },
       // Filtrar solo los datos serializables de los colores (sin elementos DOM)
@@ -78,12 +77,7 @@ export function saveProgress(filename = null) {
         b: color.b
       })),
       remainingPixels: imageState.remainingPixels || [],
-      // Nueva información v2.0 para protección
-      drawnPixels: Array.from(imageState.drawnPixelsMap.values()),
-      protection: {
-        enabled: imageState.protectionEnabled,
-        lastCheck: imageState.lastProtectionCheck
-      }
+
     };
 
     // Persistencia del overlay de imagen eliminada; el overlay de plan se infiere desde remainingPixels
@@ -207,33 +201,11 @@ export async function loadProgress(file) {
             
             // Nuevas configuraciones v2.0 (solo si están disponibles)
             if (fileVersion >= "2.0") {
-              imageState.protectionEnabled = progressData.config.protectionEnabled !== undefined ? 
-                progressData.config.protectionEnabled : true;
               imageState.paintPattern = progressData.config.paintPattern || 'linear_start';
             }
           }
           
-          // Cargar datos de protección (solo en v2.0+)
-          if (fileVersion >= "2.0" && progressData.drawnPixels) {
-            // Reconstruir mapa de píxeles dibujados
-            imageState.drawnPixelsMap.clear();
-            for (const pixel of progressData.drawnPixels) {
-              const key = `${pixel.imageX},${pixel.imageY}`;
-              imageState.drawnPixelsMap.set(key, pixel);
-            }
-            log(`✅ Cargados ${progressData.drawnPixels.length} píxeles dibujados para protección`);
-            
-            // Cargar información de protección
-            if (progressData.protection) {
-              imageState.protectionEnabled = progressData.protection.enabled !== undefined ? 
-                progressData.protection.enabled : true;
-              imageState.lastProtectionCheck = progressData.protection.lastCheck || 0;
-            }
-          } else {
-            // En archivos v1.0, crear mapa de protección basado en progreso actual
-            imageState.drawnPixelsMap.clear();
-            log('📁 Archivo v1.0 detectado, protección se activará al continuar pintado');
-          }
+
           
           // Aplicar patrón de pintado a píxeles restantes (solo si hay configuración)
           if (imageState.paintPattern && imageState.paintPattern !== 'linear_start' && imageState.remainingPixels.length > 0) {
@@ -289,7 +261,7 @@ export async function loadProgress(file) {
           
           log(`✅ Progreso cargado (v${fileVersion}): ${imageState.paintedPixels}/${imageState.totalPixels} píxeles`);
           if (fileVersion >= "2.0") {
-            log(`🛡️ Protección: ${imageState.protectionEnabled ? 'habilitada' : 'deshabilitada'}, Patrón: ${imageState.paintPattern}`);
+            log(`🎨 Patrón: ${imageState.paintPattern}`);
           }
           
           resolve({ 

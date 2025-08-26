@@ -84,10 +84,6 @@ export const imageState = {
   chargeDecimalPart: 0,
   originalImageName: null,
   retryCount: 0, // Contador de reintentos para estadísticas
-  // Nuevas opciones para protección y patrones
-  protectionEnabled: true, // Habilitar protección del dibujo
-  smartVerification: true, // Verificación inteligente de píxeles (omitir píxeles ya correctos)
-  paintPattern: 'linear_start', // Patrón de pintado predeterminado
-  drawnPixelsMap: new Map(), // Mapa de píxeles ya dibujados para protección
-  lastProtectionCheck: 0 // Timestamp de última verificación de protección
+  // Nuevas opciones para patrones
+  paintPattern: 'linear_start' // Patrón de pintado predeterminado
 };

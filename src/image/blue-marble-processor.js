@@ -408,6 +408,13 @@ export class BlueMarblelImageProcessor {
       throw new Error('Imagen no cargada. Llama a load() primero.');
     }
 
+    // Debug: Verificar estado de la paleta de colores
+    log(`[BLUE MARBLE DEBUG] allowedColorsSet size: ${this.allowedColorsSet ? this.allowedColorsSet.size : 'undefined'}`);
+    log(`[BLUE MARBLE DEBUG] allowedColors length: ${this.allowedColors ? this.allowedColors.length : 'undefined'}`);
+    if (this.allowedColorsSet && this.allowedColorsSet.size > 0) {
+      log(`[BLUE MARBLE DEBUG] Primeros colores permitidos: ${Array.from(this.allowedColorsSet).slice(0, 5).join(', ')}`);
+    }
+
     // Generando cola...
 
     const queue = [];
@@ -421,45 +428,68 @@ export class BlueMarblelImageProcessor {
     readCtx.drawImage(this.bitmap, 0, 0);
     const pixelData = readCtx.getImageData(0, 0, this.imageWidth, this.imageHeight).data;
 
+    // Debug: Contadores para depuración
+    let totalPixelsProcessed = 0;
+    let transparentPixels = 0;
+    let defacePixels = 0;
+    let exactMatches = 0;
+    let labMatches = 0;
+    let invalidPixels = 0;
+
     for (let y = 0; y < this.imageHeight; y++) {
-      for (let x = 0; x < this.imageWidth; x++) {
-        const idx = (y * this.imageWidth + x) * 4;
-        const r = pixelData[idx];
-        const g = pixelData[idx + 1];
-        const b = pixelData[idx + 2];
-        const alpha = pixelData[idx + 3];
+        for (let x = 0; x < this.imageWidth; x++) {
+          totalPixelsProcessed++;
+          const idx = (y * this.imageWidth + x) * 4;
+          const r = pixelData[idx];
+          const g = pixelData[idx + 1];
+          const b = pixelData[idx + 2];
+          const alpha = pixelData[idx + 3];
 
-        // Filtrar píxeles transparentes
-        if (alpha === 0) continue;
-
-        // Filtrar píxeles #deface (se renderizan como transparentes)
-        if (r === 222 && g === 250 && b === 206) continue;
-
-        const colorKey = `${r},${g},${b}`;
-        
-        // Verificar si es un color exacto primero
-        let finalColorKey = colorKey;
-        let finalR = r, finalG = g, finalB = b;
-        let isValidPixel = this.allowedColorsSet.has(colorKey);
-        
-        // Si no es exacto, usar algoritmo LAB para encontrar el color más cercano
-        if (!isValidPixel && this.allowedColors && this.allowedColors.length > 0) {
-          const closestColor = ColorUtils.findClosestPaletteColor(r, g, b, this.allowedColors, {
-            useLegacyRgb: false, // Usar algoritmo LAB avanzado
-            whiteThreshold: 240
-          });
-          
-          if (closestColor) {
-            finalR = closestColor.r;
-            finalG = closestColor.g;
-            finalB = closestColor.b;
-            finalColorKey = `${finalR},${finalG},${finalB}`;
-            isValidPixel = true;
+          // Filtrar píxeles transparentes
+          if (alpha === 0) {
+            transparentPixels++;
+            continue;
           }
-        }
-        
-        // Solo incluir colores válidos
-        if (!isValidPixel) continue;
+
+          // Filtrar píxeles #deface (se renderizan como transparentes)
+          if (r === 222 && g === 250 && b === 206) {
+            defacePixels++;
+            continue;
+          }
+
+          const colorKey = `${r},${g},${b}`;
+          
+          // Verificar si es un color exacto primero
+          let finalColorKey = colorKey;
+          let finalR = r, finalG = g, finalB = b;
+          let isValidPixel = this.allowedColorsSet.has(colorKey);
+          
+          if (isValidPixel) {
+            exactMatches++;
+          } else {
+            // Si no es exacto, usar algoritmo LAB para encontrar el color más cercano
+            if (this.allowedColors && this.allowedColors.length > 0) {
+              const closestColor = ColorUtils.findClosestPaletteColor(r, g, b, this.allowedColors, {
+                useLegacyRgb: false, // Usar algoritmo LAB avanzado
+                whiteThreshold: 240
+              });
+              
+              if (closestColor) {
+                finalR = closestColor.r;
+                finalG = closestColor.g;
+                finalB = closestColor.b;
+                finalColorKey = `${finalR},${finalG},${finalB}`;
+                isValidPixel = true;
+                labMatches++;
+              }
+            }
+          }
+          
+          // Solo incluir colores válidos
+          if (!isValidPixel) {
+            invalidPixels++;
+            continue;
+          }
 
         // Calcular coordenadas globales
         const globalX = baseX + x;
@@ -498,6 +528,16 @@ export class BlueMarblelImageProcessor {
         });
       }
     }
+
+    // Debug: Mostrar estadísticas de procesamiento
+    log(`[BLUE MARBLE DEBUG] Estadísticas de procesamiento:`);
+    log(`[BLUE MARBLE DEBUG] - Total píxeles procesados: ${totalPixelsProcessed}`);
+    log(`[BLUE MARBLE DEBUG] - Píxeles transparentes: ${transparentPixels}`);
+    log(`[BLUE MARBLE DEBUG] - Píxeles #deface: ${defacePixels}`);
+    log(`[BLUE MARBLE DEBUG] - Coincidencias exactas: ${exactMatches}`);
+    log(`[BLUE MARBLE DEBUG] - Coincidencias LAB: ${labMatches}`);
+    log(`[BLUE MARBLE DEBUG] - Píxeles inválidos: ${invalidPixels}`);
+    log(`[BLUE MARBLE DEBUG] - Cola final: ${queue.length} píxeles`);
 
     log(`[BLUE MARBLE] Cola: ${queue.length} píxeles`);
     return queue;

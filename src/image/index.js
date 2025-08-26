@@ -163,14 +163,7 @@ export async function runImage() {
         if (config.useAllCharges !== undefined) {
           imageState.useAllChargesFirst = config.useAllCharges;
         }
-        if (config.protectionEnabled !== undefined) {
-          imageState.protectionEnabled = config.protectionEnabled;
-          log(`🛡️ Protección del dibujo: ${config.protectionEnabled ? 'habilitada' : 'deshabilitada'}`);
-        }
-        if (config.smartVerification !== undefined) {
-          imageState.smartVerification = config.smartVerification;
-          log(`💡 Verificación inteligente: ${config.smartVerification ? 'habilitada' : 'deshabilitada'}`);
-        }
+
         if (config.paintPattern !== undefined) {
           imageState.paintPattern = config.paintPattern;
           log(`🎨 Patrón de pintado cambiado a: ${config.paintPattern}`);
