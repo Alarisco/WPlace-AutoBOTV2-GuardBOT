@@ -41,6 +41,25 @@ export function saveProgress(filename = null) {
       throw new Error('No hay progreso para guardar');
     }
     
+    // Obtener datos de píxeles de forma segura
+    let fullPixelData = null;
+    try {
+      const pixelData = getFullPixelData();
+      // Limitar el tamaño de los datos para evitar errores de JSON.stringify
+      if (pixelData && Array.isArray(pixelData)) {
+        // Si hay demasiados píxeles, solo guardar los esenciales para continuar
+        if (pixelData.length > 50000) {
+          log(`⚠️ Imagen muy grande (${pixelData.length} píxeles), guardando solo píxeles restantes`);
+          fullPixelData = null; // No guardar fullPixelData para imágenes muy grandes
+        } else {
+          fullPixelData = pixelData;
+        }
+      }
+    } catch (pixelError) {
+      log('⚠️ Error obteniendo datos completos de píxeles, continuando sin ellos:', pixelError);
+      fullPixelData = null;
+    }
+    
     const progressData = {
       version: "2.0", // Versión actualizada para compatibilidad
       timestamp: Date.now(),
@@ -48,8 +67,8 @@ export function saveProgress(filename = null) {
         width: imageState.imageData.width,
         height: imageState.imageData.height,
         originalName: imageState.originalImageName,
-        // Guardar todos los píxeles del proyecto completo para protección
-        fullPixelData: getFullPixelData()
+        // Solo guardar fullPixelData si no es demasiado grande
+        ...(fullPixelData && { fullPixelData })
       },
       progress: {
         paintedPixels: imageState.paintedPixels,
@@ -82,7 +101,17 @@ export function saveProgress(filename = null) {
 
     // Persistencia del overlay de imagen eliminada; el overlay de plan se infiere desde remainingPixels
     
-    const dataStr = JSON.stringify(progressData, null, 2);
+    // Intentar serializar con manejo de errores
+    let dataStr;
+    try {
+      dataStr = JSON.stringify(progressData, null, 2);
+    } catch (stringifyError) {
+      // Si falla, intentar sin fullPixelData
+      log('⚠️ Error serializando datos completos, intentando sin fullPixelData');
+      delete progressData.imageData.fullPixelData;
+      dataStr = JSON.stringify(progressData, null, 2);
+    }
+    
     const blob = new window.Blob([dataStr], { type: 'application/json' });
     
     const finalFilename = filename || `wplace_progress_${imageState.originalImageName || 'image'}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;

@@ -46,7 +46,9 @@ export async function createImageUI({ texts, ...handlers }) {
       font-family: 'Segoe UI', Roboto, sans-serif;
       color: #eee;
       animation: slideIn 0.4s ease-out;
-      overflow: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 90vh;
     }
     
     .header {
@@ -435,6 +437,107 @@ export async function createImageUI({ texts, ...handlers }) {
       gap: 10px;
       margin-top: 15px;
     }
+    
+    /* Resize handle */
+    .resize-handle {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 20px;
+      height: 20px;
+      cursor: se-resize;
+      background: linear-gradient(-45deg, transparent 30%, rgba(255,255,255,0.3) 30%, rgba(255,255,255,0.3) 70%, transparent 70%);
+      border-radius: 0 0 8px 0;
+      z-index: 10;
+    }
+    
+    /* Media queries para responsividad */
+    @media (max-width: 768px) {
+      .container {
+        width: calc(100vw - 20px);
+        max-width: 350px;
+        left: 10px !important;
+        right: 10px;
+        top: 10px !important;
+        font-size: 14px;
+      }
+      
+      .header {
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+      
+      .content {
+        padding: 12px;
+      }
+      
+      .btn {
+        padding: 8px;
+        font-size: 13px;
+      }
+      
+      .config-item {
+        font-size: 13px;
+      }
+      
+      .stat-item {
+        font-size: 13px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .container {
+        width: calc(100vw - 10px);
+        left: 5px !important;
+        right: 5px;
+        top: 5px !important;
+        font-size: 13px;
+      }
+      
+      .header {
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+      
+      .content {
+        padding: 10px;
+      }
+      
+      .btn {
+        padding: 6px;
+        font-size: 12px;
+        gap: 4px;
+      }
+      
+      .config-item {
+        font-size: 12px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+      
+      .stat-item {
+        font-size: 12px;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .config-input {
+        width: 100%;
+        max-width: 120px;
+      }
+    }
+    
+    @media (max-height: 600px) {
+      .container {
+        max-height: calc(100vh - 20px);
+        overflow-y: auto;
+      }
+      
+      .stats {
+        margin-bottom: 10px;
+      }
+    }
   `;
   root.appendChild(style);
   
@@ -516,10 +619,6 @@ export async function createImageUI({ texts, ...handlers }) {
           📊
           <span>Estadísticas</span>
         </button>
-        <button class="btn btn-secondary log-window-btn" data-state="initial,load-progress,upload-image">
-          📋
-          <span>${texts.logWindow || 'Logs'}</span>
-        </button>
         
         <!-- Flujo de carga de progreso -->
         <button class="btn btn-load load-progress-btn-flow" data-state="load-progress" style="display: none;">
@@ -559,6 +658,16 @@ export async function createImageUI({ texts, ...handlers }) {
           🤖
           <span>${texts.initBot}</span>
         </button>
+        
+        <!-- Botones movidos al final: Guardar progreso y Logs -->
+        <button class="btn btn-secondary save-progress-btn" data-state="load-progress,upload-image" style="display: none;">
+          💾
+          <span>Guardar progreso</span>
+        </button>
+        <button class="btn btn-secondary log-window-btn" data-state="initial,load-progress,upload-image">
+          📋
+          <span>${texts.logWindow || 'Logs'}</span>
+        </button>
       </div>
       
       <div class="progress">
@@ -576,6 +685,9 @@ export async function createImageUI({ texts, ...handlers }) {
       <div class="status status-default">
         ${texts.waitingInit}
       </div>
+      
+      <!-- Handle de redimensionamiento -->
+      <div class="resize-handle"></div>
     </div>
   `;
   
@@ -648,6 +760,7 @@ export async function createImageUI({ texts, ...handlers }) {
     uploadBtn: container.querySelector('.upload-btn'),
     loadProgressBtn: container.querySelector('.load-progress-btn'),
     loadProgressBtnFlow: container.querySelector('.load-progress-btn-flow'),
+    saveProgressBtn: container.querySelector('.save-progress-btn'),
 
     resizeBtn: container.querySelector('.resize-btn'),
     selectPosBtn: container.querySelector('.select-pos-btn'),
@@ -660,7 +773,8 @@ export async function createImageUI({ texts, ...handlers }) {
     progressBar: container.querySelector('.progress-bar'),
     statsArea: container.querySelector('.stats-area'),
     status: container.querySelector('.status'),
-    content: container.querySelector('.content')
+    content: container.querySelector('.content'),
+    resizeHandle: container.querySelector('.resize-handle')
   };
   
   // Estado actual de la interfaz (manejado por la función setState)
@@ -685,8 +799,177 @@ export async function createImageUI({ texts, ...handlers }) {
     configVisible: false
   };
   
-  // Hacer draggable
-  makeDraggable(elements.header, container);
+  // Configuración persistente para tamaño y posición
+  let windowConfig = {
+    width: 300,
+    height: 'auto',
+    x: 20,
+    y: 20
+  };
+  
+  // Cargar configuración guardada
+  function loadWindowConfig() {
+    try {
+      const saved = localStorage.getItem('wplace-auto-image-window-config');
+      if (saved) {
+        windowConfig = { ...windowConfig, ...JSON.parse(saved) };
+        applyWindowConfig();
+      }
+    } catch (error) {
+      console.warn('Error cargando configuración de ventana:', error);
+    }
+  }
+  
+  // Guardar configuración
+  function saveWindowConfig() {
+    try {
+      localStorage.setItem('wplace-auto-image-window-config', JSON.stringify(windowConfig));
+    } catch (error) {
+      console.warn('Error guardando configuración de ventana:', error);
+    }
+  }
+  
+  // Aplicar configuración a la ventana
+  function applyWindowConfig() {
+    container.style.width = typeof windowConfig.width === 'number' ? windowConfig.width + 'px' : windowConfig.width;
+    if (typeof windowConfig.height === 'number') {
+      container.style.height = windowConfig.height + 'px';
+    }
+    container.style.left = windowConfig.x + 'px';
+    container.style.top = windowConfig.y + 'px';
+  }
+  
+  // Configurar redimensionamiento
+  function setupResizing() {
+    let isResizing = false;
+    let startX, startY, startWidth, startHeight;
+    
+    elements.resizeHandle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startWidth = parseInt(document.defaultView.getComputedStyle(container).width, 10);
+      startHeight = parseInt(document.defaultView.getComputedStyle(container).height, 10);
+      
+      document.addEventListener('mousemove', handleResize);
+      document.addEventListener('mouseup', stopResize);
+      e.preventDefault();
+    });
+    
+    const handleResize = (e) => {
+      if (!isResizing) return;
+      
+      const newWidth = Math.max(250, startWidth + e.clientX - startX);
+      const newHeight = Math.max(200, startHeight + e.clientY - startY);
+      
+      container.style.width = newWidth + 'px';
+      container.style.height = newHeight + 'px';
+      
+      windowConfig.width = newWidth;
+      windowConfig.height = newHeight;
+      
+      // Escalar elementos según el nuevo tamaño
+      scaleElements(newWidth);
+    };
+    
+    const stopResize = () => {
+      isResizing = false;
+      document.removeEventListener('mousemove', handleResize);
+      document.removeEventListener('mouseup', stopResize);
+      saveWindowConfig();
+    };
+  }
+  
+  // Escalar elementos según el tamaño de la ventana
+  function scaleElements(width) {
+    const baseWidth = 300;
+    const scale = Math.max(0.8, Math.min(1.2, width / baseWidth));
+    
+    // Escalar fuentes
+    const scaledFontSize = Math.round(14 * scale);
+    container.style.fontSize = scaledFontSize + 'px';
+    
+    // Escalar botones
+    const buttons = container.querySelectorAll('.btn');
+    buttons.forEach(btn => {
+      const scaledPadding = Math.round(10 * scale);
+      btn.style.padding = scaledPadding + 'px';
+    });
+    
+    // Escalar header
+    const header = container.querySelector('.header');
+    if (header) {
+      const scaledHeaderPadding = Math.round(12 * scale);
+      header.style.padding = scaledHeaderPadding + 'px ' + Math.round(15 * scale) + 'px';
+    }
+    
+    // Escalar contenido
+    const content = container.querySelector('.content');
+    if (content) {
+      const scaledContentPadding = Math.round(15 * scale);
+      content.style.padding = scaledContentPadding + 'px';
+    }
+  }
+  
+  // Cargar configuración guardada
+  loadWindowConfig();
+  
+  // Configurar redimensionamiento
+  setupResizing();
+  
+  // Hacer draggable con guardado de posición
+  makeDraggableWithSave(elements.header, container);
+  
+  // Función personalizada de arrastre que guarda la posición
+  function makeDraggableWithSave(dragHandle, element) {
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    
+    dragHandle.style.cursor = 'move';
+    dragHandle.addEventListener('mousedown', dragMouseDown);
+    
+    function dragMouseDown(e) {
+      // Evitar arrastre si es un botón de la cabecera
+      if (e.target.closest('.header-btn, .wplace-header-btn')) return;
+      
+      e.preventDefault();
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+      document.addEventListener('mouseup', closeDragElement);
+      document.addEventListener('mousemove', elementDrag);
+    }
+    
+    function elementDrag(e) {
+      e.preventDefault();
+      pos1 = pos3 - e.clientX;
+      pos2 = pos4 - e.clientY;
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+      
+      const newTop = element.offsetTop - pos2;
+      const newLeft = element.offsetLeft - pos1;
+      
+      // Limitar a los bordes de la ventana
+      const maxLeft = window.innerWidth - element.offsetWidth;
+      const maxTop = window.innerHeight - element.offsetHeight;
+      
+      const constrainedLeft = Math.max(0, Math.min(maxLeft, newLeft));
+      const constrainedTop = Math.max(0, Math.min(maxTop, newTop));
+      
+      element.style.top = constrainedTop + "px";
+      element.style.left = constrainedLeft + "px";
+      
+      // Actualizar configuración
+      windowConfig.x = constrainedLeft;
+      windowConfig.y = constrainedTop;
+    }
+    
+    function closeDragElement() {
+      document.removeEventListener('mouseup', closeDragElement);
+      document.removeEventListener('mousemove', elementDrag);
+      // Guardar configuración al terminar el arrastre
+      saveWindowConfig();
+    }
+  }
   
   // Event listeners
   elements.minimizeBtn.addEventListener('click', () => {
@@ -800,6 +1083,13 @@ export async function createImageUI({ texts, ...handlers }) {
     progressFileInput.click();
   });
   
+  // Event listener para el botón de guardar progreso
+  elements.saveProgressBtn.addEventListener('click', () => {
+    if (handlers.onSaveProgress) {
+      handlers.onSaveProgress();
+    }
+  });
+  
   elements.resizeBtn.addEventListener('click', () => {
     if (handlers.onResizeImage) {
       handlers.onResizeImage();
@@ -835,12 +1125,12 @@ export async function createImageUI({ texts, ...handlers }) {
   // Event listeners para botones de start/stop (ambos flujos)
   const handleStartPainting = async (startBtn, stopBtn) => {
     if (handlers.onStartPainting) {
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
+      // Establecer estado de pintura activa
+      setPaintingState(true);
       const success = await handlers.onStartPainting();
       if (!success) {
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
+        // Si falla, volver al estado de no pintura
+        setPaintingState(false);
       }
     }
   };
@@ -849,8 +1139,8 @@ export async function createImageUI({ texts, ...handlers }) {
     if (handlers.onStopPainting) {
       const shouldStop = await handlers.onStopPainting();
       if (shouldStop) {
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
+        // Establecer estado de pintura inactiva
+        setPaintingState(false);
       }
     }
   };
@@ -1173,6 +1463,20 @@ export async function createImageUI({ texts, ...handlers }) {
     }
   }
   
+  // Función para gestionar el estado de los botones según el estado de la pintura
+  function setPaintingState(isPainting) {
+    // Deshabilitar/habilitar botones de inicio según el estado
+    elements.startBtn.disabled = isPainting;
+    elements.startBtnUpload.disabled = isPainting;
+    
+    // Habilitar/deshabilitar botones de parada según el estado
+    elements.stopBtn.disabled = !isPainting;
+    elements.stopBtnUpload.disabled = !isPainting;
+    
+    // Deshabilitar/habilitar botón de cargar progreso durante la pintura
+    elements.loadProgressBtn.disabled = isPainting;
+  }
+  
   log('✅ Interfaz de Auto-Image creada');
   
   // Inicializar en estado inicial
@@ -1191,6 +1495,7 @@ export async function createImageUI({ texts, ...handlers }) {
     showResizeDialog,
     closeResizeDialog,
     updateStatsWindow,
+    setPaintingState,
     destroy
   };
 }
