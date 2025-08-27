@@ -122,8 +122,12 @@ export function createGuardUI(texts) {
       </div>
       
       <!-- Controles de configuración -->
-      <div id="configSection" style="background: #2d3748; padding: 10px; border-radius: 6px; margin-top: 10px;">
-        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #cbd5e0;">⚙️ Configuración</h4>
+      <div id="configSection" style="background: #2d3748; border-radius: 6px; margin-top: 10px; overflow: hidden;">
+        <div id="configHeader" style="padding: 10px; cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; background: #374151; border-radius: 6px 6px 0 0;">
+          <h4 style="margin: 0; font-size: 14px; color: #cbd5e0;">⚙️ Configuración</h4>
+          <span id="configToggle" style="font-size: 12px; color: #9ca3af; transition: transform 0.3s ease;">▼</span>
+        </div>
+        <div id="configContent" style="padding: 10px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;">
         
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
           <div style="flex: 1;">
@@ -169,6 +173,7 @@ export function createGuardUI(texts) {
           <button id="analyzeBtn" style="flex: 1; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;" disabled>
             🔍 Analizar
           </button>
+        </div>
         </div>
       </div>
       
@@ -226,7 +231,10 @@ export function createGuardUI(texts) {
     colorComparisonSelect: container.querySelector('#colorComparisonSelect'),
     colorThresholdInput: container.querySelector('#colorThresholdInput'),
     saveBtn: container.querySelector('#saveBtn'),
-    analyzeBtn: container.querySelector('#analyzeBtn')
+    analyzeBtn: container.querySelector('#analyzeBtn'),
+    configHeader: container.querySelector('#configHeader'),
+    configContent: container.querySelector('#configContent'),
+    configToggle: container.querySelector('#configToggle')
   };
 
   // API de la UI
@@ -355,6 +363,31 @@ export function createGuardUI(texts) {
       areaFileInput.remove();
     }
   };
+
+  // Funcionalidad de colapso/expansión de configuración
+  let isConfigCollapsed = true; // Inicialmente colapsado
+  
+  // Configurar estado inicial (colapsado)
+  elements.configContent.style.maxHeight = '0';
+  elements.configContent.style.padding = '0 10px';
+  elements.configToggle.style.transform = 'rotate(-90deg)';
+  
+  // Event listener para toggle de configuración
+  elements.configHeader.addEventListener('click', () => {
+    isConfigCollapsed = !isConfigCollapsed;
+    
+    if (isConfigCollapsed) {
+      // Colapsar
+      elements.configContent.style.maxHeight = '0';
+      elements.configContent.style.padding = '0 10px';
+      elements.configToggle.style.transform = 'rotate(-90deg)';
+    } else {
+      // Expandir
+      elements.configContent.style.maxHeight = '400px'; // Altura suficiente para todo el contenido
+      elements.configContent.style.padding = '10px';
+      elements.configToggle.style.transform = 'rotate(0deg)';
+    }
+  });
 
   // Event listener para botón de análisis
   elements.analyzeBtn.addEventListener('click', async () => {
