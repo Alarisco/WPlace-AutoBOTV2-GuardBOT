@@ -608,26 +608,30 @@ export async function repairChanges(changes) {
   const changesArray = Array.from(changes.values());
   const availableCharges = Math.floor(guardState.currentCharges);
   
-  // Si no hay cargas suficientes para reparar ni un píxel, esperar
-  if (availableCharges === 0) {
-    log(`⚠️ Sin cargas disponibles, esperando recarga...`);
+  // Verificar si tenemos suficientes cargas para empezar a reparar
+  if (availableCharges < guardState.minChargesToWait) {
+    log(`⚠️ Cargas insuficientes: ${availableCharges}/${guardState.minChargesToWait}. Esperando más cargas...`);
     if (guardState.ui) {
-      guardState.ui.updateStatus('⚡ Esperando cargas para reparar...', 'warning');
+      guardState.ui.updateStatus(`⏳ Esperando ${guardState.minChargesToWait} cargas para reparar (${availableCharges} actuales)`, 'warning');
+      
+      // Calcular tiempo estimado para alcanzar las cargas mínimas
+      const chargesNeeded = guardState.minChargesToWait - availableCharges;
+      const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
+      _nextChargeTime = Date.now() + timeToWait;
+      
+      // Iniciar contador de tiempo
+      startCountdownTimer();
     }
     return;
   }
 
-  // Si hay daños pero menos cargas que el mínimo configurado, gastar todas las disponibles
-  const shouldRepairAll = availableCharges < guardState.minChargesToWait;
-  const maxRepairs = shouldRepairAll 
-    ? availableCharges  // Gastar todas las cargas disponibles
-    : Math.min(changesArray.length, guardState.pixelsPerBatch); // Usar lote normal
+  // Si tenemos suficientes cargas, proceder con la reparación normal
+  const maxRepairs = Math.min(changesArray.length, guardState.pixelsPerBatch);
   
   log(`🛠️ Cargas: ${availableCharges}, Mínimo: ${guardState.minChargesToWait}, Reparando: ${maxRepairs} píxeles`);
   
   if (guardState.ui) {
-    const repairMode = shouldRepairAll ? " (gastando todas las cargas)" : "";
-    guardState.ui.updateStatus(`🛠️ Reparando ${maxRepairs} píxeles${repairMode}...`, 'info');
+    guardState.ui.updateStatus(`🛠️ Reparando ${maxRepairs} píxeles...`, 'info');
   }
   
   // Seleccionar píxeles usando el patrón configurado
