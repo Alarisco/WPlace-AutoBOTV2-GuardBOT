@@ -130,11 +130,9 @@ export const es = {
     clearLogs: "Limpiar Logs",
     closeLogs: "Cerrar",
     // Nuevas funcionalidades
-    paintingStats: "Estadísticas de Pintado",
     userInfo: "Información del Usuario",
     imageProgress: "Progreso de la Imagen",
     availableColors: "Colores Disponibles",
-    refreshStats: "Actualizar Estadísticas",
     noImageLoaded: "No hay imagen cargada",
     cooldown: "Tiempo de espera",
     totalColors: "Total de Colores",
@@ -240,10 +238,11 @@ export const es = {
     initBot: "Inicializar Guard-BOT",
     selectArea: "Seleccionar Área",
     captureArea: "Capturar Área",
-
+    startProtection: "Iniciar Protección",
+    stopProtection: "Detener Protección",
+    protectedPixels: "Píxeles Protegidos",
     upperLeft: "Esquina Superior Izquierda",
     lowerRight: "Esquina Inferior Derecha",
-
     detectedChanges: "Cambios Detectados",
     repairedPixels: "Píxeles Reparados",
     charges: "Cargas",
