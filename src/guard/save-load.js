@@ -93,7 +93,7 @@ export function saveProgress(filename = null, splitCount = null) {
         },
         config: {
           maxProtectionSize: 100000,
-          pixelsPerBatch: 10,
+          pixelsPerBatch: guardState.pixelsPerBatch,
           checkInterval: 10000
         },
         // Filtrar solo los datos serializables de los colores (sin elementos DOM)
