@@ -594,11 +594,13 @@ async function captureNewPosition(statusDiv) {
         try {
           log('🔍 Request interceptado:', url);
           
-          // Extraer coordenadas del tile de la URL
-          const urlMatch = url.match(/\/s0\/pixel\/(\d+)\/(\d+)/);
+          // Extraer coordenadas del tile de la URL - mejorar patrón de captura
+          const urlMatch = url.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);
           if (urlMatch) {
             const tileX = parseInt(urlMatch[1]);
             const tileY = parseInt(urlMatch[2]);
+            
+            log(`🔍 Tile extraído de URL: (${tileX}, ${tileY})`);
             
             // Extraer coordenadas del request body
             const requestBody = args[1]?.body;
@@ -633,7 +635,12 @@ async function captureNewPosition(statusDiv) {
                   log('🔍 Coordenadas como objeto:', relativeX, relativeY);
                 } else {
                   log('❌ Formato de coordenadas no reconocido:', coords);
-                  return;
+                  return response;
+                }
+                
+                // Validar que las coordenadas relativas están en rango válido (0-999)
+                if (relativeX < 0 || relativeX >= 1000 || relativeY < 0 || relativeY >= 1000) {
+                  log(`⚠️ Coordenadas relativas fuera de rango: (${relativeX}, ${relativeY})`);
                 }
                 
                 // Las coordenadas en el body son relativas al tile, convertir a absolutas
@@ -641,7 +648,7 @@ async function captureNewPosition(statusDiv) {
                 const newY = tileY * 1000 + relativeY;
                 
                 log(`📍 Nueva posición capturada: (${newX}, ${newY})`);
-                log(`📐 Tile: (${tileX}, ${tileY}), Relativa: (${relativeX}, ${relativeY})`);
+                log(`📐 Cálculo: Tile(${tileX}, ${tileY}) * 1000 + Relativa(${relativeX}, ${relativeY}) = Global(${newX}, ${newY})`);
                 
                 // Restaurar fetch original
                 window.fetch = originalFetch;
@@ -651,6 +658,8 @@ async function captureNewPosition(statusDiv) {
                 resolve();
               }
             }
+          } else {
+            log('❌ No se pudo extraer tile de URL:', url);
           }
         } catch (error) {
           log('❌ Error capturando nueva posición:', error);
@@ -680,7 +689,8 @@ async function repositionArea(newX, newY, statusDiv) {
   const offsetX = newX - originalArea.x1;
   const offsetY = newY - originalArea.y1;
   
-  log(`📐 Calculando offset: (${offsetX}, ${offsetY})`);
+  log(`📐 Calculando offset para trasladar patrón: (${offsetX}, ${offsetY})`);
+  log(`📋 Trasladando ${repositionState.originalPixels.size} píxeles con sus colores originales`);
   
   // Crear nueva área con las posiciones actualizadas
   const newArea = {
@@ -692,13 +702,54 @@ async function repositionArea(newX, newY, statusDiv) {
     tileY: Math.floor((originalArea.y1 + offsetY) / GUARD_DEFAULTS.TILE_SIZE)
   };
   
-  // Crear nuevos píxeles con las posiciones actualizadas
+  // CRÍTICO: Trasladar los píxeles originales manteniendo sus colores exactos
   const newPixels = new Map();
-  repositionState.originalPixels.forEach((colorData, key) => {
+  repositionState.originalPixels.forEach((originalColorData, key) => {
     const [x, y] = key.split(',').map(Number);
-    const newKey = `${x + offsetX},${y + offsetY}`;
-    newPixels.set(newKey, colorData);
+    const newGlobalX = x + offsetX;
+    const newGlobalY = y + offsetY;
+    const newKey = `${newGlobalX},${newGlobalY}`;
+    
+    // Recalcular información de tile y coordenadas locales para las nuevas coordenadas
+    const newTileX = Math.floor(newGlobalX / GUARD_DEFAULTS.TILE_SIZE);
+    const newTileY = Math.floor(newGlobalY / GUARD_DEFAULTS.TILE_SIZE);
+    const newLocalX = ((newGlobalX % GUARD_DEFAULTS.TILE_SIZE) + GUARD_DEFAULTS.TILE_SIZE) % GUARD_DEFAULTS.TILE_SIZE;
+    const newLocalY = ((newGlobalY % GUARD_DEFAULTS.TILE_SIZE) + GUARD_DEFAULTS.TILE_SIZE) % GUARD_DEFAULTS.TILE_SIZE;
+    
+    // Validación de cálculos
+    const expectedGlobalX = newTileX * GUARD_DEFAULTS.TILE_SIZE + newLocalX;
+    const expectedGlobalY = newTileY * GUARD_DEFAULTS.TILE_SIZE + newLocalY;
+    
+    if (expectedGlobalX !== newGlobalX || expectedGlobalY !== newGlobalY) {
+      log(`⚠️ Error en cálculo de coordenadas: Global(${newGlobalX},${newGlobalY}) vs Esperado(${expectedGlobalX},${expectedGlobalY})`);
+    }
+    
+    // Crear nuevo píxel manteniendo EXACTAMENTE los colores originales
+    const newPixelData = {
+      r: originalColorData.r,           // Color original RGB
+      g: originalColorData.g,
+      b: originalColorData.b,
+      colorId: originalColorData.colorId, // ID de color original
+      globalX: newGlobalX,              // Nuevas coordenadas globales
+      globalY: newGlobalY,
+      localX: newLocalX,                // Nuevas coordenadas locales
+      localY: newLocalY,
+      tileX: newTileX,                  // Nuevo tile
+      tileY: newTileY
+    };
+    
+    newPixels.set(newKey, newPixelData);
+    
+    // Log de verificación para algunos píxeles - mostrar más información
+    if (newPixels.size <= 5) {
+      log(`🎨 Píxel trasladado #${newPixels.size}:`);
+      log(`   Original: (${x},${y}) color(${originalColorData.r},${originalColorData.g},${originalColorData.b}) ID:${originalColorData.colorId}`);
+      log(`   Nuevo: Global(${newGlobalX},${newGlobalY}) Tile(${newTileX},${newTileY}) Local(${newLocalX},${newLocalY})`);
+      log(`   Verificación: ${newTileX}*1000 + ${newLocalX} = ${newTileX * 1000 + newLocalX} (debe ser ${newGlobalX})`);
+    }
   });
+  
+  log(`✅ Patrón de colores trasladado: ${newPixels.size} píxeles con coordenadas actualizadas`);
   
   // Mostrar overlay de confirmación
   await showRepositionOverlay(newArea, newPixels, statusDiv);
@@ -747,10 +798,14 @@ async function showRepositionOverlay(newArea, newPixels, statusDiv) {
 }
 
 // Función para confirmar el reposicionamiento
-function confirmRepositioning(newArea, newPixels, statusDiv) {
+async function confirmRepositioning(newArea, newPixels, statusDiv) {
   // Actualizar el estado permanentemente
   guardState.protectionArea = newArea;
   guardState.originalPixels = newPixels;
+  
+  // CRÍTICO: Limpiar cambios detectados anteriormente ya que apuntan a coordenadas antiguas
+  guardState.changes.clear();
+  guardState.totalRepaired = 0; // Reiniciar contador de reparaciones
   
   // Actualizar la UI con las nuevas coordenadas
   guardState.ui.updateCoordinates({
@@ -771,7 +826,16 @@ function confirmRepositioning(newArea, newPixels, statusDiv) {
   cleanupRepositioning(statusDiv);
   
   guardState.ui.updateStatus('✅ Área reposicionada correctamente', 'success');
-  log('✅ Reposicionamiento confirmado');
+  log('✅ Reposicionamiento confirmado - patrón de colores trasladado a nueva ubicación');
+  log(`📋 Protegiendo ${newPixels.size} píxeles con los colores originales en coordenadas (${newArea.x1},${newArea.y1}) → (${newArea.x2},${newArea.y2})`);
+  
+  // Forzar una nueva verificación inmediata para detectar cambios en la nueva ubicación
+  if (guardState.running) {
+    log('🔍 Ejecutando verificación inmediata tras reposicionamiento...');
+    setTimeout(async () => {
+      await checkForChanges();
+    }, 2000); // Pausa para asegurar que se complete la actualización
+  }
 }
 
 // Función para reintentar el reposicionamiento

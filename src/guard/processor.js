@@ -655,6 +655,9 @@ export async function repairChanges(changes) {
       targetColorId = change.original.colorId;
     }
     
+    // Log de diagnóstico para verificar coordenadas
+    log(`🔧 Reparando píxel en (${targetPixel.globalX}, ${targetPixel.globalY}) tile(${targetPixel.tileX}, ${targetPixel.tileY}) local(${targetPixel.localX}, ${targetPixel.localY})`);
+    
     const tileKey = `${targetPixel.tileX},${targetPixel.tileY}`;
     
     if (!changesByTile.has(tileKey)) {
