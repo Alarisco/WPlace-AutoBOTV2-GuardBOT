@@ -608,13 +608,13 @@ export async function repairChanges(changes) {
   const changesArray = Array.from(changes.values());
   const availableCharges = Math.floor(guardState.currentCharges);
   
-  // Verificar si tenemos suficientes cargas para empezar a reparar
+  // Verificar si hay cargas suficientes según la configuración mínima
   if (availableCharges < guardState.minChargesToWait) {
     log(`⚠️ Cargas insuficientes: ${availableCharges}/${guardState.minChargesToWait}. Esperando más cargas...`);
     if (guardState.ui) {
-      guardState.ui.updateStatus(`⏳ Esperando ${guardState.minChargesToWait} cargas para reparar (${availableCharges} actuales)`, 'warning');
+      guardState.ui.updateStatus(`⏳ Esperando ${guardState.minChargesToWait} cargas para continuar (${availableCharges} actuales)`, 'warning');
       
-      // Calcular tiempo estimado para alcanzar las cargas mínimas
+      // Calcular tiempo estimado para alcanzar el mínimo de cargas
       const chargesNeeded = guardState.minChargesToWait - availableCharges;
       const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
       _nextChargeTime = Date.now() + timeToWait;
@@ -625,7 +625,7 @@ export async function repairChanges(changes) {
     return;
   }
 
-  // Si tenemos suficientes cargas, proceder con la reparación normal
+  // Si hay cargas suficientes, usar el lote normal configurado
   const maxRepairs = Math.min(changesArray.length, guardState.pixelsPerBatch);
   
   log(`🛠️ Cargas: ${availableCharges}, Mínimo: ${guardState.minChargesToWait}, Reparando: ${maxRepairs} píxeles`);
@@ -795,6 +795,3 @@ async function paintPixelBatch(tileX, tileY, coords, colors) {
     };
   }
 }
-
-// Pintar un píxel individual
-
