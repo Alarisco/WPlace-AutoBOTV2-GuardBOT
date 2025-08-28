@@ -50,6 +50,8 @@ export const guardState = {
   preferColor: false,
   preferredColorId: null, // legado
   preferredColorIds: [],
+  excludeColor: false, // Nueva opción para excluir colores
+  excludedColorIds: [], // Colores a excluir de la reparación
   spendAllPixelsOnStart: false,
   randomWaitTime: false,
   randomWaitMin: 5, // segundos

@@ -57,27 +57,27 @@ export function createGuardUI(texts) {
         
         <!-- Fila 1: Iniciar / Detener -->
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-          <button id="startBtn" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;" disabled>
+          <button id="startBtn" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; opacity: 0.5;" disabled>
             ▶️ ${texts.startProtection}
           </button>
-          <button id="stopBtn" style="flex: 1; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;" disabled>
+          <button id="stopBtn" style="flex: 1; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; opacity: 0.5;" disabled>
             ⏹️ ${texts.stopProtection}
           </button>
         </div>
 
         <!-- Fila 2: Reposicionar / Guardar -->
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-          <button id="repositionBtn" style="flex: 1; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;" disabled>
+          <button id="repositionBtn" style="flex: 1; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all 0.3s ease; opacity: 0.5;" disabled>
             📍 Reposicionar
           </button>
-          <button id="saveBtn" style="flex: 1; padding: 8px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
+          <button id="saveBtn" style="flex: 1; padding: 8px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all 0.3s ease; opacity: 0.5;" disabled>
             💾 ${texts.save || 'Guardar'}
           </button>
         </div>
 
         <!-- Fila 3: Analizar Área / Logs -->
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-          <button id="analyzeBtn" style="flex: 1; padding: 8px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;" disabled>
+          <button id="analyzeBtn" style="flex: 1; padding: 8px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; opacity: 0.5;" disabled>
             <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-right: 6px; flex-shrink: 0;" fill="none">
               <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
               <line x1="16.65" y1="16.65" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
@@ -97,7 +97,7 @@ export function createGuardUI(texts) {
 
         <!-- Fila 4: Vigía / Configuración -->
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-          <button id="watchBtn" style="flex: 1; padding: 8px; background: #f59e0b; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;" disabled>
+          <button id="watchBtn" style="flex: 1; padding: 8px; background: #f59e0b; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all 0.3s ease; opacity: 0.5;" disabled>
             👁️ Vigía
           </button>
           <button id="configBtn" style="flex: 1; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
@@ -105,28 +105,7 @@ export function createGuardUI(texts) {
           </button>
         </div>
 
-        <!-- Coordenadas capturadas (solo lectura) - Movido al final -->
-        <div style="margin-bottom: 15px;">
-          <div style="display: flex; gap: 10px; margin-bottom: 8px;">
-            <div style="flex: 1;">
-              <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #cbd5e0;">${texts.upperLeft}:</label>
-              <div style="display: flex; gap: 5px;">
-                <input id="x1Input" type="number" placeholder="X1" readonly style="flex: 1; padding: 5px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db; font-size: 13px;">
-                <input id="y1Input" type="number" placeholder="Y1" readonly style="flex: 1; padding: 5px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db; font-size: 13px;">
-              </div>
-            </div>
-          </div>
-          
-          <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <div style="flex: 1;">
-              <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #cbd5e0;">${texts.lowerRight}:</label>
-              <div style="display: flex; gap: 5px;">
-                <input id="x2Input" type="number" placeholder="X2" readonly style="flex: 1; padding: 5px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db; font-size: 13px;">
-                <input id="y2Input" type="number" placeholder="Y2" readonly style="flex: 1; padding: 5px; background: #374151; border: 1px solid #4b5563; border-radius: 4px; color: #d1d5db; font-size: 13px;">
-              </div>
-            </div>
-          </div>
-        </div>
+
       </div>
       
       <!-- Estadísticas -->
@@ -310,17 +289,27 @@ export function createGuardUI(texts) {
     },
 
     enableStartBtn: () => {
+      // Habilitar botón de iniciar con transición suave
       elements.startBtn.disabled = false;
-      elements.watchBtn.disabled = false;
-      // También habilitar el botón de análisis cuando hay un área seleccionada
-      elements.analyzeBtn.disabled = false;
-      // Actualizar estado del botón de reposicionamiento
-      ui.updateRepositionBtn();
+      elements.startBtn.style.opacity = '1';
+      elements.startBtn.style.cursor = 'pointer';
+      
+      // Habilitar otros botones cuando hay área seleccionada
+      ui.updateButtonsState();
     },
 
     updateRepositionBtn: () => {
       // El botón de reposicionamiento solo está disponible si hay progreso (área + píxeles)
-      elements.repositionBtn.disabled = !hasProgress();
+      const hasProgressData = hasProgress();
+      elements.repositionBtn.disabled = !hasProgressData;
+      
+      if (hasProgressData) {
+        elements.repositionBtn.style.opacity = '1';
+        elements.repositionBtn.style.cursor = 'pointer';
+      } else {
+        elements.repositionBtn.style.opacity = '0.5';
+        elements.repositionBtn.style.cursor = 'not-allowed';
+      }
     },
 
     updateWatchButton: (isWatching) => {
@@ -333,13 +322,57 @@ export function createGuardUI(texts) {
       }
     },
 
-    setRunningState: (running) => {
-      elements.startBtn.disabled = running;
-      elements.stopBtn.disabled = !running; // Stop deshabilitado si no corre
-      elements.watchBtn.disabled = false; // Vigía siempre habilitado para toggle
-      elements.selectAreaBtn.disabled = running;
+    updateButtonsState: () => {
+      // Verificar si hay área seleccionada o archivo cargado
+      const hasArea = hasProgress() || (window.guardState && window.guardState.protectionArea);
       
+      // Actualizar botón de análisis
+      elements.analyzeBtn.disabled = !hasArea;
+      if (hasArea) {
+        elements.analyzeBtn.style.opacity = '1';
+        elements.analyzeBtn.style.cursor = 'pointer';
+      } else {
+        elements.analyzeBtn.style.opacity = '0.5';
+        elements.analyzeBtn.style.cursor = 'not-allowed';
+      }
+      
+      // Actualizar botón de vigía
+      elements.watchBtn.disabled = !hasArea;
+      if (hasArea) {
+        elements.watchBtn.style.opacity = '1';
+        elements.watchBtn.style.cursor = 'pointer';
+      } else {
+        elements.watchBtn.style.opacity = '0.5';
+        elements.watchBtn.style.cursor = 'not-allowed';
+      }
+      
+      // Actualizar botón de guardar
+      elements.saveBtn.disabled = !hasArea;
+      if (hasArea) {
+        elements.saveBtn.style.opacity = '1';
+        elements.saveBtn.style.cursor = 'pointer';
+      } else {
+        elements.saveBtn.style.opacity = '0.5';
+        elements.saveBtn.style.cursor = 'not-allowed';
+      }
+      
+      // Actualizar botón de reposicionamiento
+      ui.updateRepositionBtn();
+    },
+
+    setRunningState: (running) => {
       if (running) {
+        // Deshabilitar botón de iniciar con transición suave
+        elements.startBtn.disabled = true;
+        elements.startBtn.style.opacity = '0.5';
+        elements.startBtn.style.cursor = 'not-allowed';
+        
+        // Habilitar botón de detener con transición suave
+        elements.stopBtn.disabled = false;
+        elements.stopBtn.style.opacity = '1';
+        elements.stopBtn.style.cursor = 'pointer';
+        
+        elements.selectAreaBtn.disabled = true;
         // Deshabilitar reposicionamiento mientras está corriendo
         elements.repositionBtn.disabled = true;
         // Ocultar fila de selección/carga con transición
@@ -349,13 +382,17 @@ export function createGuardUI(texts) {
           setTimeout(() => { elements.areaActionsRow.style.display = 'none'; }, 300);
         }
       } else {
-        // Actualizar estado basado en si hay progreso
-        ui.updateRepositionBtn();
-        // Mantener el botón de análisis habilitado si hay área protegida
-        if (elements.x1Input.value && elements.y1Input.value && elements.x2Input.value && elements.y2Input.value) {
-          elements.analyzeBtn.disabled = false;
-          elements.watchBtn.disabled = false;
-        }
+        // Deshabilitar botón de detener con transición suave
+        elements.stopBtn.disabled = true;
+        elements.stopBtn.style.opacity = '0.5';
+        elements.stopBtn.style.cursor = 'not-allowed';
+        
+        // Habilitar botón de iniciar solo si hay área seleccionada
+        ui.updateStartButtonState();
+        
+        elements.selectAreaBtn.disabled = false;
+        // Actualizar estado de todos los botones
+        ui.updateButtonsState();
         // Mostrar fila de selección/carga con transición
         if (elements.areaActionsRow) {
           elements.areaActionsRow.style.display = 'flex';
@@ -366,22 +403,40 @@ export function createGuardUI(texts) {
           });
         }
       }
+
     },
 
     updateCoordinates: (coords) => {
-      if (coords.x1 !== undefined) elements.x1Input.value = coords.x1;
-      if (coords.y1 !== undefined) elements.y1Input.value = coords.y1;
-      if (coords.x2 !== undefined) elements.x2Input.value = coords.x2;
-      if (coords.y2 !== undefined) elements.y2Input.value = coords.y2;
+      // Las coordenadas ahora se muestran en analysis-window.js
+      // Solo actualizamos el estado de los botones
+      if (coords.x1 !== undefined && coords.y1 !== undefined && coords.x2 !== undefined && coords.y2 !== undefined) {
+        // Habilitar botón de iniciar cuando hay área seleccionada
+        ui.updateStartButtonState();
+        // Actualizar estado de todos los botones
+        ui.updateButtonsState();
+      }
+    },
+
+    updateStartButtonState: () => {
+      // Verificar si hay área seleccionada o archivo cargado
+      const hasArea = hasProgress() || (window.guardState && window.guardState.protectionArea);
       
-      // Habilitar botón de análisis y vigía si todas las coordenadas están definidas
-      if (elements.x1Input.value && elements.y1Input.value && elements.x2Input.value && elements.y2Input.value) {
-        elements.analyzeBtn.disabled = false;
-        elements.watchBtn.disabled = false;
+      if (hasArea && !elements.startBtn.disabled) {
+        // Ya está habilitado, no hacer nada
+        return;
       }
       
-      // Actualizar estado del botón de reposicionamiento
-      ui.updateRepositionBtn();
+      if (hasArea) {
+        // Habilitar botón de iniciar con transición suave
+        elements.startBtn.disabled = false;
+        elements.startBtn.style.opacity = '1';
+        elements.startBtn.style.cursor = 'pointer';
+      } else {
+        // Deshabilitar botón de iniciar con transición suave
+        elements.startBtn.disabled = true;
+        elements.startBtn.style.opacity = '0.5';
+        elements.startBtn.style.cursor = 'not-allowed';
+      }
     },
 
     destroy: () => {
@@ -403,8 +458,8 @@ export function createGuardUI(texts) {
     createAnalysisWindow();
   });
 
-  // Inicializar estado del botón de reposicionamiento
-  ui.updateRepositionBtn();
+  // Inicializar estado de todos los botones
+  ui.updateButtonsState();
 
   return ui;
 }

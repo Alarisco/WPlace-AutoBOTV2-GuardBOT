@@ -28,7 +28,7 @@ export default function _createConfigWindow() {
   const content = document.createElement('div');
   content.style.cssText = 'padding:16px;overflow:auto;flex:1;';
   content.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:16px;">
+    <div id="configGrid" style="display:grid;grid-template-columns:1fr;gap:16px;transition:grid-template-columns 0.3s ease;">
       <div style="background:#2d3748;padding:12px;border-radius:8px;border:1px solid #4a5568;">
         <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">🛡️ Patrones de Protección</h3>
         <select id="protectionPatternSelect" style="width:100%;padding:8px;background:#374151;border:1px solid #6b7280;color:#e5e7eb;border-radius:6px;">
@@ -67,6 +67,19 @@ export default function _createConfigWindow() {
         </label>
         <div id="colorSelectorContainer" style="display:none;margin-top:8px;">
           <div id="colorSelector" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+          <button id="clearPreferredColors" style="display:none;margin-top:8px;padding:4px 12px;font-size:12px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;">Clear</button>
+        </div>
+      </div>
+
+      <div style="background:#2d3748;padding:12px;border-radius:8px;border:1px solid #4a5568;">
+        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">🚫 Excluir Color</h3>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="excludeColorCheckbox" style="width:16px;height:16px;accent-color:#ef4444;">
+          <span style="color:#e5e7eb;">No reparar colores específicos</span>
+        </label>
+        <div id="excludeColorSelectorContainer" style="display:none;margin-top:8px;">
+          <div id="excludeColorSelector" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+          <button id="clearExcludedColors" style="display:none;margin-top:8px;padding:4px 12px;font-size:12px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;">Clear</button>
         </div>
       </div>
 
@@ -119,6 +132,9 @@ export default function _createConfigWindow() {
 
   makeDraggable(win, header);
   
+  // Configurar responsividad
+  setupResponsiveLayout(win);
+  
   // Registrar overlay para manejo de z-index (no win)
   registerWindow(overlay);
   
@@ -145,6 +161,50 @@ function makeDraggable(element, handle){
   });
 }
 
+function setupResponsiveLayout(windowElement) {
+  const configGrid = windowElement.querySelector('#configGrid');
+  if (!configGrid) return;
+  
+  let lastWidth = 0;
+  
+  const updateLayout = () => {
+    const windowWidth = windowElement.offsetWidth;
+    
+    // Solo actualizar si el ancho cambió significativamente
+    if (Math.abs(windowWidth - lastWidth) < 10) return;
+    lastWidth = windowWidth;
+    
+    if (windowWidth >= 900) {
+      // 3 columnas para ventanas muy anchas
+      configGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    } else if (windowWidth >= 650) {
+      // 2 columnas para ventanas medianas
+      configGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    } else {
+      // 1 columna para ventanas estrechas
+      configGrid.style.gridTemplateColumns = '1fr';
+    }
+  };
+  
+  // Polling ligero para detectar cambios de tamaño
+  const checkInterval = window.setInterval(updateLayout, 200);
+  
+  // También escuchar eventos de resize de la ventana
+  const resizeHandler = () => window.setTimeout(updateLayout, 50);
+  window.addEventListener('resize', resizeHandler);
+  
+  // Llamada inicial
+  updateLayout();
+  
+  // Limpiar cuando se cierre la ventana
+  const originalRemove = windowElement.remove;
+  windowElement.remove = function() {
+    window.clearInterval(checkInterval);
+    window.removeEventListener('resize', resizeHandler);
+    originalRemove.call(this);
+  };
+}
+
 function setupEventListeners(overlay){
   const patternSelect = overlay.querySelector('#protectionPatternSelect');
   patternSelect.addEventListener('change', () => {
@@ -154,10 +214,36 @@ function setupEventListeners(overlay){
 
   const preferColorCheckbox = overlay.querySelector('#preferColorCheckbox');
   const colorSelectorContainer = overlay.querySelector('#colorSelectorContainer');
+  const clearPreferredColorsBtn = overlay.querySelector('#clearPreferredColors');
+  
   preferColorCheckbox.addEventListener('change', (e)=>{
     colorSelectorContainer.style.display = e.target.checked ? 'block' : 'none';
     guardState.preferColor = !!e.target.checked;
     if(e.target.checked){ loadColorSelector(overlay); }
+    persistConfiguration();
+  });
+  
+  clearPreferredColorsBtn.addEventListener('click', () => {
+    guardState.preferredColorIds = [];
+    guardState.preferredColorId = null;
+    loadColorSelector(overlay);
+    persistConfiguration();
+  });
+
+  const excludeColorCheckbox = overlay.querySelector('#excludeColorCheckbox');
+  const excludeColorSelectorContainer = overlay.querySelector('#excludeColorSelectorContainer');
+  const clearExcludedColorsBtn = overlay.querySelector('#clearExcludedColors');
+  
+  excludeColorCheckbox.addEventListener('change', (e)=>{
+    excludeColorSelectorContainer.style.display = e.target.checked ? 'block' : 'none';
+    guardState.excludeColor = !!e.target.checked;
+    if(e.target.checked){ loadExcludeColorSelector(overlay); }
+    persistConfiguration();
+  });
+  
+  clearExcludedColorsBtn.addEventListener('click', () => {
+    guardState.excludedColorIds = [];
+    loadExcludeColorSelector(overlay);
     persistConfiguration();
   });
 
@@ -243,8 +329,13 @@ function loadColorSelector(overlay){
       guardState.preferredColorIds = arr;
       // Mantener compatibilidad con código legado que usa un único id
       guardState.preferredColorId = arr.length > 0 ? arr[0] : null;
-  log(`🎨 Colores preferidos: [${arr.join(', ')}]`);
-  persistConfiguration();
+      
+      // Actualizar visibilidad del botón Clear
+      const clearBtn = overlay.querySelector('#clearPreferredColors');
+      clearBtn.style.display = arr.length > 0 ? 'block' : 'none';
+      
+      log(`🎨 Colores preferidos: [${arr.join(', ')}]`);
+      persistConfiguration();
     });
     if(Array.isArray(guardState.preferredColorIds) && guardState.preferredColorIds.includes(color.id)){ 
       el.style.borderColor = '#10b981'; 
@@ -252,6 +343,82 @@ function loadColorSelector(overlay){
     }
     colorSelector.appendChild(el);
   });
+  
+  // Mostrar/ocultar botón Clear según si hay colores seleccionados
+  const clearBtn = overlay.querySelector('#clearPreferredColors');
+  const hasSelectedColors = Array.isArray(guardState.preferredColorIds) && guardState.preferredColorIds.length > 0;
+  clearBtn.style.display = hasSelectedColors ? 'block' : 'none';
+}
+
+function loadExcludeColorSelector(overlay){
+  const excludeColorSelector = overlay.querySelector('#excludeColorSelector');
+  if(!excludeColorSelector || !guardState.availableColors) return;
+  // Inicializar array de colores excluidos si no existe
+  if (!Array.isArray(guardState.excludedColorIds)) {
+    guardState.excludedColorIds = [];
+  }
+  excludeColorSelector.innerHTML = '';
+  guardState.availableColors.forEach(color => {
+    const el = document.createElement('div');
+    el.style.cssText = `width:28px;height:28px;border-radius:6px;cursor:pointer;border:2px solid transparent;background-color: rgb(${color.r},${color.g},${color.b});position:relative;`;
+    el.title = `Color ${color.id}: RGB(${color.r}, ${color.g}, ${color.b})`;
+    el.dataset.colorId = color.id;
+    
+    // Crear indicador de selección (X roja para excluir)
+    const excludeIcon = document.createElement('div');
+    excludeIcon.style.cssText = `
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      width: 16px;
+      height: 16px;
+      background: #ef4444;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      border: 2px solid white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    `;
+    excludeIcon.innerHTML = '✕';
+    el.appendChild(excludeIcon);
+    
+    el.addEventListener('click', ()=>{
+      // toggle múltiple para colores excluidos
+      const arr = Array.isArray(guardState.excludedColorIds) ? guardState.excludedColorIds : [];
+      const idx = arr.indexOf(color.id);
+      if (idx >= 0) {
+        arr.splice(idx, 1);
+        el.style.borderColor = 'transparent';
+        excludeIcon.style.display = 'none';
+      } else {
+        arr.push(color.id);
+        el.style.borderColor = '#ef4444';
+        excludeIcon.style.display = 'flex';
+      }
+      guardState.excludedColorIds = arr;
+      
+      // Actualizar visibilidad del botón Clear
+      const clearBtn = overlay.querySelector('#clearExcludedColors');
+      clearBtn.style.display = arr.length > 0 ? 'block' : 'none';
+      
+      log(`🚫 Colores excluidos: [${arr.join(', ')}]`);
+      persistConfiguration();
+    });
+    if(Array.isArray(guardState.excludedColorIds) && guardState.excludedColorIds.includes(color.id)){ 
+      el.style.borderColor = '#ef4444'; 
+      excludeIcon.style.display = 'flex';
+    }
+    excludeColorSelector.appendChild(el);
+  });
+  
+  // Mostrar/ocultar botón Clear según si hay colores excluidos
+  const clearBtn = overlay.querySelector('#clearExcludedColors');
+  const hasExcludedColors = Array.isArray(guardState.excludedColorIds) && guardState.excludedColorIds.length > 0;
+  clearBtn.style.display = hasExcludedColors ? 'block' : 'none';
 }
 
 function loadConfiguration(overlay){
@@ -261,6 +428,22 @@ function loadConfiguration(overlay){
   preferColorCheckbox.checked = guardState.preferColor;
   colorSelectorContainer.style.display = guardState.preferColor ? 'block' : 'none';
   if(guardState.preferColor){ loadColorSelector(overlay); }
+
+  const excludeColorCheckbox = overlay.querySelector('#excludeColorCheckbox');
+  const excludeColorSelectorContainer = overlay.querySelector('#excludeColorSelectorContainer');
+  excludeColorCheckbox.checked = guardState.excludeColor;
+  excludeColorSelectorContainer.style.display = guardState.excludeColor ? 'block' : 'none';
+  if(guardState.excludeColor){ loadExcludeColorSelector(overlay); }
+
+  // Actualizar visibilidad de botones Clear
+  const clearPreferredBtn = overlay.querySelector('#clearPreferredColors');
+  const clearExcludedBtn = overlay.querySelector('#clearExcludedColors');
+  
+  const hasPreferredColors = Array.isArray(guardState.preferredColorIds) && guardState.preferredColorIds.length > 0;
+  const hasExcludedColors = Array.isArray(guardState.excludedColorIds) && guardState.excludedColorIds.length > 0;
+  
+  clearPreferredBtn.style.display = hasPreferredColors ? 'block' : 'none';
+  clearExcludedBtn.style.display = hasExcludedColors ? 'block' : 'none';
 
   overlay.querySelector('#spendAllPixelsCheckbox').checked = guardState.spendAllPixelsOnStart;
   overlay.querySelector('#minChargesToWaitInput').value = guardState.minChargesToWait;
@@ -283,6 +466,8 @@ function persistConfiguration(){
       preferColor: guardState.preferColor,
       preferredColorId: guardState.preferredColorId, // legado
       preferredColorIds: Array.isArray(guardState.preferredColorIds) ? guardState.preferredColorIds : [],
+      excludeColor: guardState.excludeColor,
+      excludedColorIds: Array.isArray(guardState.excludedColorIds) ? guardState.excludedColorIds : [],
       spendAllPixelsOnStart: guardState.spendAllPixelsOnStart,
       minChargesToWait: guardState.minChargesToWait,
       pixelsPerBatch: guardState.pixelsPerBatch,
@@ -303,6 +488,8 @@ function resetConfiguration(overlay){
   guardState.preferColor = false;
   guardState.preferredColorIds = [];
   guardState.preferredColorId = 5; // legado, sin efecto si preferColor=false
+  guardState.excludeColor = false;
+  guardState.excludedColorIds = [];
   guardState.spendAllPixelsOnStart = false;
   guardState.minChargesToWait = 20;
   guardState.pixelsPerBatch = 10;

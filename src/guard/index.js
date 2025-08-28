@@ -35,6 +35,8 @@ export async function runGuard() {
           guardState.preferredColorIds = [cfg.preferredColorId];
           guardState.preferredColorId = cfg.preferredColorId;
         }
+        if (typeof cfg.excludeColor === 'boolean') guardState.excludeColor = cfg.excludeColor;
+        if (Array.isArray(cfg.excludedColorIds)) guardState.excludedColorIds = cfg.excludedColorIds;
         if (typeof cfg.spendAllPixelsOnStart === 'boolean') guardState.spendAllPixelsOnStart = cfg.spendAllPixelsOnStart;
         if (Number.isFinite(cfg.minChargesToWait)) guardState.minChargesToWait = cfg.minChargesToWait;
         if (Number.isFinite(cfg.pixelsPerBatch)) guardState.pixelsPerBatch = cfg.pixelsPerBatch;
@@ -491,6 +493,7 @@ async function startGuard() {
   
   guardState.running = true;
   guardState.watchMode = false; // Modo protección completa
+  guardState.totalRepaired = 0; // Resetear contador para "gastar todos los píxeles al iniciar"
   guardState.ui.setRunningState(true);
   guardState.ui.updateStatus(t('guard.protectionStarted'), 'success');
   
@@ -514,6 +517,7 @@ async function startWatch() {
   
   guardState.running = true;
   guardState.watchMode = true; // Modo solo vigilancia, sin reparar
+  guardState.totalRepaired = 0; // Resetear contador para consistencia
   guardState.ui.setRunningState(true);
   guardState.ui.updateWatchButton(true); // Actualizar botón a estado "detener"
   guardState.ui.updateStatus('👁️ Modo Vigía iniciado - solo monitorización', 'success');

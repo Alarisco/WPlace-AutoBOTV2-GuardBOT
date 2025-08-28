@@ -649,14 +649,16 @@ export async function repairChanges(changes) {
       guardState.ui.updateStatus(`🛠️ Reparando ${maxRepairs} píxeles...`, 'info');
     }
     
-    // Seleccionar píxeles usando el patrón configurado con preferencia de color
+    // Seleccionar píxeles usando el patrón configurado con preferencia y exclusión de color
     const selectedKeys = getPixelsByPattern(
       guardState.protectionPattern, 
       changes, 
       maxRepairs,
       guardState.preferColor,
       guardState.preferredColorId,
-      guardState.preferredColorIds
+      guardState.preferredColorIds,
+      guardState.excludeColor,
+      guardState.excludedColorIds
     );
     const pixelsToRepair = selectedKeys.map(key => changes.get(key));
     

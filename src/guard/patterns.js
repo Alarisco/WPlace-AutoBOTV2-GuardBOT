@@ -776,7 +776,7 @@ export function getScatteredPattern(changes, count) {
 /**
  * Obtiene píxeles según el patrón seleccionado
  */
-export function getPixelsByPattern(pattern, changes, count, preferColor = false, preferredColorId = null, preferredColorIds = null) {
+export function getPixelsByPattern(pattern, changes, count, preferColor = false, preferredColorId = null, preferredColorIds = null, excludeColor = false, excludedColorIds = null) {
   log(`🎯 Aplicando patrón ${pattern} para ${count} píxeles de ${changes.size} cambios detectados`);
   
   let selectedCoords;
@@ -869,7 +869,17 @@ export function getPixelsByPattern(pattern, changes, count, preferColor = false,
       selectedCoords = applyColorPreference(selectedCoords, changes, ids, count);
     }
   }
-  
+
+  // Aplicar filtro de exclusión de colores si está habilitado
+  if (excludeColor && changes instanceof Map) {
+    const excludeIds = Array.isArray(excludedColorIds) && excludedColorIds.length > 0
+      ? excludedColorIds
+      : [];
+    if (excludeIds.length > 0) {
+      selectedCoords = applyColorExclusion(selectedCoords, changes, excludeIds);
+    }
+  }
+
   return selectedCoords;
 }
 
@@ -900,6 +910,32 @@ function applyColorPreference(selectedCoords, changesMap, preferredColorIds, max
   }
   
   return result;
+}
+
+/**
+ * Aplica exclusión de colores filtrando píxeles de los colores especificados
+ */
+function applyColorExclusion(selectedCoords, changesMap, excludedColorIds) {
+  const filteredPixels = [];
+  let excludedCount = 0;
+  
+  // Filtrar píxeles excluyendo los colores especificados
+  for (const coord of selectedCoords) {
+    const changeData = changesMap.get(coord);
+    
+    // Si el píxel tiene color original y está en la lista de exclusión, no lo incluimos
+    if (changeData && changeData.original && excludedColorIds.includes(changeData.original.colorId)) {
+      excludedCount++;
+    } else {
+      filteredPixels.push(coord);
+    }
+  }
+  
+  if (excludedCount > 0) {
+    log(`🚫 Exclusión de colores: ${excludedCount} píxeles excluidos, ${filteredPixels.length} píxeles seleccionados`);
+  }
+  
+  return filteredPixels;
 }
 
 /**

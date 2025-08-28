@@ -3,6 +3,7 @@ import { log } from '../core/logger.js';
 import { guardState } from './config.js';
 import { analyzeAreaPixels } from './processor.js';
 import { registerWindow, unregisterWindow } from '../core/window-manager.js';
+import { getGuardTexts } from '../locales/index.js';
 
 // Variables globales para la ventana
 let analysisWindowInstance = null;
@@ -174,6 +175,20 @@ export function createAnalysisWindow() {
       <button id="autoFitZoom" style="width: 100%; padding: 8px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 8px;">
         📐 Ajustar Zoom
       </button>
+      
+      <!-- Coordenadas del área -->
+      <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #4b5563;">
+        <div style="font-size: 10px; color: #9ca3af; margin-bottom: 5px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+            <span>Superior Izq.:</span>
+            <span id="coordsUpperLeft">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Inferior Der.:</span>
+            <span id="coordsLowerRight">--</span>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -362,9 +377,12 @@ async function initializeAnalysis(canvas, controlPanel) {
     renderVisualization(canvas, analysis);
     
     // Configurar controles
-    setupControls(controlPanel, canvas, analysis);
-    
-    log('✅ Análisis completado');
+  setupControls(controlPanel, canvas, analysis);
+  
+  // Actualizar coordenadas
+  updateCoordinatesDisplay(controlPanel);
+  
+  log('✅ Análisis completado');
   } catch (error) {
     log('❌ Error en análisis:', error);
     console.error('Error detallado:', error);
@@ -688,4 +706,19 @@ function calculateDeltaE(lab1, lab2) {
   const deltaB = lab1.b - lab2.b;
   
   return Math.sqrt(deltaL * deltaL + deltaA * deltaA + deltaB * deltaB);
+}
+
+// Función para actualizar las coordenadas mostradas
+function updateCoordinatesDisplay(controlPanel) {
+  const coordsUpperLeft = controlPanel.querySelector('#coordsUpperLeft');
+  const coordsLowerRight = controlPanel.querySelector('#coordsLowerRight');
+  
+  if (guardState.protectionArea) {
+    const { x1, y1, x2, y2 } = guardState.protectionArea;
+    coordsUpperLeft.textContent = `(${x1}, ${y1})`;
+    coordsLowerRight.textContent = `(${x2}, ${y2})`;
+  } else {
+    coordsUpperLeft.textContent = '--';
+    coordsLowerRight.textContent = '--';
+  }
 }
