@@ -1,5 +1,6 @@
 import { hasProgress } from './save-load.js';
 import { createConfigWindow } from './config-window.js';
+import { registerWindow, unregisterWindow } from '../core/window-manager.js';
 
 export function createGuardUI(texts) {
   // Crear contenedor principal
@@ -185,6 +186,9 @@ export function createGuardUI(texts) {
 
   document.body.appendChild(container);
 
+  // Registrar ventana para manejo de z-index
+  registerWindow(container);
+
   // Input oculto para archivos de área
   const areaFileInput = document.createElement('input');
   areaFileInput.type = 'file';
@@ -319,10 +323,20 @@ export function createGuardUI(texts) {
       elements.repositionBtn.disabled = !hasProgress();
     },
 
+    updateWatchButton: (isWatching) => {
+      if (isWatching) {
+        elements.watchBtn.innerHTML = '⏹️ Detener Vigía';
+        elements.watchBtn.style.background = '#ef4444'; // Rojo para detener
+      } else {
+        elements.watchBtn.innerHTML = '👁️ Vigía';
+        elements.watchBtn.style.background = '#f59e0b'; // Naranja original
+      }
+    },
+
     setRunningState: (running) => {
       elements.startBtn.disabled = running;
       elements.stopBtn.disabled = !running; // Stop deshabilitado si no corre
-      elements.watchBtn.disabled = running;
+      elements.watchBtn.disabled = false; // Vigía siempre habilitado para toggle
       elements.selectAreaBtn.disabled = running;
       
       if (running) {
@@ -371,6 +385,8 @@ export function createGuardUI(texts) {
     },
 
     destroy: () => {
+      // Desregistrar ventana del gestor
+      unregisterWindow(container);
       container.remove();
       areaFileInput.remove();
     }
@@ -432,12 +448,17 @@ export function showConfirmDialog(message, title, buttons = {}) {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
     
+    // Registrar modal para manejo de z-index
+    registerWindow(modal);
+    
     // Event listeners
     const saveBtn = modal.querySelector('.save-btn');
     const discardBtn = modal.querySelector('.discard-btn');
     const cancelBtn = modal.querySelector('.cancel-btn');
     
     const cleanup = () => {
+      // Desregistrar modal del gestor
+      unregisterWindow(modal);
       document.body.removeChild(overlay);
     };
     

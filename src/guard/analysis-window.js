@@ -2,6 +2,7 @@
 import { log } from '../core/logger.js';
 import { guardState } from './config.js';
 import { analyzeAreaPixels } from './processor.js';
+import { registerWindow, unregisterWindow } from '../core/window-manager.js';
 
 // Variables globales para la ventana
 let analysisWindowInstance = null;
@@ -12,6 +13,9 @@ let autoRefreshInterval = null;
 // Cerrar ventana de análisis
 export function closeAnalysisWindow() {
   if (analysisWindowInstance) {
+    // Desregistrar ventana del gestor
+    unregisterWindow(analysisWindowInstance.analysisWindow);
+    
     // Limpiar interval si existe
      if (autoRefreshInterval) {
        window.clearInterval(autoRefreshInterval);
@@ -214,6 +218,9 @@ export function createAnalysisWindow() {
   analysisWindow.appendChild(resizeHandle);
   document.body.appendChild(analysisWindow);
 
+  // Registrar ventana para manejo de z-index
+  registerWindow(analysisWindow);
+
   // Inicializar el análisis
   initializeAnalysis(canvas, controlPanel);
 
@@ -292,6 +299,26 @@ export function createAnalysisWindow() {
    }
 
    return { analysisWindow, canvas, controlPanel };
+}
+
+// Función para refrescar solo los datos sin reajustar zoom
+async function refreshAnalysisData(canvas, controlPanel) {
+  try {
+    // Obtener píxeles actuales del canvas
+    const currentPixels = await analyzeAreaPixels(guardState.protectionArea);
+    
+    // Comparar con píxeles originales
+    const analysis = comparePixels(guardState.originalPixels, currentPixels || new Map());
+    
+    // Actualizar estadísticas
+    updateStatistics(controlPanel, analysis);
+    
+    // Renderizar visualización manteniendo zoom actual
+    renderVisualization(canvas, analysis);
+    
+  } catch (error) {
+    log('❌ Error en refresco de análisis:', error);
+  }
 }
 
 // Inicializar el análisis y visualización
@@ -560,21 +587,7 @@ function setupControls(controlPanel, canvas, analysis) {
      if (autoRefreshCheckbox.checked) {
        const interval = parseInt(refreshIntervalInput.value) * 1000;
        autoRefreshInterval = window.setInterval(async () => {
-         // Preservar el zoom actual antes del refresco
-         const currentZoom = parseFloat(zoomSlider.value);
-         const currentOpacity = parseFloat(opacitySlider.value);
-         
-         await initializeAnalysis(canvas, controlPanel);
-         
-         // Restaurar el zoom y opacidad después del refresco
-         zoomSlider.value = currentZoom;
-         zoomValue.textContent = `${Math.round(currentZoom * 100)}%`;
-         canvas.style.transform = `scale(${currentZoom})`;
-         canvas.style.transformOrigin = 'top left';
-         
-         opacitySlider.value = currentOpacity;
-         opacityValue.textContent = `${Math.round(currentOpacity * 100)}%`;
-         canvas.style.opacity = currentOpacity;
+         await refreshAnalysisData(canvas, controlPanel);
        }, interval);
        log(`🔄 Auto-refresco activado cada ${refreshIntervalInput.value} segundos`);
      } else {
@@ -595,21 +608,7 @@ function setupControls(controlPanel, canvas, analysis) {
        }
        const interval = parseInt(refreshIntervalInput.value) * 1000;
        autoRefreshInterval = window.setInterval(async () => {
-         // Preservar el zoom actual antes del refresco
-         const currentZoom = parseFloat(zoomSlider.value);
-         const currentOpacity = parseFloat(opacitySlider.value);
-         
-         await initializeAnalysis(canvas, controlPanel);
-         
-         // Restaurar el zoom y opacidad después del refresco
-         zoomSlider.value = currentZoom;
-         zoomValue.textContent = `${Math.round(currentZoom * 100)}%`;
-         canvas.style.transform = `scale(${currentZoom})`;
-         canvas.style.transformOrigin = 'top left';
-         
-         opacitySlider.value = currentOpacity;
-         opacityValue.textContent = `${Math.round(currentOpacity * 100)}%`;
-         canvas.style.opacity = currentOpacity;
+         await refreshAnalysisData(canvas, controlPanel);
        }, interval);
        log(`🔄 Intervalo de auto-refresco actualizado a ${refreshIntervalInput.value} segundos`);
      }
@@ -617,7 +616,7 @@ function setupControls(controlPanel, canvas, analysis) {
   
   // Botón de actualizar
   refreshBtn.addEventListener('click', async () => {
-    await initializeAnalysis(canvas, controlPanel);
+    await refreshAnalysisData(canvas, controlPanel);
   });
   
   // Checkboxes de visualización - refresco inmediato

@@ -207,23 +207,20 @@ function setupEventListeners() {
   
   elements.startBtn.addEventListener('click', startGuard);
   elements.stopBtn.addEventListener('click', async () => {
-    // Simplemente detener la protección sin opciones de guardado
-    guardState.running = false;
-    guardState.watchMode = false; // Resetear modo vigía
-    guardState.loopId = null;
-    guardState.ui.setRunningState(false);
-    
-    // Mensaje diferente según el modo anterior
-    const statusMessage = guardState.watchMode ? '⏹️ Vigía detenido' : '⏹️ Protección detenida';
-    guardState.ui.updateStatus(statusMessage, 'warning');
-    
-    if (guardState.checkInterval) {
-      clearInterval(guardState.checkInterval);
-      guardState.checkInterval = null;
-    }
+    // Usar la función stopGuard que maneja correctamente todos los estados
+    stopGuard();
   });
   
-  elements.watchBtn.addEventListener('click', startWatch);
+  elements.watchBtn.addEventListener('click', () => {
+    // Toggle entre iniciar y detener el modo Vigía
+    if (guardState.running && guardState.watchMode) {
+      // Si está corriendo en modo vigía, detenerlo
+      stopGuard();
+    } else {
+      // Si no está corriendo o está en modo protección, iniciar vigía
+      startWatch();
+    }
+  });
   
 
   
@@ -518,6 +515,7 @@ async function startWatch() {
   guardState.running = true;
   guardState.watchMode = true; // Modo solo vigilancia, sin reparar
   guardState.ui.setRunningState(true);
+  guardState.ui.updateWatchButton(true); // Actualizar botón a estado "detener"
   guardState.ui.updateStatus('👁️ Modo Vigía iniciado - solo monitorización', 'success');
   
   log('👁️ Iniciando modo Vigía del área');
@@ -533,6 +531,7 @@ async function startWatch() {
 }
 
 function stopGuard() {
+  const wasWatchMode = guardState.watchMode;
   guardState.running = false;
   guardState.watchMode = false; // Resetear modo vigía
   
@@ -546,10 +545,12 @@ function stopGuard() {
   
   if (guardState.ui) {
     guardState.ui.setRunningState(false);
-    guardState.ui.updateStatus(t('guard.protectionStopped'), 'warning');
+    guardState.ui.updateWatchButton(false); // Actualizar botón a estado "iniciar"
+    const statusMessage = wasWatchMode ? '⏹️ Vigía detenido' : t('guard.protectionStopped');
+    guardState.ui.updateStatus(statusMessage, 'warning');
   }
   
-  log('⏹️ Protección detenida');
+  log(wasWatchMode ? '⏹️ Vigía detenido' : '⏹️ Protección detenida');
 }
 
 // Variables para el sistema de reposicionamiento

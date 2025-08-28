@@ -1,5 +1,6 @@
 import { guardState } from './config.js';
 import { log } from '../core/logger.js';
+import { registerWindow, unregisterWindow } from '../core/window-manager.js';
 
 export function createConfigWindow() {
   return _createConfigWindow();
@@ -39,6 +40,22 @@ export default function _createConfigWindow() {
           <option value="center">🎯 Centro</option>
           <option value="borders">🧱 Bordes</option>
           <option value="spiral">🌀 Espiral</option>
+          <option value="zigzag">📝 Zigzag (Escritura)</option>
+          <option value="diagonal">📐 Diagonal (Lectura)</option>
+          <option value="cluster">🔗 Clusters (Agrupado)</option>
+          <option value="wave">🌊 Ondas (Natural)</option>
+          <option value="corners">📍 Esquinas (Referencia)</option>
+          <option value="sweep">🧹 Barrido (Sistemático)</option>
+          <option value="priority">⭐ Prioridad (Inteligente)</option>
+          <option value="proximity">🤝 Proximidad (Cercano)</option>
+          <option value="quadrant">🔲 Cuadrantes (Rotativo)</option>
+          <option value="scattered">💫 Disperso (Espaciado)</option>
+          <option value="snake">🐍 Serpiente (Zigzag Filas)</option>
+          <option value="diagonalSweep">↗️ Barrido Diagonal</option>
+          <option value="spiralClockwise">🔄 Espiral Horaria</option>
+          <option value="spiralCounterClockwise">🔃 Espiral Antihoraria</option>
+          <option value="biasedRandom">🎲 Aleatorio Sesgado</option>
+          <option value="anchorPoints">⚓ Puntos de Anclaje</option>
         </select>
       </div>
 
@@ -101,7 +118,14 @@ export default function _createConfigWindow() {
   document.body.appendChild(overlay);
 
   makeDraggable(win, header);
-  closeBtn.addEventListener('click', () => overlay.style.display = 'none');
+  
+  // Registrar overlay para manejo de z-index (no win)
+  registerWindow(overlay);
+  
+  closeBtn.addEventListener('click', () => {
+    unregisterWindow(overlay);
+    overlay.style.display = 'none';
+  });
   // Nota: el overlay no captura eventos (pointer-events:none) para no bloquear el fondo.
 
   setupEventListeners(overlay);

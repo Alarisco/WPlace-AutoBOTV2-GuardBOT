@@ -1,4 +1,5 @@
 import { log } from '../core/logger.js';
+import { registerWindow, unregisterWindow } from '../core/window-manager.js';
 
 /* global Blob, URL */
 
@@ -207,6 +208,9 @@ class LogWindow {
     this.container.appendChild(this.logContent);
     this.container.appendChild(this.resizeHandle);
     document.body.appendChild(this.container);
+
+    // Registrar ventana para manejo de z-index
+    registerWindow(this.container);
 
     // Configurar arrastre de ventana
     this.setupDragging(header);
@@ -504,6 +508,8 @@ class LogWindow {
 
     // Remover ventana del DOM
     if (this.container && this.container.parentNode) {
+      // Desregistrar ventana del gestor
+      unregisterWindow(this.container);
       this.container.parentNode.removeChild(this.container);
     }
 
