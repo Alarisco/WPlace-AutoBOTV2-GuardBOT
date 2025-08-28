@@ -6,6 +6,7 @@ export const GUARD_DEFAULTS = {
   CHECK_INTERVAL: 10000, // Revisar cada 10 segundos
   MAX_PROTECTION_SIZE: Infinity, // Sin límite de píxeles protegidos
   PIXELS_PER_BATCH: 10, // Menos que Image para ser más sutil
+  MAX_PIXELS_PER_BATCH: 9999, // Nuevo máximo para tamaño de lote
   MIN_CHARGES_TO_WAIT: 20, // Cargas mínimas a esperar antes de continuar
   BACKEND_URL: "https://backend.wplace.live",
   PROTECTION_PATTERN: "random" // Patrón por defecto
@@ -14,10 +15,14 @@ export const GUARD_DEFAULTS = {
 // Patrones de protección disponibles
 export const PROTECTION_PATTERNS = {
   random: "Aleatorio",
-  line: "Línea",
+  lineUp: "Lineal (Arriba)",
+  lineDown: "Lineal (Abajo)",
+  lineLeft: "Lineal (Izquierda)",
+  lineRight: "Lineal (Derecha)",
   center: "Centro",
+  borders: "Bordes",
   spiral: "Espiral",
-  human: "Humano"
+  
 };
 
 // Estado global del Guard
@@ -40,6 +45,17 @@ export const guardState = {
   pixelsPerBatch: GUARD_DEFAULTS.PIXELS_PER_BATCH,
   minChargesToWait: GUARD_DEFAULTS.MIN_CHARGES_TO_WAIT,
   protectionPattern: GUARD_DEFAULTS.PROTECTION_PATTERN,
+  
+  // Nuevas opciones de configuración
+  preferColor: false,
+  preferredColorId: null, // legado
+  preferredColorIds: [],
+  spendAllPixelsOnStart: false,
+  randomWaitTime: false,
+  randomWaitMin: 5, // segundos
+  randomWaitMax: 15, // segundos
+  watchMode: false, // Modo vigía: solo observa, no repara
+  
   config: {
     colorComparisonMethod: 'lab', // 'rgb' o 'lab' - LAB por defecto para reposicionamiento
     colorThreshold: 10 // Umbral de diferencia de color

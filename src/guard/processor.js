@@ -565,9 +565,15 @@ export async function checkForChanges() {
         updateAnalysisStatsInUI(guardState.originalPixels, currentPixels);
       }
       
-      // Iniciar reparación automática si está habilitada
-      if (guardState.running) {
+      // Iniciar reparación automática si está habilitada y no está en modo vigía
+      if (guardState.running && !guardState.watchMode) {
         await repairChanges(changes);
+      } else if (guardState.watchMode) {
+        // En modo vigía, solo registrar los cambios sin reparar
+        log(`👁️ Modo Vigía: ${changes.size} cambios detectados (sin reparar)`);
+        if (guardState.ui) {
+          guardState.ui.updateStatus(`👁️ Vigía: ${changes.size} cambios detectados`, 'warning');
+        }
       }
     } else {
       // Actualizar timestamp de última verificación
@@ -604,150 +610,176 @@ export async function repairChanges(changes) {
   _isRepairing = true;
   
   try {
-
-  const changesArray = Array.from(changes.values());
-  const availableCharges = Math.floor(guardState.currentCharges);
-  
-  // Verificar si hay cargas suficientes según la configuración mínima
-  if (availableCharges < guardState.minChargesToWait) {
-    log(`⚠️ Cargas insuficientes: ${availableCharges}/${guardState.minChargesToWait}. Esperando más cargas...`);
-    if (guardState.ui) {
-      guardState.ui.updateStatus(`⏳ Esperando ${guardState.minChargesToWait} cargas para continuar (${availableCharges} actuales)`, 'warning');
-      
-      // Calcular tiempo estimado para alcanzar el mínimo de cargas
-      const chargesNeeded = guardState.minChargesToWait - availableCharges;
-      const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
-      _nextChargeTime = Date.now() + timeToWait;
-      
-      // Iniciar contador de tiempo
-      startCountdownTimer();
-    }
-    return;
-  }
-
-  // Si hay cargas suficientes, usar el lote normal configurado
-  const maxRepairs = Math.min(changesArray.length, guardState.pixelsPerBatch);
-  
-  log(`🛠️ Cargas: ${availableCharges}, Mínimo: ${guardState.minChargesToWait}, Reparando: ${maxRepairs} píxeles`);
-  
-  if (guardState.ui) {
-    guardState.ui.updateStatus(`🛠️ Reparando ${maxRepairs} píxeles...`, 'info');
-  }
-  
-  // Seleccionar píxeles usando el patrón configurado
-  const changeKeys = Array.from(changes.keys());
-  const selectedKeys = getPixelsByPattern(guardState.protectionPattern, new Set(changeKeys), maxRepairs);
-  const pixelsToRepair = selectedKeys.map(key => changes.get(key));
-  
-  // Agrupar cambios por tile para eficiencia
-  const changesByTile = new Map();
-  
-  for (const change of pixelsToRepair) {
-    let targetPixel, targetColorId;
+    const changesArray = Array.from(changes.values());
+    const availableCharges = Math.floor(guardState.currentCharges);
     
-    if (change.type === 'intrusion') {
-      // Para intrusiones, usar las coordenadas del píxel actual pero pintar de blanco
-      targetPixel = change.current;
-      targetColorId = 5; // Blanco para borrar la intrusión
+    // Lógica especial para "gastar todos los píxeles al iniciar"
+    let maxRepairs;
+    let isFirstBatch = guardState.spendAllPixelsOnStart && guardState.totalRepaired === 0;
+    
+    if (isFirstBatch) {
+      // En el primer batch, usar todas las cargas disponibles
+      maxRepairs = Math.min(changesArray.length, availableCharges, GUARD_DEFAULTS.MAX_PIXELS_PER_BATCH);
+      log(`⚡ Primer batch - gastando todas las cargas: ${maxRepairs} píxeles`);
     } else {
-      // Para cambios normales, restaurar al color original
-      targetPixel = change.original;
-      targetColorId = change.original.colorId;
-    }
-    
-    // Log de diagnóstico para verificar coordenadas
-    log(`🔧 Reparando píxel en (${targetPixel.globalX}, ${targetPixel.globalY}) tile(${targetPixel.tileX}, ${targetPixel.tileY}) local(${targetPixel.localX}, ${targetPixel.localY})`);
-    
-    const tileKey = `${targetPixel.tileX},${targetPixel.tileY}`;
-    
-    if (!changesByTile.has(tileKey)) {
-      changesByTile.set(tileKey, []);
-    }
-    
-    changesByTile.get(tileKey).push({
-      localX: targetPixel.localX,
-      localY: targetPixel.localY,
-      colorId: targetColorId,
-      globalX: targetPixel.globalX,
-      globalY: targetPixel.globalY,
-      changeType: change.type
-    });
-  }
-  
-  let totalRepaired = 0;
-  
-  // Reparar por lotes de tile
-  for (const [tileKey, tileChanges] of changesByTile) {
-    const [tileX, tileY] = tileKey.split(',').map(Number);
-    
-    try {
-      const coords = [];
-      const colors = [];
-      
-      for (const change of tileChanges) {
-        coords.push(change.localX, change.localY);
-        colors.push(change.colorId);
+      // Verificar si hay cargas suficientes según la configuración mínima
+      if (availableCharges < guardState.minChargesToWait) {
+        log(`⚠️ Cargas insuficientes: ${availableCharges}/${guardState.minChargesToWait}. Esperando más cargas...`);
+        if (guardState.ui) {
+          guardState.ui.updateStatus(`⏳ Esperando ${guardState.minChargesToWait} cargas para continuar (${availableCharges} actuales)`, 'warning');
+          
+          // Calcular tiempo estimado para alcanzar el mínimo de cargas
+          const chargesNeeded = guardState.minChargesToWait - availableCharges;
+          const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
+          _nextChargeTime = Date.now() + timeToWait;
+          
+          // Iniciar contador de tiempo
+          startCountdownTimer();
+        }
+        return;
       }
       
-      const result = await paintPixelBatch(tileX, tileY, coords, colors);
+      // Si hay cargas suficientes, usar el lote normal configurado
+      maxRepairs = Math.min(changesArray.length, guardState.pixelsPerBatch);
+    }
+    
+    log(`🛠️ Cargas: ${availableCharges}, Mínimo: ${guardState.minChargesToWait}, Reparando: ${maxRepairs} píxeles`);
+    
+    if (guardState.ui) {
+      guardState.ui.updateStatus(`🛠️ Reparando ${maxRepairs} píxeles...`, 'info');
+    }
+    
+    // Seleccionar píxeles usando el patrón configurado con preferencia de color
+    const selectedKeys = getPixelsByPattern(
+      guardState.protectionPattern, 
+      changes, 
+      maxRepairs,
+      guardState.preferColor,
+      guardState.preferredColorId,
+      guardState.preferredColorIds
+    );
+    const pixelsToRepair = selectedKeys.map(key => changes.get(key));
+    
+    // Agrupar cambios por tile para eficiencia
+    const changesByTile = new Map();
+    
+    for (const change of pixelsToRepair) {
+      let targetPixel, targetColorId;
       
-      if (result.success && result.painted > 0) {
-        totalRepaired += result.painted;
-        guardState.currentCharges = Math.max(0, guardState.currentCharges - result.painted);
-        guardState.totalRepaired += result.painted;
+      if (change.type === 'intrusion') {
+        // Para intrusiones, usar las coordenadas del píxel actual pero pintar de blanco
+        targetPixel = change.current;
+        targetColorId = 5; // Blanco para borrar la intrusión
+      } else {
+        // Para cambios normales, restaurar al color original
+        targetPixel = change.original;
+        targetColorId = change.original.colorId;
+      }
+      
+      // Log de diagnóstico para verificar coordenadas
+      log(`🔧 Reparando píxel en (${targetPixel.globalX}, ${targetPixel.globalY}) tile(${targetPixel.tileX}, ${targetPixel.tileY}) local(${targetPixel.localX}, ${targetPixel.localY})`);
+      
+      const tileKey = `${targetPixel.tileX},${targetPixel.tileY}`;
+      
+      if (!changesByTile.has(tileKey)) {
+        changesByTile.set(tileKey, []);
+      }
+      
+      changesByTile.get(tileKey).push({
+        localX: targetPixel.localX,
+        localY: targetPixel.localY,
+        colorId: targetColorId,
+        globalX: targetPixel.globalX,
+        globalY: targetPixel.globalY,
+        changeType: change.type
+      });
+    }
+    
+    let totalRepaired = 0;
+    
+    // Reparar por lotes de tile
+    for (const [tileKey, tileChanges] of changesByTile) {
+      const [tileX, tileY] = tileKey.split(',').map(Number);
+      
+      try {
+        const coords = [];
+        const colors = [];
         
-        // Remover cambios reparados exitosamente
-        for (let i = 0; i < result.painted && i < tileChanges.length; i++) {
-          const change = tileChanges[i];
-          const key = `${change.globalX},${change.globalY}`;
-          guardState.changes.delete(key);
+        for (const change of tileChanges) {
+          coords.push(change.localX, change.localY);
+          colors.push(change.colorId);
         }
         
-        log(`✅ Reparados ${result.painted} píxeles en tile (${tileX},${tileY})`);
-      } else {
-        log(`❌ Error reparando tile (${tileX},${tileY}):`, result.error);
+        const result = await paintPixelBatch(tileX, tileY, coords, colors);
+        
+        if (result.success && result.painted > 0) {
+          totalRepaired += result.painted;
+          guardState.currentCharges = Math.max(0, guardState.currentCharges - result.painted);
+          guardState.totalRepaired += result.painted;
+          
+          // Remover cambios reparados exitosamente
+          for (let i = 0; i < result.painted && i < tileChanges.length; i++) {
+            const change = tileChanges[i];
+            const key = `${change.globalX},${change.globalY}`;
+            guardState.changes.delete(key);
+          }
+          
+          log(`✅ Reparados ${result.painted} píxeles en tile (${tileX},${tileY})`);
+        } else {
+          log(`❌ Error reparando tile (${tileX},${tileY}):`, result.error);
+        }
+      } catch (error) {
+        log(`❌ Error reparando tile (${tileX},${tileY}):`, error);
       }
       
-    } catch (error) {
-      log(`❌ Error reparando tile (${tileX},${tileY}):`, error);
+      // Delay entre tiles si hay múltiples
+      if (changesByTile.size > 1) {
+        if (guardState.randomWaitTime) {
+          // Tiempo aleatorio entre lotes
+          const randomDelay = Math.random() * (guardState.randomWaitMax - guardState.randomWaitMin) + guardState.randomWaitMin;
+          log(`⏰ Esperando ${randomDelay.toFixed(1)} segundos (aleatorio) antes del siguiente lote`);
+          await sleep(randomDelay * 1000);
+        } else {
+          await sleep(500);
+        }
+      }
     }
     
-    // Pausa entre tiles para evitar rate limiting
-    if (changesByTile.size > 1) {
-      await sleep(500);
-    }
-  }
-  
-  const remainingCharges = Math.floor(guardState.currentCharges);
-  const remainingChanges = guardState.changes.size;
-  
-  log(`🛠️ Reparación completada: ${totalRepaired} píxeles reparados, ${remainingCharges} cargas restantes`);
-  
-  if (guardState.ui) {
-    if (remainingChanges > 0 && remainingCharges < guardState.minChargesToWait) {
-      guardState.ui.updateStatus(`⏳ Esperando ${guardState.minChargesToWait} cargas para continuar (${remainingCharges} actuales)`, 'warning');
+    const remainingCharges = Math.floor(guardState.currentCharges);
+    const pendingChanges = guardState.changes.size;
+    
+    log(`🛠️ Reparación completada: ${totalRepaired} píxeles reparados, ${remainingCharges} cargas restantes`);
+    
+    if (guardState.ui) {
+      if (pendingChanges > 0 && remainingCharges < guardState.minChargesToWait) {
+        guardState.ui.updateStatus(`⏳ Esperando ${guardState.minChargesToWait} cargas para continuar (${remainingCharges} actuales)`, 'warning');
+        
+        // Calcular tiempo estimado para alcanzar el mínimo de cargas
+        const chargesNeeded = guardState.minChargesToWait - remainingCharges;
+        const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
+        _nextChargeTime = Date.now() + timeToWait;
+        
+        // Iniciar contador de tiempo
+        startCountdownTimer();
+      } else {
+        guardState.ui.updateStatus(`✅ Reparados ${totalRepaired} píxeles correctamente`, 'success');
+        stopCountdownTimer();
+      }
       
-      // Calcular tiempo estimado para la próxima carga
-      const chargesNeeded = guardState.minChargesToWait - remainingCharges;
-      const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
-      _nextChargeTime = Date.now() + timeToWait;
-      
-      // Iniciar contador de tiempo
-      startCountdownTimer();
-    } else {
-      guardState.ui.updateStatus(`✅ Reparados ${totalRepaired} píxeles correctamente`, 'success');
-      
-      // Detener contador si está activo
-      stopCountdownTimer();
+      guardState.ui.updateStats({
+        charges: remainingCharges,
+        repaired: guardState.totalRepaired,
+        pending: pendingChanges
+      });
     }
     
-    guardState.ui.updateStats({
-      charges: remainingCharges,
-      repaired: guardState.totalRepaired,
-      pending: remainingChanges
-    });
-  }
-  
+    // Aplicar delay aleatorio entre batches si está configurado
+    if (guardState.randomWaitTime && pendingChanges > 0 && remainingCharges >= guardState.minChargesToWait) {
+      const randomDelay = Math.random() * (guardState.randomWaitMax - guardState.randomWaitMin) + guardState.randomWaitMin;
+      log(`⏰ Esperando ${randomDelay.toFixed(1)} segundos (aleatorio) antes del siguiente batch`);
+      await sleep(randomDelay * 1000);
+    }
+    
   } catch (error) {
     log(`❌ Error en reparación: ${error.message}`);
   } finally {

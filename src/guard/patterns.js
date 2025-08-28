@@ -23,83 +23,203 @@ export function getRandomPattern(changes, count) {
 }
 
 /**
- * Patrón de línea - selecciona píxeles en líneas horizontales/verticales
+ * Patrón lineal hacia arriba - recorre de arriba hacia abajo por filas
  */
-export function getLinePattern(changes, count) {
+export function getLineUpPattern(changes, count) {
   const changesArray = Array.from(changes);
   if (changesArray.length === 0) return [];
   
-  // Agrupar por filas y columnas
+  // Agrupar por filas y ordenar de arriba hacia abajo
   const byRow = new Map();
-  const byCol = new Map();
-  
   changesArray.forEach(coord => {
-    const [x, y] = coord.split(',').map(Number);
-    
+    const [_x, y] = coord.split(',').map(Number);
     if (!byRow.has(y)) byRow.set(y, []);
-    if (!byCol.has(x)) byCol.set(x, []);
-    
     byRow.get(y).push(coord);
-    byCol.get(x).push(coord);
   });
   
   const selected = [];
-  const used = new Set();
+  const sortedRows = Array.from(byRow.keys()).sort((a, b) => a - b); // Arriba hacia abajo
   
-  // Alternar entre filas y columnas
-  const rows = Array.from(byRow.keys()).sort((a, b) => a - b);
-  const cols = Array.from(byCol.keys()).sort((a, b) => a - b);
-  
-  let rowIndex = 0;
-  let colIndex = 0;
-  let useRow = true;
-  
-  while (selected.length < count && (rowIndex < rows.length || colIndex < cols.length)) {
-    if (useRow && rowIndex < rows.length) {
-      const row = rows[rowIndex];
-      const rowPixels = byRow.get(row).filter(coord => !used.has(coord));
-      
-      if (rowPixels.length > 0) {
-        // Tomar píxeles de la fila de izquierda a derecha
-        const sortedRow = rowPixels.sort((a, b) => {
-          const [x1] = a.split(',').map(Number);
-          const [x2] = b.split(',').map(Number);
-          return x1 - x2;
-        });
-        
-        for (const coord of sortedRow) {
-          if (selected.length >= count) break;
-          selected.push(coord);
-          used.add(coord);
-        }
-      }
-      rowIndex++;
-    } else if (!useRow && colIndex < cols.length) {
-      const col = cols[colIndex];
-      const colPixels = byCol.get(col).filter(coord => !used.has(coord));
-      
-      if (colPixels.length > 0) {
-        // Tomar píxeles de la columna de arriba a abajo
-        const sortedCol = colPixels.sort((a, b) => {
-          const [, y1] = a.split(',').map(Number);
-          const [, y2] = b.split(',').map(Number);
-          return y1 - y2;
-        });
-        
-        for (const coord of sortedCol) {
-          if (selected.length >= count) break;
-          selected.push(coord);
-          used.add(coord);
-        }
-      }
-      colIndex++;
-    }
+  for (const row of sortedRows) {
+    if (selected.length >= count) break;
+    const rowPixels = byRow.get(row).sort((a, b) => {
+      const [x1] = a.split(',').map(Number);
+      const [x2] = b.split(',').map(Number);
+      return x1 - x2; // Izquierda a derecha dentro de la fila
+    });
     
-    useRow = !useRow;
+    for (const coord of rowPixels) {
+      if (selected.length >= count) break;
+      selected.push(coord);
+    }
   }
   
   return selected.slice(0, count);
 }
+
+/**
+ * Patrón lineal hacia abajo - recorre de abajo hacia arriba por filas
+ */
+export function getLineDownPattern(changes, count) {
+  const changesArray = Array.from(changes);
+  if (changesArray.length === 0) return [];
+  
+  // Agrupar por filas y ordenar de abajo hacia arriba
+  const byRow = new Map();
+  changesArray.forEach(coord => {
+    const [_x, y] = coord.split(',').map(Number);
+    if (!byRow.has(y)) byRow.set(y, []);
+    byRow.get(y).push(coord);
+  });
+  
+  const selected = [];
+  const sortedRows = Array.from(byRow.keys()).sort((a, b) => b - a); // Abajo hacia arriba
+  
+  for (const row of sortedRows) {
+    if (selected.length >= count) break;
+    const rowPixels = byRow.get(row).sort((a, b) => {
+      const [x1] = a.split(',').map(Number);
+      const [x2] = b.split(',').map(Number);
+      return x1 - x2; // Izquierda a derecha dentro de la fila
+    });
+    
+    for (const coord of rowPixels) {
+      if (selected.length >= count) break;
+      selected.push(coord);
+    }
+  }
+  
+  return selected.slice(0, count);
+}
+
+/**
+ * Patrón lineal hacia la izquierda - recorre de izquierda a derecha por columnas
+ */
+export function getLineLeftPattern(changes, count) {
+  const changesArray = Array.from(changes);
+  if (changesArray.length === 0) return [];
+  
+  // Agrupar por columnas y ordenar de izquierda a derecha
+  const byCol = new Map();
+  changesArray.forEach(coord => {
+    const [x, _y] = coord.split(',').map(Number);
+    if (!byCol.has(x)) byCol.set(x, []);
+    byCol.get(x).push(coord);
+  });
+  
+  const selected = [];
+  const sortedCols = Array.from(byCol.keys()).sort((a, b) => a - b); // Izquierda a derecha
+  
+  for (const col of sortedCols) {
+    if (selected.length >= count) break;
+    const colPixels = byCol.get(col).sort((a, b) => {
+      const [, y1] = a.split(',').map(Number);
+      const [, y2] = b.split(',').map(Number);
+      return y1 - y2; // Arriba a abajo dentro de la columna
+    });
+    
+    for (const coord of colPixels) {
+      if (selected.length >= count) break;
+      selected.push(coord);
+    }
+  }
+  
+  return selected.slice(0, count);
+}
+
+/**
+ * Patrón lineal hacia la derecha - recorre de derecha a izquierda por columnas
+ */
+export function getLineRightPattern(changes, count) {
+  const changesArray = Array.from(changes);
+  if (changesArray.length === 0) return [];
+  
+  // Agrupar por columnas y ordenar de derecha a izquierda
+  const byCol = new Map();
+  changesArray.forEach(coord => {
+    const [x, _y] = coord.split(',').map(Number);
+    if (!byCol.has(x)) byCol.set(x, []);
+    byCol.get(x).push(coord);
+  });
+  
+  const selected = [];
+  const sortedCols = Array.from(byCol.keys()).sort((a, b) => b - a); // Derecha a izquierda
+  
+  for (const col of sortedCols) {
+    if (selected.length >= count) break;
+    const colPixels = byCol.get(col).sort((a, b) => {
+      const [, y1] = a.split(',').map(Number);
+      const [, y2] = b.split(',').map(Number);
+      return y1 - y2; // Arriba a abajo dentro de la columna
+    });
+    
+    for (const coord of colPixels) {
+      if (selected.length >= count) break;
+      selected.push(coord);
+    }
+  }
+  
+  return selected.slice(0, count);
+}
+
+/**
+ * Patrón de bordes - prioriza perímetro exterior, luego interior en anillos
+ */
+export function getBordersPattern(changes, count) {
+  const changesArray = Array.from(changes);
+  if (changesArray.length === 0) return [];
+  
+  // Calcular bounding box del área de cambios
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  
+  changesArray.forEach(coord => {
+    const [x, y] = coord.split(',').map(Number);
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  });
+  
+  // Agrupar píxeles por anillos desde el borde exterior
+  const ringMap = new Map();
+  
+  changesArray.forEach(coord => {
+    const [x, y] = coord.split(',').map(Number);
+    
+    // Calcular distancia al borde más cercano
+    const distToLeft = x - minX;
+    const distToRight = maxX - x;
+    const distToTop = y - minY;
+    const distToBottom = maxY - y;
+    
+    // El anillo es la distancia mínima al borde
+    const ring = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+    
+    if (!ringMap.has(ring)) ringMap.set(ring, []);
+    ringMap.get(ring).push(coord);
+  });
+  
+  // Seleccionar desde el anillo más exterior (ring 0) hacia adentro
+  const selected = [];
+  const sortedRings = Array.from(ringMap.keys()).sort((a, b) => a - b);
+  
+  for (const ring of sortedRings) {
+    if (selected.length >= count) break;
+    const ringPixels = ringMap.get(ring);
+    
+    for (const coord of ringPixels) {
+      if (selected.length >= count) break;
+      selected.push(coord);
+    }
+  }
+  
+  return selected.slice(0, count);
+}
+
+/**
+ * Patrón de línea - selecciona píxeles en líneas horizontales/verticales
+ */
 
 /**
  * Patrón de centro - selecciona píxeles desde el centro hacia afuera
@@ -236,71 +356,125 @@ export function getSpiralPattern(changes, count) {
 /**
  * Patrón humano - simula comportamiento humano con variaciones y pausas
  */
-export function getHumanPattern(changes, count) {
-  const changesArray = Array.from(changes);
-  if (changesArray.length === 0) return [];
-  
-  // Combinar diferentes estrategias como lo haría un humano
-  const strategies = [
-    () => getRandomPattern(new Set(changesArray), Math.ceil(count * 0.4)),
-    () => getCenterPattern(new Set(changesArray), Math.ceil(count * 0.3)),
-    () => getLinePattern(new Set(changesArray), Math.ceil(count * 0.3))
-  ];
-  
-  const selected = [];
-  const used = new Set();
-  
-  // Aplicar estrategias de forma aleatoria
-  for (const strategy of strategies) {
-    if (selected.length >= count) break;
-    
-    const availableChanges = new Set(changesArray.filter(coord => !used.has(coord)));
-    if (availableChanges.size === 0) break;
-    
-    const strategyResult = strategy();
-    
-    for (const coord of strategyResult) {
-      if (selected.length >= count) break;
-      if (!used.has(coord)) {
-        selected.push(coord);
-        used.add(coord);
-      }
-    }
-  }
-  
-  // Completar con aleatorios si es necesario
-  if (selected.length < count) {
-    const remaining = changesArray.filter(coord => !used.has(coord));
-    const needed = Math.min(count - selected.length, remaining.length);
-    
-    for (let i = 0; i < needed; i++) {
-      const randomIndex = Math.floor(Math.random() * remaining.length);
-      const coord = remaining.splice(randomIndex, 1)[0];
-      selected.push(coord);
-      used.add(coord);
-    }
-  }
-  
-  return selected.slice(0, count);
-}
 
 /**
  * Obtiene píxeles según el patrón seleccionado
  */
-export function getPixelsByPattern(pattern, changes, count) {
+export function getPixelsByPattern(pattern, changes, count, preferColor = false, preferredColorId = null, preferredColorIds = null) {
   log(`🎯 Aplicando patrón ${pattern} para ${count} píxeles de ${changes.size} cambios detectados`);
   
+  let selectedCoords;
+  const changeKeys = changes instanceof Map ? Array.from(changes.keys()) : Array.from(changes);
+  
   switch (pattern) {
-    case 'line':
-      return getLinePattern(changes, count);
+    case 'lineUp':
+      selectedCoords = getLineUpPattern(changeKeys, count);
+      break;
+    case 'lineDown':
+      selectedCoords = getLineDownPattern(changeKeys, count);
+      break;
+    case 'lineLeft':
+      selectedCoords = getLineLeftPattern(changeKeys, count);
+      break;
+    case 'lineRight':
+      selectedCoords = getLineRightPattern(changeKeys, count);
+      break;
+  // 'line' eliminado
     case 'center':
-      return getCenterPattern(changes, count);
+      selectedCoords = getCenterPattern(changeKeys, count);
+      break;
+    case 'borders':
+      selectedCoords = getBordersPattern(changeKeys, count);
+      break;
     case 'spiral':
-      return getSpiralPattern(changes, count);
-    case 'human':
-      return getHumanPattern(changes, count);
+      selectedCoords = getSpiralPattern(changeKeys, count);
+      break;
+  // 'human' eliminado
     case 'random':
     default:
-      return getRandomPattern(changes, count);
+      selectedCoords = getRandomPattern(changeKeys, count);
+      break;
   }
+  
+  // Aplicar filtro de color preferido si está habilitado
+  if (preferColor && changes instanceof Map) {
+    const ids = Array.isArray(preferredColorIds) && preferredColorIds.length > 0
+      ? preferredColorIds
+      : (preferredColorId !== null ? [preferredColorId] : []);
+    if (ids.length > 0) {
+      selectedCoords = applyColorPreference(selectedCoords, changes, ids, count);
+    }
+  }
+  
+  return selectedCoords;
 }
+
+/**
+ * Aplica preferencia de color priorizando píxeles del color seleccionado
+ */
+function applyColorPreference(selectedCoords, changesMap, preferredColorIds, maxCount) {
+  const preferredPixels = [];
+  const otherPixels = [];
+  
+  // Separar píxeles por color preferido
+  for (const coord of selectedCoords) {
+    const changeData = changesMap.get(coord);
+  if (changeData && changeData.original && (Array.isArray(preferredColorIds)
+    ? preferredColorIds.includes(changeData.original.colorId)
+    : changeData.original.colorId === preferredColorIds)) {
+      preferredPixels.push(coord);
+    } else {
+      otherPixels.push(coord);
+    }
+  }
+  
+  // Priorizar píxeles del color preferido, luego completar con otros
+  const result = [...preferredPixels, ...otherPixels].slice(0, maxCount);
+  
+  if (preferredPixels.length > 0) {
+    log(`🎨 Priorización de color: ${preferredPixels.length} píxeles del color preferido, ${result.length - preferredPixels.length} otros`);
+  }
+  
+  return result;
+}
+
+/*
+ * PATRONES ADICIONALES SUGERIDOS PARA IMPLEMENTACIÓN FUTURA:
+ * 
+ * 1. SERPIENTE (ZIG-ZAG):
+ *    - Patrón que avanza en zigzag por filas o columnas
+ *    - Alterna dirección en cada fila/columna para simular escritura
+ *    - Implementación: getSnakePattern(changes, count, direction = 'horizontal')
+ * 
+ * 2. BARRIDO DIAGONAL:
+ *    - Recorre diagonalmente (↘️ o ↗️)
+ *    - Útil para patrones diagonales en imágenes
+ *    - Implementación: getDiagonalPattern(changes, count, direction = 'down-right')
+ * 
+ * 3. ESPIRAL HORARIA/ANTIHORARIA:
+ *    - Variación del espiral actual con control de dirección
+ *    - Implementación: getSpiralPattern(changes, count, clockwise = true)
+ * 
+ * 4. ALEATORIO SESGADO:
+ *    - Aleatorio que pondera bordes o contornos
+ *    - Implementación: getBiasedRandomPattern(changes, count, bias = 'edges')
+ * 
+ * 5. PUNTOS DE ANCLAJE:
+ *    - Prioriza esquinas y centro, luego rellena
+ *    - Implementación: getAnchorPointsPattern(changes, count)
+ * 
+ * 6. BLOQUES/TILES:
+ *    - Divide en bloques de 8x8 o 16x16 y procesa por bloques
+ *    - Implementación: getTiledPattern(changes, count, tileSize = 16)
+ * 
+ * 7. CALOR (HEATMAP):
+ *    - Prioriza áreas con vandalismo reciente
+ *    - Requiere tracking de historial de cambios
+ *    - Implementación: getHeatPattern(changes, count, recentChanges)
+ * 
+ * Para añadir estos patrones:
+ * 1. Implementar la función en este archivo
+ * 2. Añadir al switch en getPixelsByPattern()
+ * 3. Actualizar PROTECTION_PATTERNS en config.js
+ * 4. Actualizar el selector en la UI
+ */
