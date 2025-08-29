@@ -75,7 +75,16 @@ export function createConfigWindow() {
 
 export default function _createConfigWindow() {
   const existing = document.getElementById('guardConfigWindow');
-  if (existing) { existing.style.display = 'flex'; return; }
+  if (existing) { 
+    existing.style.display = 'flex';
+    existing.style.opacity = '1';
+    const win = existing.querySelector('div');
+    if (win) {
+      win.style.opacity = '1';
+      win.style.transform = 'scale(1) translateY(0)';
+    }
+    return; 
+  }
 
   const overlay = document.createElement('div');
   overlay.id = 'guardConfigWindow';
@@ -127,7 +136,7 @@ export default function _createConfigWindow() {
       </div>
 
       <div style="background:#2d3748;padding:12px;border-radius:8px;border:1px solid #4a5568;">
-        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">🎯 ${t('guard.protectionPatterns')}</h3>
+        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">🎨 ${t('guard.preferSpecificColor')}</h3>
         ${createToggle('preferColorCheckbox', t('guard.preferSpecificColor'), false)}
         <div id="colorSelectorContainer" style="max-height:0;overflow:hidden;margin-top:8px;transition:max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);opacity:0;">
           <div id="colorSelector" style="display:flex;flex-wrap:wrap;gap:8px;padding-top:8px;"></div>
@@ -209,6 +218,9 @@ export default function _createConfigWindow() {
     setTimeout(() => {
       unregisterWindow(overlay);
       overlay.style.display = 'none';
+      // Resetear estilos para la próxima apertura
+      overlay.style.transition = '';
+      win.style.transition = '';
     }, 300);
   });
   // Nota: el overlay no captura eventos (pointer-events:none) para no bloquear el fondo.

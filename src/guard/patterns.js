@@ -885,6 +885,7 @@ export function getPixelsByPattern(pattern, changes, count, preferColor = false,
 
 /**
  * Aplica preferencia de color priorizando píxeles del color seleccionado
+ * SOLO debe usar píxeles del color preferido hasta que no queden más de ese color
  */
 function applyColorPreference(selectedCoords, changesMap, preferredColorIds, maxCount) {
   const preferredPixels = [];
@@ -893,20 +894,26 @@ function applyColorPreference(selectedCoords, changesMap, preferredColorIds, max
   // Separar píxeles por color preferido
   for (const coord of selectedCoords) {
     const changeData = changesMap.get(coord);
-  if (changeData && changeData.original && (Array.isArray(preferredColorIds)
-    ? preferredColorIds.includes(changeData.original.colorId)
-    : changeData.original.colorId === preferredColorIds)) {
+    if (changeData && changeData.original && (Array.isArray(preferredColorIds)
+      ? preferredColorIds.includes(changeData.original.colorId)
+      : changeData.original.colorId === preferredColorIds)) {
       preferredPixels.push(coord);
     } else {
       otherPixels.push(coord);
     }
   }
   
-  // Priorizar píxeles del color preferido, luego completar con otros
-  const result = [...preferredPixels, ...otherPixels].slice(0, maxCount);
-  
+  // CAMBIO CRÍTICO: Si hay píxeles del color preferido, SOLO usar esos
+  // No mezclar con otros colores hasta que se agoten los preferidos
+  let result;
   if (preferredPixels.length > 0) {
-    log(`🎨 Priorización de color: ${preferredPixels.length} píxeles del color preferido, ${result.length - preferredPixels.length} otros`);
+    // Solo usar píxeles del color preferido
+    result = preferredPixels.slice(0, maxCount);
+    log(`🎨 Priorización de color: usando SOLO ${result.length} píxeles del color preferido (${preferredPixels.length} disponibles)`);
+  } else {
+    // Si no hay píxeles del color preferido, usar otros
+    result = otherPixels.slice(0, maxCount);
+    log(`🎨 Priorización de color: no hay píxeles del color preferido, usando ${result.length} píxeles de otros colores`);
   }
   
   return result;
