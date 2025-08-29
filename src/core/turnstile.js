@@ -242,6 +242,52 @@ async function executeTurnstile(sitekey, action = 'paint') {
   if (invisible && invisible.length > 20) return invisible;
 
   log('👀 Falling back to interactive Turnstile (visible).');
+  
+  // Implementar sistema de reintentos para la ventana interactiva
+  const MAX_RETRIES = 3;
+  const TIMEOUTS = [5000, 10000, 30000]; // Timeouts progresivos: 5s, 10s, 30s
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const currentTimeout = TIMEOUTS[attempt - 1];
+    log(`🔄 Intento ${attempt}/${MAX_RETRIES} de resolución automática del CAPTCHA (timeout: ${currentTimeout/1000}s)...`);
+    
+    // Mostrar mensaje informativo al usuario sobre los reintentos
+    if (attempt === 2) {
+      log(`ℹ️ Primer intento falló. Reintentando automáticamente (2/${MAX_RETRIES})...`);
+    } else if (attempt === 3) {
+      log(`ℹ️ Segundo intento falló. Último reintento automático (3/${MAX_RETRIES})...`);
+    }
+    
+    try {
+      // Limpiar cualquier widget existente antes de cada intento
+      if (_turnstileWidgetId && window.turnstile?.remove) {
+        try { 
+          window.turnstile.remove(_turnstileWidgetId); 
+          _turnstileWidgetId = null;
+        } catch { /* Ignore removal errors */ }
+      }
+      
+      // Crear nueva ventana interactiva con timeout progresivo
+      const token = await createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, attempt < MAX_RETRIES, currentTimeout);
+      
+      if (token && token.length > 20) {
+        log(`✅ CAPTCHA resuelto exitosamente en el intento ${attempt}`);
+        return token;
+      }
+      
+      if (attempt < MAX_RETRIES) {
+        log(`⚠️ Intento ${attempt} falló, reintentando en 2 segundos...`);
+        await sleep(2000);
+      }
+    } catch (error) {
+      log(`❌ Error en intento ${attempt}:`, error.message);
+      if (attempt < MAX_RETRIES) {
+        await sleep(2000);
+      }
+    }
+  }
+  
+  log('🚨 Todos los intentos automáticos fallaron, mostrando ventana manual...');
   return await createNewTurnstileWidgetInteractive(sitekey, action);
 }
 
@@ -329,6 +375,82 @@ async function createNewTurnstileWidgetInteractive(sitekey, action) {
       }
     } catch (error) {
       log('❌ Error creating interactive Turnstile widget:', error);
+      reject(error);
+    }
+  });
+}
+
+// Versión con reintentos automáticos para resolución del CAPTCHA
+async function createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, isAutoRetry = true, customTimeout = 30000) {
+  return new Promise((resolve, reject) => {
+    try {
+      if (_turnstileWidgetId && window.turnstile?.remove) {
+        try { window.turnstile.remove(_turnstileWidgetId); } catch { /* Ignore removal errors */ }
+      }
+
+      const overlay = ensureTurnstileOverlayContainer();
+      const host = overlay.querySelector('#turnstile-overlay-host');
+      host.innerHTML = '';
+
+      // Timeout progresivo para reintentos automáticos
+      const timeout = isAutoRetry ? customTimeout : 120000; // Timeout personalizado para auto-retry, 2 minutos para manual
+      const timeoutId = setTimeout(() => {
+        log(`⏰ Interactive Turnstile timed out (${isAutoRetry ? 'auto-retry' : 'manual'})`);
+        // Limpiar overlay en timeout
+        try { overlay.remove(); } catch { /* Ignore removal errors */ }
+        resolve(null);
+      }, timeout);
+
+      const widgetId = window.turnstile.render(host, {
+        sitekey,
+        action,
+        size: 'normal',
+        retry: 'auto',
+        'retry-interval': isAutoRetry ? 3000 : 8000, // Intervalo más rápido para auto-retry
+        callback: (token) => {
+          clearTimeout(timeoutId);
+          // Hide overlay after success
+          try { overlay.remove(); } catch { /* Ignore removal errors */ }
+          log(`✅ Interactive Turnstile solved (${isAutoRetry ? 'auto-retry' : 'manual'})`);
+          resolve(token);
+        },
+        'error-callback': (error) => {
+          log(`🚨 Interactive Turnstile error (${isAutoRetry ? 'auto-retry' : 'manual'}):`, error);
+          if (isAutoRetry) {
+            // En modo auto-retry, resolver con null para continuar con el siguiente intento
+            clearTimeout(timeoutId);
+            try { overlay.remove(); } catch { /* Ignore removal errors */ }
+            resolve(null);
+          }
+        },
+        'timeout-callback': () => {
+          log(`⏰ Turnstile timeout callback (${isAutoRetry ? 'auto-retry' : 'manual'})`);
+          if (isAutoRetry) {
+            clearTimeout(timeoutId);
+            try { overlay.remove(); } catch { /* Ignore removal errors */ }
+            resolve(null);
+          }
+        },
+        'expired-callback': () => {
+          log(`⚠️ Interactive Turnstile token expired (${isAutoRetry ? 'auto-retry' : 'manual'})`);
+          if (isAutoRetry) {
+            clearTimeout(timeoutId);
+            try { overlay.remove(); } catch { /* Ignore removal errors */ }
+            resolve(null);
+          }
+        }
+      });
+
+      _turnstileWidgetId = widgetId;
+      _lastSitekey = sitekey;
+      if (!widgetId) {
+        clearTimeout(timeoutId);
+        try { overlay.remove(); } catch { /* Ignore removal errors */ }
+        resolve(null);
+        return;
+      }
+    } catch (error) {
+      log(`❌ Error creating interactive Turnstile widget (${isAutoRetry ? 'auto-retry' : 'manual'}):`, error);
       reject(error);
     }
   });
