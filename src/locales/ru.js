@@ -298,6 +298,33 @@ export const ru = {
     logWindowTitle: "Логи - {botName}",
     downloadLogs: "Скачать Логи",
     clearLogs: "Очистить Логи",
-    closeLogs: "Закрыть"
+    closeLogs: "Закрыть",
+    // Analysis Window
+    analysisTitle: "Анализ Различий - JSON vs Текущий Canvas",
+    correctPixels: "Правильные Пиксели",
+    incorrectPixels: "Неправильные Пиксели",
+    missingPixels: "Отсутствующие Пиксели",
+    showCorrect: "Показать Правильные",
+    showIncorrect: "Показать Неправильные",
+    showMissing: "Показать Отсутствующие",
+    autoRefresh: "Авто-обновление",
+    zoomAdjusted: "Масштаб автоматически настроен на",
+    autoRefreshEnabled: "Авто-обновление включено каждые",
+    autoRefreshDisabled: "Авто-обновление отключено",
+    autoRefreshIntervalUpdated: "Интервал авто-обновления обновлен до",
+    visualizationUpdated: "Визуализация обновлена",
+    // Config Window
+    configTitle: "Конфигурация Guard",
+    protectionPatterns: "Шаблоны Защиты",
+    preferSpecificColor: "Приоритет определенного цвета",
+    excludeSpecificColors: "Не восстанавливать определенные цвета",
+    loadManagement: "Управление Нагрузкой",
+    minLoadsToWait: "Минимум загрузок для ожидания",
+    pixelsPerBatch: "Пикселей за партию",
+    spendAllPixelsOnStart: "Потратить все пиксели при запуске",
+    waitTimes: "Время Ожидания",
+    useRandomTimes: "Использовать случайное время между партиями",
+    minTime: "Минимальное время (с)",
+    maxTime: "Максимальное время (с)"
   }
 };

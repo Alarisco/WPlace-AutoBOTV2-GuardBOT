@@ -180,11 +180,17 @@ function checkExistingBots() {
 function setupEventListeners() {
   const { elements } = guardState.ui;
   
-  elements.closeBtn.addEventListener('click', () => {
-    stopGuard();
-    guardState.ui.destroy();
-    if (window.__wplaceBot) {
-      window.__wplaceBot.guardRunning = false;
+  elements.minimizeBtn.addEventListener('click', () => {
+    // Minimizar la ventana en lugar de cerrarla
+    const container = guardState.ui.container;
+    if (container.style.display === 'none') {
+      container.style.display = 'block';
+      elements.minimizeBtn.textContent = '➖';
+      elements.minimizeBtn.title = 'Minimizar';
+    } else {
+      container.style.display = 'none';
+      elements.minimizeBtn.textContent = '🔲';
+      elements.minimizeBtn.title = 'Restaurar';
     }
   });
 

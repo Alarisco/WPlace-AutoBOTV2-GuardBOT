@@ -618,29 +618,61 @@ export async function repairChanges(changes) {
     let isFirstBatch = guardState.spendAllPixelsOnStart && guardState.totalRepaired === 0;
     
     if (isFirstBatch) {
-      // En el primer batch, usar todas las cargas disponibles
-      maxRepairs = Math.min(changesArray.length, availableCharges, GUARD_DEFAULTS.MAX_PIXELS_PER_BATCH);
-      log(`⚡ Primer batch - gastando todas las cargas: ${maxRepairs} píxeles`);
+      // En el primer batch, usar todas las cargas disponibles pero respetando un mínimo de seguridad
+      const safetyMinimum = Math.min(5, guardState.minChargesToWait); // Mantener al menos 5 cargas o el mínimo configurado
+      const spendableCharges = Math.max(0, availableCharges - safetyMinimum);
+      maxRepairs = Math.min(changesArray.length, spendableCharges, GUARD_DEFAULTS.MAX_PIXELS_PER_BATCH);
+      log(`⚡ Primer batch - gastando ${maxRepairs} píxeles de ${spendableCharges} cargas gastables (${availableCharges} total, ${safetyMinimum} mínimo de seguridad)`);
     } else {
-      // Verificar si hay cargas suficientes según la configuración mínima
-      if (availableCharges < guardState.minChargesToWait) {
-        log(`⚠️ Cargas insuficientes: ${availableCharges}/${guardState.minChargesToWait}. Esperando más cargas...`);
-        if (guardState.ui) {
-          guardState.ui.updateStatus(`⏳ Esperando ${guardState.minChargesToWait} cargas para continuar (${availableCharges} actuales)`, 'warning');
-          
-          // Calcular tiempo estimado para alcanzar el mínimo de cargas
-          const chargesNeeded = guardState.minChargesToWait - availableCharges;
-          const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
-          _nextChargeTime = Date.now() + timeToWait;
-          
-          // Iniciar contador de tiempo
-          startCountdownTimer();
-        }
-        return;
-      }
+      // Determinar cuántos píxeles necesitamos reparar
+      const pixelsNeeded = changesArray.length;
+      const batchSize = guardState.pixelsPerBatch;
       
-      // Si hay cargas suficientes, usar el lote normal configurado
-      maxRepairs = Math.min(changesArray.length, guardState.pixelsPerBatch);
+      // Si quedan menos píxeles que el tamaño del lote, usar solo los píxeles restantes
+      if (pixelsNeeded > 0 && pixelsNeeded < batchSize) {
+        // Calcular cargas disponibles para gastar (total - mínimo a mantener)
+        const spendableCharges = Math.max(0, availableCharges - guardState.minChargesToWait);
+        
+        // Verificar si tenemos suficientes cargas para los píxeles restantes
+        if (spendableCharges >= pixelsNeeded) {
+          maxRepairs = pixelsNeeded;
+          log(`🎯 Píxeles restantes: gastando solo ${maxRepairs} píxeles de ${spendableCharges} cargas gastables (${availableCharges} total, ${guardState.minChargesToWait} mínimo)`);
+        } else {
+          const totalNeeded = guardState.minChargesToWait + pixelsNeeded;
+          log(`⚠️ Cargas insuficientes para píxeles restantes: ${availableCharges}/${totalNeeded} (necesita ${pixelsNeeded} + ${guardState.minChargesToWait} mínimo). Esperando más cargas...`);
+          if (guardState.ui) {
+            guardState.ui.updateStatus(`⏳ Esperando ${totalNeeded} cargas para píxeles restantes (${availableCharges} actuales, mínimo ${guardState.minChargesToWait})`, 'warning');
+            
+            const chargesNeeded = totalNeeded - availableCharges;
+            const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
+            _nextChargeTime = Date.now() + timeToWait;
+            startCountdownTimer();
+          }
+          return;
+        }
+      } else {
+        // Lógica normal: verificar si hay cargas suficientes para un lote completo
+        // Calcular cargas disponibles para gastar (total - mínimo a mantener)
+        const spendableCharges = Math.max(0, availableCharges - guardState.minChargesToWait);
+        const requiredCharges = guardState.pixelsPerBatch;
+        
+        if (spendableCharges < requiredCharges) {
+          const totalNeeded = guardState.minChargesToWait + requiredCharges;
+          log(`⚠️ Cargas insuficientes para lote completo: ${availableCharges}/${totalNeeded} (necesita ${requiredCharges} + ${guardState.minChargesToWait} mínimo). Esperando más cargas...`);
+          if (guardState.ui) {
+            guardState.ui.updateStatus(`⏳ Esperando ${totalNeeded} cargas para continuar (${availableCharges} actuales, mínimo ${guardState.minChargesToWait})`, 'warning');
+            
+            const chargesNeeded = totalNeeded - availableCharges;
+            const timeToWait = chargesNeeded * CHARGE_REGENERATION_TIME;
+            _nextChargeTime = Date.now() + timeToWait;
+            startCountdownTimer();
+          }
+          return;
+        }
+        
+        // Si hay cargas suficientes, usar el lote normal configurado
+        maxRepairs = Math.min(changesArray.length, guardState.pixelsPerBatch, spendableCharges);
+      }
     }
     
     log(`🛠️ Cargas: ${availableCharges}, Mínimo: ${guardState.minChargesToWait}, Reparando: ${maxRepairs} píxeles`);

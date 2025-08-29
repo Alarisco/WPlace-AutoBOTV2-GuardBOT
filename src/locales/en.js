@@ -297,6 +297,33 @@ export const en = {
     logWindowTitle: "Logs - {botName}",
     downloadLogs: "Download Logs",
     clearLogs: "Clear Logs",
-    closeLogs: "Close"
+    closeLogs: "Close",
+    // Analysis Window
+    analysisTitle: "Difference Analysis - JSON vs Current Canvas",
+    correctPixels: "Correct Pixels",
+    incorrectPixels: "Incorrect Pixels",
+    missingPixels: "Missing Pixels",
+    showCorrect: "Show Correct",
+    showIncorrect: "Show Incorrect",
+    showMissing: "Show Missing",
+    autoRefresh: "Auto-refresh",
+    zoomAdjusted: "Zoom automatically adjusted to",
+    autoRefreshEnabled: "Auto-refresh enabled every",
+    autoRefreshDisabled: "Auto-refresh disabled",
+    autoRefreshIntervalUpdated: "Auto-refresh interval updated to",
+    visualizationUpdated: "Visualization updated",
+    // Config Window
+    configTitle: "Guard Configuration",
+    protectionPatterns: "Protection Patterns",
+    preferSpecificColor: "Prioritize specific color",
+    excludeSpecificColors: "Don't repair specific colors",
+    loadManagement: "Load Management",
+    minLoadsToWait: "Minimum loads to wait",
+    pixelsPerBatch: "Pixels per batch",
+    spendAllPixelsOnStart: "Spend all pixels on start",
+    waitTimes: "Wait Times",
+    useRandomTimes: "Use random times between batches",
+    minTime: "Minimum time (s)",
+    maxTime: "Maximum time (s)"
   }
 };

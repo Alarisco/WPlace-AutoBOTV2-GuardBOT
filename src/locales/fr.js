@@ -297,6 +297,33 @@ export const fr = {
     logWindowTitle: "Logs - {botName}",
     downloadLogs: "Télécharger Logs",
     clearLogs: "Effacer Logs",
-    closeLogs: "Fermer"
+    closeLogs: "Fermer",
+    // Analysis Window
+    analysisTitle: "Analyse des Différences - JSON vs Canvas Actuel",
+    correctPixels: "Pixels Corrects",
+    incorrectPixels: "Pixels Incorrects",
+    missingPixels: "Pixels Manquants",
+    showCorrect: "Afficher Corrects",
+    showIncorrect: "Afficher Incorrects",
+    showMissing: "Afficher Manquants",
+    autoRefresh: "Actualisation automatique",
+    zoomAdjusted: "Zoom ajusté automatiquement à",
+    autoRefreshEnabled: "Actualisation automatique activée toutes les",
+    autoRefreshDisabled: "Actualisation automatique désactivée",
+    autoRefreshIntervalUpdated: "Intervalle d'actualisation automatique mis à jour à",
+    visualizationUpdated: "Visualisation mise à jour",
+    // Config Window
+    configTitle: "Configuration du Guard",
+    protectionPatterns: "Modèles de Protection",
+    preferSpecificColor: "Prioriser une couleur spécifique",
+    excludeSpecificColors: "Ne pas réparer les couleurs spécifiques",
+    loadManagement: "Gestion des Charges",
+    minLoadsToWait: "Minimum de charges à attendre",
+    pixelsPerBatch: "Pixels par lot",
+    spendAllPixelsOnStart: "Dépenser tous les pixels au démarrage",
+    waitTimes: "Temps d'Attente",
+    useRandomTimes: "Utiliser des temps aléatoires entre les lots",
+    minTime: "Temps minimum (s)",
+    maxTime: "Temps maximum (s)"
   }
 };

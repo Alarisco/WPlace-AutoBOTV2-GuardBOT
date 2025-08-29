@@ -3,11 +3,61 @@ import { log } from '../core/logger.js';
 import { guardState } from './config.js';
 import { analyzeAreaPixels } from './processor.js';
 import { registerWindow, unregisterWindow } from '../core/window-manager.js';
-import { getGuardTexts } from '../locales/index.js';
+import { t } from '../locales/index.js';
 
 // Variables globales para la ventana
 let analysisWindowInstance = null;
 let autoRefreshInterval = null;
+
+// Función para crear toggle CSS personalizado
+function createToggle(id, labelText, checked = false) {
+  return `
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding: 8px 0;">
+      <span style="color: #eee; font-size: 14px; flex: 1;">${labelText}</span>
+      <label class="toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 26px; margin-left: 10px;">
+        <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="opacity: 0; width: 0; height: 0;">
+        <span class="toggle-slider" style="
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: ${checked ? '#22c55e' : '#ef4444'};
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 13px;
+          border: 1px solid ${checked ? '#16a34a' : '#dc2626'};
+        "></span>
+        <span class="toggle-knob" style="
+          position: absolute;
+          height: 20px;
+          width: 20px;
+          left: ${checked ? '27px' : '3px'};
+          top: 3px;
+          background-color: white;
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 50%;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        "></span>
+      </label>
+    </div>
+  `;
+}
+
+// Función para actualizar el estado visual del toggle
+function updateToggleState(toggleId, checked) {
+  const toggle = document.getElementById(toggleId);
+  if (!toggle) return;
+  
+  const slider = toggle.parentElement.querySelector('.toggle-slider');
+  const knob = toggle.parentElement.querySelector('.toggle-knob');
+  
+  if (slider && knob) {
+    slider.style.backgroundColor = checked ? '#22c55e' : '#ef4444';
+    slider.style.borderColor = checked ? '#16a34a' : '#dc2626';
+    knob.style.left = checked ? '27px' : '3px';
+  }
+}
 
 
 
@@ -84,7 +134,7 @@ export function createAnalysisWindow() {
   `;
   header.innerHTML = `
     <div style="display: flex; align-items: center; gap: 10px;">
-      🔍 <span>Análisis de Diferencias - JSON vs Canvas Actual</span>
+      🔍 <span>${t('guard.analysisTitle')}</span>
     </div>
     <button id="closeAnalysisBtn" style="background: none; border: none; color: #eee; cursor: pointer; font-size: 20px; padding: 5px;">❌</button>
   `;
@@ -113,15 +163,15 @@ export function createAnalysisWindow() {
     <h3 style="margin: 0 0 15px 0; color: #60a5fa;">📊 Estadísticas</h3>
     <div style="background: #374151; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
       <div style="margin-bottom: 10px;">
-        <span style="color: #10b981;">✅ Píxeles Correctos:</span>
+        <span style="color: #10b981;">✅ ${t('guard.correctPixels')}:</span>
         <span id="correctPixels" style="float: right; font-weight: bold;">-</span>
       </div>
       <div style="margin-bottom: 10px;">
-        <span style="color: #ef4444;">❌ Píxeles Incorrectos:</span>
+        <span style="color: #ef4444;">❌ ${t('guard.incorrectPixels')}:</span>
         <span id="incorrectPixels" style="float: right; font-weight: bold;">-</span>
       </div>
       <div style="margin-bottom: 10px;">
-        <span style="color: #f59e0b;">⚪ Píxeles Faltantes:</span>
+        <span style="color: #f59e0b;">⚪ ${t('guard.missingPixels')}:</span>
         <span id="missingPixels" style="float: right; font-weight: bold;">-</span>
       </div>
       <div>
@@ -132,19 +182,9 @@ export function createAnalysisWindow() {
 
     <h3 style="margin: 0 0 15px 0; color: #60a5fa;">🎨 Visualización</h3>
     <div style="background: #374151; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-      <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-        <input type="checkbox" id="showCorrect" checked style="margin-right: 8px;">
-        <span style="color: #10b981;">✅ Mostrar Correctos</span>
-      </label>
-      <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-        <input type="checkbox" id="showIncorrect" checked style="margin-right: 8px;">
-        <span style="color: #ef4444;">❌ Mostrar Incorrectos</span>
-      </label>
-      <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-        <input type="checkbox" id="showMissing" checked style="margin-right: 8px;">
-        <span style="color: #f59e0b;">⚪ Mostrar Faltantes</span>
-      </label>
-
+      ${createToggle('showCorrect', `✅ ${t('guard.showCorrect')}`, false)}
+      ${createToggle('showIncorrect', `❌ ${t('guard.showIncorrect')}`, true)}
+      ${createToggle('showMissing', `⚪ ${t('guard.showMissing')}`, true)}
     </div>
 
     <h3 style="margin: 0 0 15px 0; color: #60a5fa;">⚙️ Configuración</h3>
@@ -160,11 +200,8 @@ export function createAnalysisWindow() {
         <span id="opacityValue" style="font-size: 12px; color: #cbd5e0;">80%</span>
       </div>
       <div style="margin-bottom: 15px;">
-        <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-          <input type="checkbox" id="autoRefresh" style="margin-right: 8px;">
-          <span style="color: #60a5fa;">🔄 Auto-refresco</span>
-        </label>
-        <div style="display: flex; align-items: center; gap: 10px;">
+        ${createToggle('autoRefresh', `🔄 ${t('guard.autoRefresh')}`, false)}
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
           <label style="font-size: 12px; color: #cbd5e0;">Intervalo (s):</label>
           <input type="number" id="refreshInterval" min="1" max="60" value="5" style="width: 60px; padding: 4px; background: #4b5563; color: white; border: 1px solid #6b7280; border-radius: 4px;">
         </div>
@@ -490,14 +527,15 @@ function renderVisualization(canvas, analysis) {
     imageData.data[i + 3] = 255; // A
   }
   
-  // Obtener estado de los checkboxes
-  const analysisWindow = canvas.closest('.analysis-window');
-  const panelElement = analysisWindow ? analysisWindow.querySelector('.control-panel') : null;
+  // Obtener estado de los checkboxes desde el panel de control
+  const showCorrectElement = document.querySelector('#showCorrect');
+  const showIncorrectElement = document.querySelector('#showIncorrect');
+  const showMissingElement = document.querySelector('#showMissing');
   
-  // Usar valores por defecto si no se puede acceder al panel
-  const showCorrect = panelElement ? panelElement.querySelector('#showCorrect')?.checked ?? true : true;
-  const showIncorrect = panelElement ? panelElement.querySelector('#showIncorrect')?.checked ?? true : true;
-  const showMissing = panelElement ? panelElement.querySelector('#showMissing')?.checked ?? true : true;
+  // Usar valores por defecto si no se puede acceder a los elementos
+  const showCorrect = showCorrectElement ? showCorrectElement.checked : true;
+  const showIncorrect = showIncorrectElement ? showIncorrectElement.checked : true;
+  const showMissing = showMissingElement ? showMissingElement.checked : true;
   
   log(`🎛️ Estados de visualización - Correctos: ${showCorrect}, Incorrectos: ${showIncorrect}, Faltantes: ${showMissing}`);
   
@@ -597,23 +635,24 @@ function setupControls(controlPanel, canvas, analysis) {
     canvas.style.transform = `scale(${optimalZoom})`;
     canvas.style.transformOrigin = 'top left';
     
-    log(`🔍 Zoom ajustado automáticamente a ${Math.round(optimalZoom * 100)}%`);
+    log(`🔍 ${t('guard.zoomAdjusted')} ${Math.round(optimalZoom * 100)}%`);
   });
 
   // Auto-refresco
    autoRefreshCheckbox.addEventListener('change', () => {
+     updateToggleState('autoRefresh', autoRefreshCheckbox.checked);
      if (autoRefreshCheckbox.checked) {
        const interval = parseInt(refreshIntervalInput.value) * 1000;
        autoRefreshInterval = window.setInterval(async () => {
          await refreshAnalysisData(canvas, controlPanel);
        }, interval);
-       log(`🔄 Auto-refresco activado cada ${refreshIntervalInput.value} segundos`);
+       log(`🔄 ${t('guard.autoRefreshEnabled')} ${refreshIntervalInput.value} segundos`);
      } else {
        if (autoRefreshInterval) {
          window.clearInterval(autoRefreshInterval);
          autoRefreshInterval = null;
        }
-       log('🔄 Auto-refresco desactivado');
+       log(`🔄 ${t('guard.autoRefreshDisabled')}`);
      }
    });
 
@@ -628,7 +667,7 @@ function setupControls(controlPanel, canvas, analysis) {
        autoRefreshInterval = window.setInterval(async () => {
          await refreshAnalysisData(canvas, controlPanel);
        }, interval);
-       log(`🔄 Intervalo de auto-refresco actualizado a ${refreshIntervalInput.value} segundos`);
+       log(`🔄 ${t('guard.autoRefreshIntervalUpdated')} ${refreshIntervalInput.value} segundos`);
      }
    });
   
@@ -637,11 +676,13 @@ function setupControls(controlPanel, canvas, analysis) {
     await refreshAnalysisData(canvas, controlPanel);
   });
   
-  // Checkboxes de visualización - refresco inmediato
-  const checkboxes = ['showCorrect', 'showIncorrect', 'showMissing'];
-  checkboxes.forEach(id => {
-    const checkbox = controlPanel.querySelector(`#${id}`);
-    checkbox.addEventListener('change', () => {
+  // Toggles de visualización - refresco inmediato
+  const toggles = ['showCorrect', 'showIncorrect', 'showMissing'];
+  toggles.forEach(id => {
+    const toggle = controlPanel.querySelector(`#${id}`);
+    toggle.addEventListener('change', () => {
+      updateToggleState(id, toggle.checked);
+      
       // Preservar el zoom actual durante el refresco
       const currentZoom = parseFloat(zoomSlider.value);
       const currentOpacity = parseFloat(opacitySlider.value);
@@ -653,7 +694,7 @@ function setupControls(controlPanel, canvas, analysis) {
       canvas.style.transformOrigin = 'top left';
       canvas.style.opacity = currentOpacity;
       
-      log(`👁️ Visualización actualizada: ${id} = ${checkbox.checked}`);
+      log(`👁️ ${t('guard.visualizationUpdated')}: ${id} = ${toggle.checked}`);
     });
   });
 

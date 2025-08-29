@@ -278,6 +278,7 @@ export const es = {
     paletteNotFound: "🔍 Buscando paleta de colores...",
     clickingPaintButton: "👆 Haciendo clic en el botón Paint...",
     paintButtonNotFound: "❌ Botón Paint no encontrado",
+    protectionStopped: "⏹️ Protección detenida",
     selectUpperLeft: "🎯 Pinta un píxel en la esquina SUPERIOR IZQUIERDA del área a monitorear",
     selectLowerRight: "🎯 Ahora pinta un píxel en la esquina INFERIOR DERECHA del área",
     waitingUpperLeft: "👆 Esperando selección de esquina superior izquierda...",
@@ -290,6 +291,33 @@ export const es = {
     logWindowTitle: "Logs - {botName}",
     downloadLogs: "Descargar Logs",
     clearLogs: "Limpiar Logs",
-    closeLogs: "Cerrar"
+    closeLogs: "Cerrar",
+    // Analysis Window
+    analysisTitle: "Análisis de Diferencias - JSON vs Canvas Actual",
+    correctPixels: "Píxeles Correctos",
+    incorrectPixels: "Píxeles Incorrectos",
+    missingPixels: "Píxeles Faltantes",
+    showCorrect: "Mostrar Correctos",
+    showIncorrect: "Mostrar Incorrectos",
+    showMissing: "Mostrar Faltantes",
+    autoRefresh: "Auto-refresco",
+    zoomAdjusted: "Zoom ajustado automáticamente a",
+    autoRefreshEnabled: "Auto-refresco activado cada",
+    autoRefreshDisabled: "Auto-refresco desactivado",
+    autoRefreshIntervalUpdated: "Intervalo de auto-refresco actualizado a",
+    visualizationUpdated: "Visualización actualizada",
+    // Config Window
+    configTitle: "Configuración del Guard",
+    protectionPatterns: "Patrones de Protección",
+    preferSpecificColor: "Priorizar color específico",
+    excludeSpecificColors: "No reparar colores específicos",
+    loadManagement: "Gestión de Cargas",
+    minLoadsToWait: "Mínimo de cargas:",
+    pixelsPerBatch: "Píxeles por lote",
+    spendAllPixelsOnStart: "Gastar todos los píxeles al iniciar",
+    waitTimes: "Tiempos de Espera",
+    useRandomTimes: "Usar tiempos aleatorios entre lotes",
+    minTime: "Tiempo mínimo (s)",
+    maxTime: "Tiempo máximo (s)"
   }
 };

@@ -297,6 +297,33 @@ export const zhHant = {
     logWindowTitle: '日誌視窗',
     downloadLogs: '下載日誌',
     clearLogs: '清除日誌',
-    closeLogs: '關閉'
+    closeLogs: '關閉',
+    // Analysis Window
+    analysisTitle: "差異分析 - JSON vs 當前畫布",
+    correctPixels: "正確像素",
+    incorrectPixels: "錯誤像素",
+    missingPixels: "缺失像素",
+    showCorrect: "顯示正確",
+    showIncorrect: "顯示錯誤",
+    showMissing: "顯示缺失",
+    autoRefresh: "自動刷新",
+    zoomAdjusted: "縮放自動調整為",
+    autoRefreshEnabled: "自動刷新已啟用，間隔",
+    autoRefreshDisabled: "自動刷新已禁用",
+    autoRefreshIntervalUpdated: "自動刷新間隔已更新為",
+    visualizationUpdated: "視覺化已更新",
+    // Config Window
+    configTitle: "Guard配置",
+    protectionPatterns: "保護模式",
+    preferSpecificColor: "優先特定顏色",
+    excludeSpecificColors: "不修復特定顏色",
+    loadManagement: "負載管理",
+    minLoadsToWait: "等待的最小負載數",
+    pixelsPerBatch: "每批像素數",
+    spendAllPixelsOnStart: "啟動時消耗所有像素",
+    waitTimes: "等待時間",
+    useRandomTimes: "批次間使用隨機時間",
+    minTime: "最小時間 (秒)",
+    maxTime: "最大時間 (秒)"
   }
 };

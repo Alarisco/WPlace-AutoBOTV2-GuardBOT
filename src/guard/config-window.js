@@ -1,6 +1,73 @@
 import { guardState } from './config.js';
 import { log } from '../core/logger.js';
 import { registerWindow, unregisterWindow } from '../core/window-manager.js';
+import { t } from '../locales/index.js';
+
+// Función para crear toggle CSS personalizado
+function createToggle(id, labelText, checked = false) {
+  return `
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding: 8px 0;">
+      <span style="color: #eee; font-size: 14px; flex: 1;">${labelText}</span>
+      <label class="toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 26px; margin-left: 10px;">
+        <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="opacity: 0; width: 0; height: 0;">
+        <span class="toggle-slider" style="
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: ${checked ? '#22c55e' : '#ef4444'};
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 13px;
+          border: 1px solid ${checked ? '#16a34a' : '#dc2626'};
+        "></span>
+        <span class="toggle-knob" style="
+          position: absolute;
+          height: 20px;
+          width: 20px;
+          left: ${checked ? '27px' : '3px'};
+          top: 3px;
+          background-color: white;
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 50%;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        "></span>
+      </label>
+    </div>
+  `;
+}
+
+// Función para actualizar el estado visual del toggle
+function updateToggleState(toggleId, checked) {
+  const toggle = document.getElementById(toggleId);
+  if (!toggle) return;
+  
+  const slider = toggle.parentElement.querySelector('.toggle-slider');
+  const knob = toggle.parentElement.querySelector('.toggle-knob');
+  
+  if (slider && knob) {
+    slider.style.backgroundColor = checked ? '#22c55e' : '#ef4444';
+    slider.style.borderColor = checked ? '#16a34a' : '#dc2626';
+    knob.style.left = checked ? '27px' : '3px';
+  }
+}
+
+// Función para manejar transiciones suaves de contenedores
+function toggleContainerVisibility(containerId, show) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  
+  if (show) {
+    // Mostrar con transición suave
+    container.style.maxHeight = '200px';
+    container.style.opacity = '1';
+  } else {
+    // Ocultar con transición suave
+    container.style.maxHeight = '0';
+    container.style.opacity = '0';
+  }
+}
 
 export function createConfigWindow() {
   return _createConfigWindow();
@@ -19,7 +86,7 @@ export default function _createConfigWindow() {
 
   const header = document.createElement('div');
   header.style.cssText = 'background:#2d3748;padding:12px 16px;border-bottom:1px solid #4a5568;display:flex;align-items:center;justify-content:space-between;cursor:move;user-select:none;';
-  header.innerHTML = '<h2 style="margin:0;font-size:16px;color:#e2e8f0;">⚙️ Configuración del Guard</h2>';
+  header.innerHTML = `<h2 style="margin:0;font-size:16px;color:#e2e8f0;">⚙️ ${t('guard.configTitle')}</h2>`;
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '✕';
   closeBtn.style.cssText = 'background:none;border:none;color:#cbd5e0;font-size:18px;cursor:pointer;padding:0;width:24px;height:24px;';
@@ -60,55 +127,47 @@ export default function _createConfigWindow() {
       </div>
 
       <div style="background:#2d3748;padding:12px;border-radius:8px;border:1px solid #4a5568;">
-        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">🎨 Preferencia de Color</h3>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-          <input type="checkbox" id="preferColorCheckbox" style="width:16px;height:16px;accent-color:#10b981;">
-          <span style="color:#e5e7eb;">Priorizar color específico</span>
-        </label>
-        <div id="colorSelectorContainer" style="display:none;margin-top:8px;">
-          <div id="colorSelector" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">🎯 ${t('guard.protectionPatterns')}</h3>
+        ${createToggle('preferColorCheckbox', t('guard.preferSpecificColor'), false)}
+        <div id="colorSelectorContainer" style="max-height:0;overflow:hidden;margin-top:8px;transition:max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);opacity:0;">
+          <div id="colorSelector" style="display:flex;flex-wrap:wrap;gap:8px;padding-top:8px;"></div>
           <button id="clearPreferredColors" style="display:none;margin-top:8px;padding:4px 12px;font-size:12px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;">Clear</button>
         </div>
       </div>
 
       <div style="background:#2d3748;padding:12px;border-radius:8px;border:1px solid #4a5568;">
         <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">🚫 Excluir Color</h3>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-          <input type="checkbox" id="excludeColorCheckbox" style="width:16px;height:16px;accent-color:#ef4444;">
-          <span style="color:#e5e7eb;">No reparar colores específicos</span>
-        </label>
-        <div id="excludeColorSelectorContainer" style="display:none;margin-top:8px;">
-          <div id="excludeColorSelector" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        ${createToggle('excludeColorCheckbox', t('guard.excludeSpecificColors'), false)}
+        <div id="excludeColorSelectorContainer" style="max-height:0;overflow:hidden;margin-top:8px;transition:max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);opacity:0;">
+          <div id="excludeColorSelector" style="display:flex;flex-wrap:wrap;gap:8px;padding-top:8px;"></div>
           <button id="clearExcludedColors" style="display:none;margin-top:8px;padding:4px 12px;font-size:12px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;">Clear</button>
         </div>
       </div>
 
       <div style="background:#2d3748;padding:12px;border-radius:8px;border:1px solid #4a5568;">
-        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">⚡ Gestión de Cargas</h3>
-        <label style="display:block;margin-bottom:6px;color:#e5e7eb;">Mínimo de cargas para esperar:</label>
+        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">⚡ ${t('guard.loadManagement')}</h3>
+        <label style="display:block;margin-bottom:6px;color:#e5e7eb;">${t('guard.minLoadsToWait')}:</label>
         <input type="number" id="minChargesToWaitInput" min="1" max="10" style="width:100%;padding:8px;background:#374151;border:1px solid #6b7280;color:#e5e7eb;border-radius:6px;">
-        <label style="display:block;margin:10px 0 6px;color:#e5e7eb;">Píxeles por lote:</label>
+        <label style="display:block;margin:10px 0 6px;color:#e5e7eb;">${t('guard.pixelsPerBatch')}:</label>
         <input type="number" id="pixelsPerBatchInput" min="1" max="20" style="width:100%;padding:8px;background:#374151;border:1px solid #6b7280;color:#e5e7eb;border-radius:6px;">
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
-          <input type="checkbox" id="spendAllPixelsCheckbox" style="width:16px;height:16px;accent-color:#10b981;">
-          <span style="color:#e5e7eb;">Gastar todos los píxeles al iniciar</span>
-        </label>
+        <div style="margin-top:10px;">
+          ${createToggle('spendAllPixelsCheckbox', t('guard.spendAllPixelsOnStart'), false)}
+        </div>
       </div>
 
       <div style="background:#2d3748;padding:12px;border-radius:8px;border:1px solid #4a5568;">
-        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">⏰ Tiempos de Espera</h3>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;">
-          <input type="checkbox" id="randomWaitCheckbox" style="width:16px;height:16px;accent-color:#10b981;">
-          <span style="color:#e5e7eb;">Usar tiempos aleatorios entre lotes</span>
-        </label>
+        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">⏰ ${t('guard.waitTimes')}</h3>
+        <div style="margin-bottom:8px;">
+          ${createToggle('randomWaitCheckbox', t('guard.useRandomTimes'), false)}
+        </div>
         <div id="randomWaitContainer" style="display:none;">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
             <div>
-              <label style="display:block;margin-bottom:4px;color:#e5e7eb;">Tiempo mínimo (s):</label>
+              <label style="display:block;margin-bottom:4px;color:#e5e7eb;">${t('guard.minTime')}:</label>
               <input type="number" id="randomWaitMinInput" min="0.5" max="10" step="0.1" style="width:100%;padding:8px;background:#374151;border:1px solid #6b7280;color:#e5e7eb;border-radius:6px;">
             </div>
             <div>
-              <label style="display:block;margin-bottom:4px;color:#e5e7eb;">Tiempo máximo (s):</label>
+              <label style="display:block;margin-bottom:4px;color:#e5e7eb;">${t('guard.maxTime')}:</label>
               <input type="number" id="randomWaitMaxInput" min="1" max="30" step="0.1" style="width:100%;padding:8px;background:#374151;border:1px solid #6b7280;color:#e5e7eb;border-radius:6px;">
             </div>
           </div>
@@ -207,69 +266,125 @@ function setupResponsiveLayout(windowElement) {
 
 function setupEventListeners(overlay){
   const patternSelect = overlay.querySelector('#protectionPatternSelect');
-  patternSelect.addEventListener('change', () => {
-    guardState.protectionPattern = patternSelect.value;
-    persistConfiguration();
-  });
+  if (patternSelect) {
+    patternSelect.addEventListener('change', () => {
+      guardState.protectionPattern = patternSelect.value;
+      persistConfiguration();
+    });
+  }
 
   const preferColorCheckbox = overlay.querySelector('#preferColorCheckbox');
-  const colorSelectorContainer = overlay.querySelector('#colorSelectorContainer');
   const clearPreferredColorsBtn = overlay.querySelector('#clearPreferredColors');
   
-  preferColorCheckbox.addEventListener('change', (e)=>{
-    colorSelectorContainer.style.display = e.target.checked ? 'block' : 'none';
-    guardState.preferColor = !!e.target.checked;
-    if(e.target.checked){ loadColorSelector(overlay); }
-    persistConfiguration();
-  });
+  if (preferColorCheckbox) {
+    preferColorCheckbox.addEventListener('change', (e)=>{
+      const checked = e.target.checked;
+      updateToggleState('preferColorCheckbox', checked);
+      toggleContainerVisibility('colorSelectorContainer', checked);
+      guardState.preferColor = !!checked;
+      if(checked){ loadColorSelector(overlay); }
+      persistConfiguration();
+    });
+  }
   
-  clearPreferredColorsBtn.addEventListener('click', () => {
-    guardState.preferredColorIds = [];
-    guardState.preferredColorId = null;
-    loadColorSelector(overlay);
-    persistConfiguration();
-  });
+  if (clearPreferredColorsBtn) {
+    clearPreferredColorsBtn.addEventListener('click', () => {
+      guardState.preferredColorIds = [];
+      guardState.preferredColorId = null;
+      loadColorSelector(overlay);
+      persistConfiguration();
+    });
+  }
 
   const excludeColorCheckbox = overlay.querySelector('#excludeColorCheckbox');
-  const excludeColorSelectorContainer = overlay.querySelector('#excludeColorSelectorContainer');
   const clearExcludedColorsBtn = overlay.querySelector('#clearExcludedColors');
+
+  if (excludeColorCheckbox) {
+    excludeColorCheckbox.addEventListener('change', (e)=>{
+      const checked = e.target.checked;
+      updateToggleState('excludeColorCheckbox', checked);
+      toggleContainerVisibility('excludeColorSelectorContainer', checked);
+      guardState.excludeColor = !!checked;
+      if(checked){ loadExcludeColorSelector(overlay); }
+      persistConfiguration();
+    });
+  }
   
-  excludeColorCheckbox.addEventListener('change', (e)=>{
-    excludeColorSelectorContainer.style.display = e.target.checked ? 'block' : 'none';
-    guardState.excludeColor = !!e.target.checked;
-    if(e.target.checked){ loadExcludeColorSelector(overlay); }
-    persistConfiguration();
-  });
-  
-  clearExcludedColorsBtn.addEventListener('click', () => {
-    guardState.excludedColorIds = [];
-    loadExcludeColorSelector(overlay);
-    persistConfiguration();
-  });
+  if (clearExcludedColorsBtn) {
+    clearExcludedColorsBtn.addEventListener('click', () => {
+      guardState.excludedColorIds = [];
+      loadExcludeColorSelector(overlay);
+      persistConfiguration();
+    });
+  }
 
   const randomWaitCheckbox = overlay.querySelector('#randomWaitCheckbox');
   const randomWaitContainer = overlay.querySelector('#randomWaitContainer');
-  randomWaitCheckbox.addEventListener('change', (e)=>{
-    randomWaitContainer.style.display = e.target.checked ? 'block' : 'none';
-    guardState.randomWaitTime = !!e.target.checked;
-    persistConfiguration();
-  });
+  if (randomWaitCheckbox) {
+    randomWaitCheckbox.addEventListener('change', (e)=>{
+      const checked = e.target.checked;
+      updateToggleState('randomWaitCheckbox', checked);
+      if (randomWaitContainer) {
+        randomWaitContainer.style.display = checked ? 'block' : 'none';
+      }
+      guardState.randomWaitTime = !!checked;
+      persistConfiguration();
+    });
+  }
 
   const minInput = overlay.querySelector('#randomWaitMinInput');
   const maxInput = overlay.querySelector('#randomWaitMaxInput');
-  minInput.addEventListener('change', ()=>{ const min = parseFloat(minInput.value); const max = parseFloat(maxInput.value); if(min >= max) maxInput.value = (min + 0.5).toString(); guardState.randomWaitMin = parseFloat(minInput.value); persistConfiguration(); });
-  maxInput.addEventListener('change', ()=>{ const min = parseFloat(minInput.value); const max = parseFloat(maxInput.value); if(max <= min) minInput.value = (max - 0.5).toString(); guardState.randomWaitMax = parseFloat(maxInput.value); persistConfiguration(); });
+  if (minInput) {
+    minInput.addEventListener('change', ()=>{ 
+      const min = parseFloat(minInput.value); 
+      const max = maxInput ? parseFloat(maxInput.value) : 0; 
+      if(min >= max && maxInput) maxInput.value = (min + 0.5).toString(); 
+      guardState.randomWaitMin = parseFloat(minInput.value); 
+      persistConfiguration(); 
+    });
+  }
+  if (maxInput) {
+    maxInput.addEventListener('change', ()=>{ 
+      const min = minInput ? parseFloat(minInput.value) : 0; 
+      const max = parseFloat(maxInput.value); 
+      if(max <= min && minInput) minInput.value = (max - 0.5).toString(); 
+      guardState.randomWaitMax = parseFloat(maxInput.value); 
+      persistConfiguration(); 
+    });
+  }
 
   // Otros controles numéricos y de flags
   const minChargesToWaitInput = overlay.querySelector('#minChargesToWaitInput');
   const pixelsPerBatchInput = overlay.querySelector('#pixelsPerBatchInput');
   const spendAllPixelsCheckbox = overlay.querySelector('#spendAllPixelsCheckbox');
-  minChargesToWaitInput.addEventListener('change', ()=>{ guardState.minChargesToWait = parseInt(minChargesToWaitInput.value); persistConfiguration(); });
-  pixelsPerBatchInput.addEventListener('change', ()=>{ guardState.pixelsPerBatch = parseInt(pixelsPerBatchInput.value); persistConfiguration(); });
-  spendAllPixelsCheckbox.addEventListener('change', ()=>{ guardState.spendAllPixelsOnStart = !!spendAllPixelsCheckbox.checked; persistConfiguration(); });
+  
+  if (minChargesToWaitInput) {
+    minChargesToWaitInput.addEventListener('change', ()=>{ 
+      guardState.minChargesToWait = parseInt(minChargesToWaitInput.value); 
+      persistConfiguration(); 
+    });
+  }
+  
+  if (pixelsPerBatchInput) {
+    pixelsPerBatchInput.addEventListener('change', ()=>{ 
+      guardState.pixelsPerBatch = parseInt(pixelsPerBatchInput.value); 
+      persistConfiguration(); 
+    });
+  }
+  
+  if (spendAllPixelsCheckbox) {
+    spendAllPixelsCheckbox.addEventListener('change', (e)=>{ 
+      const checked = e.target.checked;
+      updateToggleState('spendAllPixelsCheckbox', checked);
+      guardState.spendAllPixelsOnStart = !!checked; 
+      persistConfiguration(); 
+    });
+  }
 
   const resetBtnEl = overlay.querySelector('#guardResetBtn');
-  resetBtnEl.addEventListener('click', ()=> resetConfiguration(overlay));
+  if (resetBtnEl) {
+    resetBtnEl.addEventListener('click', ()=> resetConfiguration(overlay));
+  }
 
   document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && overlay.style.display !== 'none'){ overlay.style.display = 'none'; } });
 }
@@ -284,6 +399,7 @@ function loadColorSelector(overlay){
       guardState.preferredColorIds = [guardState.preferredColorId];
     }
   }
+  log(`🔍 Cargando selector de colores preferidos. Colores preferidos actuales: [${guardState.preferredColorIds.join(', ')}]`);
   colorSelector.innerHTML = '';
   guardState.availableColors.forEach(color => {
     const el = document.createElement('div');
@@ -357,6 +473,8 @@ function loadExcludeColorSelector(overlay){
   if (!Array.isArray(guardState.excludedColorIds)) {
     guardState.excludedColorIds = [];
   }
+  
+  log(`🔍 Cargando selector de colores excluidos. Colores excluidos actuales: [${guardState.excludedColorIds.join(', ')}]`);
   excludeColorSelector.innerHTML = '';
   guardState.availableColors.forEach(color => {
     const el = document.createElement('div');
@@ -424,15 +542,15 @@ function loadExcludeColorSelector(overlay){
 function loadConfiguration(overlay){
   overlay.querySelector('#protectionPatternSelect').value = guardState.protectionPattern;
   const preferColorCheckbox = overlay.querySelector('#preferColorCheckbox');
-  const colorSelectorContainer = overlay.querySelector('#colorSelectorContainer');
   preferColorCheckbox.checked = guardState.preferColor;
-  colorSelectorContainer.style.display = guardState.preferColor ? 'block' : 'none';
+  updateToggleState('preferColorCheckbox', guardState.preferColor);
+  toggleContainerVisibility('colorSelectorContainer', guardState.preferColor);
   if(guardState.preferColor){ loadColorSelector(overlay); }
 
   const excludeColorCheckbox = overlay.querySelector('#excludeColorCheckbox');
-  const excludeColorSelectorContainer = overlay.querySelector('#excludeColorSelectorContainer');
   excludeColorCheckbox.checked = guardState.excludeColor;
-  excludeColorSelectorContainer.style.display = guardState.excludeColor ? 'block' : 'none';
+  updateToggleState('excludeColorCheckbox', guardState.excludeColor);
+  toggleContainerVisibility('excludeColorSelectorContainer', guardState.excludeColor);
   if(guardState.excludeColor){ loadExcludeColorSelector(overlay); }
 
   // Actualizar visibilidad de botones Clear
@@ -445,7 +563,9 @@ function loadConfiguration(overlay){
   clearPreferredBtn.style.display = hasPreferredColors ? 'block' : 'none';
   clearExcludedBtn.style.display = hasExcludedColors ? 'block' : 'none';
 
-  overlay.querySelector('#spendAllPixelsCheckbox').checked = guardState.spendAllPixelsOnStart;
+  const spendAllPixelsCheckbox = overlay.querySelector('#spendAllPixelsCheckbox');
+  spendAllPixelsCheckbox.checked = guardState.spendAllPixelsOnStart;
+  updateToggleState('spendAllPixelsCheckbox', guardState.spendAllPixelsOnStart);
   overlay.querySelector('#minChargesToWaitInput').value = guardState.minChargesToWait;
   overlay.querySelector('#pixelsPerBatchInput').value = guardState.pixelsPerBatch;
 
@@ -454,6 +574,7 @@ function loadConfiguration(overlay){
   const minInput = overlay.querySelector('#randomWaitMinInput');
   const maxInput = overlay.querySelector('#randomWaitMaxInput');
   randomWaitCheckbox.checked = guardState.randomWaitTime;
+  updateToggleState('randomWaitCheckbox', guardState.randomWaitTime);
   randomWaitContainer.style.display = guardState.randomWaitTime ? 'block' : 'none';
   minInput.value = guardState.randomWaitMin;
   maxInput.value = guardState.randomWaitMax;
