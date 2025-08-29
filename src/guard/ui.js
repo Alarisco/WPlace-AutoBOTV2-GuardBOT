@@ -496,11 +496,23 @@ export function createGuardUI(texts) {
 
   // Event listener para botón de configuración
   elements.configBtn.addEventListener('click', async () => {
+    // Aplicar efecto visual al botón
+    elements.configBtn.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+      elements.configBtn.style.transform = 'scale(1)';
+    }, 150);
+    
     createConfigWindow();
   });
 
   // Event listener para botón de análisis
   elements.analyzeBtn.addEventListener('click', async () => {
+    // Aplicar efecto visual al botón
+    elements.analyzeBtn.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+      elements.analyzeBtn.style.transform = 'scale(1)';
+    }, 150);
+    
     const { createAnalysisWindow } = await import('./analysis-window.js');
     createAnalysisWindow();
   });

@@ -128,6 +128,9 @@ export function createAnalysisWindow() {
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     z-index: 100002;
     backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: scale(0.95) translateY(-20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
   `;
 
   // Header de la ventana
@@ -298,6 +301,12 @@ export function createAnalysisWindow() {
   analysisWindow.appendChild(content);
   analysisWindow.appendChild(resizeHandle);
   document.body.appendChild(analysisWindow);
+
+  // Aplicar transición de apertura suave
+  setTimeout(() => {
+    analysisWindow.style.opacity = '1';
+    analysisWindow.style.transform = 'scale(1) translateY(0)';
+  }, 10);
 
   // Registrar ventana para manejo de z-index
   registerWindow(analysisWindow);

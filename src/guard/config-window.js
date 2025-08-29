@@ -88,10 +88,10 @@ export default function _createConfigWindow() {
 
   const overlay = document.createElement('div');
   overlay.id = 'guardConfigWindow';
-  overlay.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;background:transparent;z-index:10002;display:flex;align-items:flex-start;justify-content:flex-start;pointer-events:none;';
+  overlay.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;background:transparent;z-index:10002;display:flex;align-items:flex-start;justify-content:flex-start;pointer-events:none;opacity:0;transition:opacity 0.3s ease;';
 
   const win = document.createElement('div');
-  win.style.cssText = 'background:#1a1a1a;border:2px solid #333;border-radius:12px;width:460px;max-width:90vw;max-height:80vh;color:#eee;font-family:Segoe UI,Roboto,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:auto;position:relative;resize:both;pointer-events:auto;';
+  win.style.cssText = 'background:#1a1a1a;border:2px solid #333;border-radius:12px;width:460px;max-width:90vw;max-height:80vh;color:#eee;font-family:Segoe UI,Roboto,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:auto;position:relative;resize:both;pointer-events:auto;opacity:0;transform:scale(0.95) translateY(-20px);transition:opacity 0.3s ease, transform 0.3s ease;';
 
   const header = document.createElement('div');
   header.style.cssText = 'background:#2d3748;padding:12px 16px;border-bottom:1px solid #4a5568;display:flex;align-items:center;justify-content:space-between;cursor:move;user-select:none;';
@@ -197,6 +197,13 @@ export default function _createConfigWindow() {
   win.appendChild(footer);
   overlay.appendChild(win);
   document.body.appendChild(overlay);
+
+  // Aplicar transición de apertura suave
+  setTimeout(() => {
+    overlay.style.opacity = '1';
+    win.style.opacity = '1';
+    win.style.transform = 'scale(1) translateY(0)';
+  }, 10);
 
   makeDraggable(win, header);
   
