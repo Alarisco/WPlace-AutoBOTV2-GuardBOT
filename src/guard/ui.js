@@ -440,10 +440,18 @@ export function createGuardUI(texts) {
     },
 
     destroy: () => {
-      // Desregistrar ventana del gestor
-      unregisterWindow(container);
-      container.remove();
-      areaFileInput.remove();
+      // Aplicar transición de cierre suave
+      container.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      container.style.opacity = '0';
+      container.style.transform = 'scale(0.95) translateY(-20px)';
+      
+      // Completar el cierre después de la transición
+      setTimeout(() => {
+        // Desregistrar ventana del gestor
+        unregisterWindow(container);
+        container.remove();
+        areaFileInput.remove();
+      }, 300);
     }
   };
 
@@ -454,18 +462,32 @@ export function createGuardUI(texts) {
     const statusBar = container.querySelector('#statusBar');
     
     if (content.style.display === 'none') {
-      // Restaurar ventana
+      // Restaurar ventana sin transición
       content.style.display = 'block';
-      if (statsSection) statsSection.style.display = 'block';
-      if (statusBar) statusBar.style.display = 'block';
+      
+      if (statsSection) {
+        statsSection.style.display = 'block';
+      }
+      
+      if (statusBar) {
+        statusBar.style.display = 'block';
+      }
+      
       elements.minimizeBtn.textContent = '➖';
       container.style.height = 'auto';
       container.style.minHeight = '200px';
     } else {
-      // Minimizar ventana
+      // Minimizar ventana sin transición
       content.style.display = 'none';
-      if (statsSection) statsSection.style.display = 'none';
-      if (statusBar) statusBar.style.display = 'none';
+      
+      if (statsSection) {
+        statsSection.style.display = 'none';
+      }
+      
+      if (statusBar) {
+        statusBar.style.display = 'none';
+      }
+      
       elements.minimizeBtn.textContent = '🔼';
       container.style.height = 'auto';
       container.style.minHeight = 'auto';

@@ -67,24 +67,34 @@ function updateToggleState(toggleId, checked) {
 // Cerrar ventana de análisis
 export function closeAnalysisWindow() {
   if (analysisWindowInstance) {
-    // Desregistrar ventana del gestor
-    unregisterWindow(analysisWindowInstance.analysisWindow);
+    const analysisWindow = analysisWindowInstance.analysisWindow;
     
-    // Limpiar interval si existe
-     if (autoRefreshInterval) {
-       window.clearInterval(autoRefreshInterval);
-       autoRefreshInterval = null;
-     }
+    // Aplicar transición de cierre suave
+    analysisWindow.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    analysisWindow.style.opacity = '0';
+    analysisWindow.style.transform = 'scale(0.95) translateY(-20px)';
     
-    // Remover la ventana del DOM
-    if (analysisWindowInstance.analysisWindow && analysisWindowInstance.analysisWindow.parentNode) {
-      document.body.removeChild(analysisWindowInstance.analysisWindow);
-    }
-    
-    // Limpiar referencia
-    analysisWindowInstance = null;
-    
-    log('🔍 Ventana de análisis cerrada');
+    // Completar el cierre después de la transición
+    setTimeout(() => {
+      // Desregistrar ventana del gestor
+      unregisterWindow(analysisWindow);
+      
+      // Limpiar interval si existe
+      if (autoRefreshInterval) {
+        window.clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+      }
+      
+      // Remover la ventana del DOM
+      if (analysisWindow && analysisWindow.parentNode) {
+        document.body.removeChild(analysisWindow);
+      }
+      
+      // Limpiar referencia
+      analysisWindowInstance = null;
+      
+      log('🔍 Ventana de análisis cerrada');
+    }, 300);
   }
 }
 
@@ -303,13 +313,15 @@ export function createAnalysisWindow() {
   const minimizeBtn = header.querySelector('#minimizeAnalysisBtn');
   minimizeBtn.addEventListener('click', () => {
     if (content.style.display === 'none') {
-      // Restaurar ventana
+      // Restaurar ventana sin transición
       content.style.display = 'flex';
       minimizeBtn.textContent = '➖';
       analysisWindow.style.height = '800px';
     } else {
-      // Minimizar ventana
+      // Minimizar ventana sin transición
       content.style.display = 'none';
+      analysisWindow.style.height = 'auto';
+      
       minimizeBtn.textContent = '🔼';
       analysisWindow.style.height = 'auto';
     }

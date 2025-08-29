@@ -198,8 +198,18 @@ export default function _createConfigWindow() {
   registerWindow(overlay);
   
   closeBtn.addEventListener('click', () => {
-    unregisterWindow(overlay);
-    overlay.style.display = 'none';
+    // Aplicar transición de cierre suave
+    overlay.style.transition = 'opacity 0.3s ease';
+    win.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    overlay.style.opacity = '0';
+    win.style.opacity = '0';
+    win.style.transform = 'scale(0.95) translateY(-20px)';
+    
+    // Completar el cierre después de la transición
+    setTimeout(() => {
+      unregisterWindow(overlay);
+      overlay.style.display = 'none';
+    }, 300);
   });
   // Nota: el overlay no captura eventos (pointer-events:none) para no bloquear el fondo.
 
