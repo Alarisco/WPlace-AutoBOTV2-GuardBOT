@@ -8,6 +8,9 @@ import { t } from '../locales/index.js';
 // Variables globales para la ventana
 let analysisWindowInstance = null;
 let autoRefreshInterval = null;
+let sessionRecording = false;
+let sessionData = [];
+let sessionStartTime = null;
 
 // Función para crear toggle CSS personalizado
 function createToggle(id, labelText, checked = false) {
@@ -136,7 +139,10 @@ export function createAnalysisWindow() {
     <div style="display: flex; align-items: center; gap: 10px;">
       🔍 <span>${t('guard.analysisTitle')}</span>
     </div>
-    <button id="closeAnalysisBtn" style="background: none; border: none; color: #eee; cursor: pointer; font-size: 20px; padding: 5px;">❌</button>
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <button id="minimizeAnalysisBtn" style="background: none; border: none; color: #eee; cursor: pointer; font-size: 16px; padding: 5px; opacity: 0.7; transition: opacity 0.2s ease;">➖</button>
+      <button id="closeAnalysisBtn" style="background: none; border: none; color: #eee; cursor: pointer; font-size: 20px; padding: 5px;">❌</button>
+    </div>
   `;
 
   // Área de contenido principal
@@ -185,6 +191,19 @@ export function createAnalysisWindow() {
       ${createToggle('showCorrect', `✅ ${t('guard.showCorrect')}`, false)}
       ${createToggle('showIncorrect', `❌ ${t('guard.showIncorrect')}`, true)}
       ${createToggle('showMissing', `⚪ ${t('guard.showMissing')}`, true)}
+    </div>
+
+    <h3 style="margin: 0 0 15px 0; color: #60a5fa;">📹 Grabación</h3>
+    <div style="background: #374151; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+      ${createToggle('recordSession', '📹 Record Session', false)}
+      <button id="snapshotBtn" style="width: 100%; padding: 10px; background: #f59e0b; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 10px;">
+        📸 Snapshot
+      </button>
+      <div id="sessionControls" style="margin-top: 10px; opacity: 0; max-height: 0; overflow: hidden; transition: all 0.3s ease;">
+        <button id="downloadSession" style="width: 100%; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
+          💾 Descargar Datos
+        </button>
+      </div>
     </div>
 
     <h3 style="margin: 0 0 15px 0; color: #60a5fa;">⚙️ Configuración</h3>
@@ -280,6 +299,23 @@ export function createAnalysisWindow() {
   analysisWindowInstance = { analysisWindow, canvas, controlPanel };
 
   // Event listeners
+  // Event listener para minimizar ventana
+  const minimizeBtn = header.querySelector('#minimizeAnalysisBtn');
+  minimizeBtn.addEventListener('click', () => {
+    if (content.style.display === 'none') {
+      // Restaurar ventana
+      content.style.display = 'flex';
+      minimizeBtn.textContent = '➖';
+      analysisWindow.style.height = '800px';
+    } else {
+      // Minimizar ventana
+      content.style.display = 'none';
+      minimizeBtn.textContent = '🔼';
+      analysisWindow.style.height = 'auto';
+    }
+  });
+
+  // Event listener para cerrar ventana
   header.querySelector('#closeAnalysisBtn').addEventListener('click', closeAnalysisWindow);
 
   // Comentado: No cerrar al hacer clic fuera de la ventana
@@ -365,6 +401,9 @@ async function refreshAnalysisData(canvas, controlPanel) {
     // Actualizar estadísticas
     updateStatistics(controlPanel, analysis);
     
+    // Registrar datos de sesión si está grabando
+    recordSessionData(analysis);
+    
     // Renderizar visualización manteniendo zoom actual
     renderVisualization(canvas, analysis);
     
@@ -408,13 +447,19 @@ async function initializeAnalysis(canvas, controlPanel) {
     const analysis = comparePixels(guardState.originalPixels, currentPixels || new Map());
     
     // Actualizar estadísticas
-    updateStatistics(controlPanel, analysis);
-    
-    // Renderizar visualización
-    renderVisualization(canvas, analysis);
+  updateStatistics(controlPanel, analysis);
+  
+  // Registrar datos de sesión si está grabando
+  recordSessionData(analysis);
+  
+  // Renderizar visualización
+  renderVisualization(canvas, analysis);
     
     // Configurar controles
   setupControls(controlPanel, canvas, analysis);
+  
+  // Configurar grabación de sesión
+  setupSessionRecording(controlPanel, analysis);
   
   // Actualizar coordenadas
   updateCoordinatesDisplay(controlPanel);
@@ -676,6 +721,12 @@ function setupControls(controlPanel, canvas, analysis) {
     await refreshAnalysisData(canvas, controlPanel);
   });
   
+  // Botón de snapshot
+  const snapshotBtn = controlPanel.querySelector('#snapshotBtn');
+  snapshotBtn.addEventListener('click', () => {
+    captureSnapshot(canvas, controlPanel);
+  });
+  
   // Toggles de visualización - refresco inmediato
   const toggles = ['showCorrect', 'showIncorrect', 'showMissing'];
   toggles.forEach(id => {
@@ -761,5 +812,175 @@ function updateCoordinatesDisplay(controlPanel) {
   } else {
     coordsUpperLeft.textContent = '--';
     coordsLowerRight.textContent = '--';
+  }
+}
+
+// Función para configurar la grabación de sesión
+function setupSessionRecording(controlPanel, analysis) {
+  const recordToggle = controlPanel.querySelector('#recordSession');
+  const sessionControls = controlPanel.querySelector('#sessionControls');
+  const downloadBtn = controlPanel.querySelector('#downloadSession');
+  
+  // Event listener para el toggle de grabación
+  recordToggle.addEventListener('change', () => {
+    // Actualizar estado visual del toggle
+    updateToggleState('recordSession', recordToggle.checked);
+    
+    if (recordToggle.checked) {
+      startSessionRecording(analysis);
+      // Mostrar controles con animación suave
+      sessionControls.style.maxHeight = '50px';
+      sessionControls.style.opacity = '1';
+    } else {
+      stopSessionRecording();
+      // Ocultar controles con animación suave
+      sessionControls.style.maxHeight = '0';
+      sessionControls.style.opacity = '0';
+    }
+  });
+  
+  // Event listener para descargar datos
+  downloadBtn.addEventListener('click', () => {
+    downloadSessionData();
+  });
+}
+
+// Función para iniciar la grabación de sesión
+function startSessionRecording(analysis) {
+  sessionRecording = true;
+  sessionData = [];
+  sessionStartTime = new Date();
+  
+  // Activar autorefresh automáticamente
+  const autoRefreshCheckbox = document.querySelector('#autoRefresh');
+  if (autoRefreshCheckbox && !autoRefreshCheckbox.checked) {
+    autoRefreshCheckbox.checked = true;
+    updateToggleState('autoRefresh', true);
+    
+    // Disparar el evento change para activar el autorefresh
+    // eslint-disable-next-line no-undef
+    autoRefreshCheckbox.dispatchEvent(new Event('change'));
+  }
+  
+  // Registrar estado inicial
+  recordSessionData(analysis);
+  
+  console.log('📹 Grabación de sesión iniciada con autorefresh activado');
+}
+
+// Función para detener la grabación de sesión
+function stopSessionRecording() {
+  sessionRecording = false;
+  
+  // Descargar automáticamente los datos al detener la grabación
+  if (sessionData.length > 0) {
+    downloadSessionData();
+  }
+  
+  console.log('⏹️ Grabación de sesión detenida');
+}
+
+// Función para registrar datos de la sesión
+function recordSessionData(analysis) {
+  if (!sessionRecording || !analysis) return;
+  
+  const timestamp = new Date();
+  const total = analysis.originalPixels?.size || 0;
+  const correctCount = analysis.correct?.size || 0;
+  const incorrectCount = analysis.incorrect?.size || 0;
+  const missingCount = analysis.missing?.size || 0;
+  const accuracy = total > 0 ? ((correctCount / total) * 100) : 0;
+  
+  const sessionEntry = {
+    timestamp: timestamp.toISOString(),
+    timeFromStart: timestamp - sessionStartTime,
+    correct: correctCount,
+    incorrect: incorrectCount,
+    missing: missingCount,
+    total: total,
+    precision: parseFloat(accuracy.toFixed(1))
+  };
+  
+  sessionData.push(sessionEntry);
+}
+
+// Función para descargar los datos de la sesión
+function downloadSessionData() {
+  if (sessionData.length === 0) {
+    alert('No hay datos de sesión para descargar');
+    return;
+  }
+  
+  const sessionSummary = {
+    sessionStart: sessionStartTime?.toISOString(),
+    sessionEnd: new Date().toISOString(),
+    totalDuration: sessionStartTime ? new Date() - sessionStartTime : 0,
+    totalEntries: sessionData.length,
+    data: sessionData,
+    summary: {
+      finalCorrect: sessionData[sessionData.length - 1]?.correct || 0,
+      finalIncorrect: sessionData[sessionData.length - 1]?.incorrect || 0,
+      finalMissing: sessionData[sessionData.length - 1]?.missing || 0,
+      finalPrecision: sessionData[sessionData.length - 1]?.precision || 0
+    }
+  };
+  
+  // eslint-disable-next-line no-undef
+  const blob = new Blob([JSON.stringify(sessionSummary, null, 2)], {
+    type: 'application/json'
+  });
+  
+  // eslint-disable-next-line no-undef
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `session-data-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // eslint-disable-next-line no-undef
+  URL.revokeObjectURL(url);
+  
+  console.log('💾 Datos de sesión descargados');
+}
+
+// Función para capturar snapshot del canvas
+function captureSnapshot(canvas, controlPanel) {
+  try {
+    // Obtener la precisión actual
+    const accuracyElement = controlPanel.querySelector('#accuracy');
+    const accuracy = accuracyElement ? accuracyElement.textContent.replace('%', '') : '0';
+    
+    // Crear un canvas temporal para capturar la imagen sin transformaciones
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    // Configurar el canvas temporal con las mismas dimensiones
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    
+    // Copiar el contenido del canvas original
+    tempCtx.drawImage(canvas, 0, 0);
+    
+    // Convertir a blob y descargar
+     tempCanvas.toBlob((blob) => {
+       const link = document.createElement('a');
+       // eslint-disable-next-line no-undef
+       link.href = URL.createObjectURL(blob);
+      
+      // Crear nombre de archivo con timestamp y precisión
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      link.download = `snapshot-${timestamp}-precision-${accuracy}%.png`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      log(`📸 Snapshot capturado: precisión ${accuracy}%`);
+    }, 'image/png');
+    
+  } catch (error) {
+    log('❌ Error al capturar snapshot:', error);
+    alert('❌ Error al capturar la imagen');
   }
 }
