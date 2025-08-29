@@ -245,7 +245,7 @@ async function executeTurnstile(sitekey, action = 'paint') {
   
   // Implementar sistema de reintentos para la ventana interactiva
   const MAX_RETRIES = 3;
-  const TIMEOUTS = [5000, 10000, 30000]; // Timeouts progresivos: 5s, 10s, 30s
+  const TIMEOUTS = [10000, 15000, 30000]; // Timeouts progresivos: 5s, 10s, 30s
   
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const currentTimeout = TIMEOUTS[attempt - 1];
