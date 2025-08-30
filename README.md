@@ -9,6 +9,12 @@
   <a href="docs/README-ru.md">🇷🇺 Русский</a>
 </p>
 
+<p align="center">
+  <a href="https://buymeacoffee.com/alariscoi">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Invítame a un café" height="50"></a>
+</p>
+
+
 <!-- Badges centrados -->
 <p align="center">
   <img src="https://visitor-badge.laobi.icu/badge?page_id=Alarisco.WPlace-AutoBOTV2&left_color=black&right_color=blue&style=for-the-badge" alt="Visitas" />
