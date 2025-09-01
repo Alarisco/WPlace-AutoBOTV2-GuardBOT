@@ -1,8 +1,8 @@
 import { log } from "../core/logger.js";
-import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
+import { createShadowRoot } from "../core/ui-utils.js";
 import { createLogWindow } from "../log_window/index.js";
 import { createPaintingStatsWindow } from "./painting-stats.js";
-import { createColorPaletteSelector } from "./color-palette-selector.js";
+import { createResizeWindow } from "./Resize-window.js";
 
 export async function createImageUI({ texts, ...handlers }) {
   log('🎨 Creando interfaz de Auto-Image');
@@ -37,6 +37,7 @@ export async function createImageUI({ texts, ...handlers }) {
       top: 20px;
       right: 20px;
       width: 300px;
+      min-width: 250px;
       background: #1a1a1a;
       border: 1px solid #333;
       border-radius: 8px;
@@ -46,9 +47,12 @@ export async function createImageUI({ texts, ...handlers }) {
       font-family: 'Segoe UI', Roboto, sans-serif;
       color: #eee;
       animation: slideIn 0.4s ease-out;
-      overflow-y: auto;
-      overflow-x: hidden;
-      max-height: 90vh;
+      resize: both;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 200px;
+      max-height: 80vh;
     }
     
     .header {
@@ -62,6 +66,7 @@ export async function createImageUI({ texts, ...handlers }) {
       align-items: center;
       cursor: move;
       user-select: none;
+      flex-shrink: 0;
     }
     
     .header-title {
@@ -91,7 +96,11 @@ export async function createImageUI({ texts, ...handlers }) {
     
     .content {
       padding: 15px;
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
       display: block;
+      position: relative;
     }
     
     .controls {
@@ -114,12 +123,58 @@ export async function createImageUI({ texts, ...handlers }) {
     }
     
     .config-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-      font-size: 14px;
-    }
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 6px;
+          font-size: 14px;
+        }
+        
+        .toggle-switch {
+          position: relative;
+          display: inline-block;
+          width: 44px;
+          height: 24px;
+        }
+        
+        .toggle-switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        
+        .toggle-slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: #ef4444;
+          transition: .3s;
+          border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+          position: absolute;
+          content: "";
+          height: 18px;
+          width: 18px;
+          left: 3px;
+          bottom: 3px;
+          background-color: white;
+          transition: .3s;
+          border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+          background-color: #10b981;
+        }
+        
+        input:checked + .toggle-slider:before {
+          transform: translateX(20px);
+          background-color: white;
+        }
     
     .config-input {
       width: 60px;
@@ -129,6 +184,13 @@ export async function createImageUI({ texts, ...handlers }) {
       background: #1a1a1a;
       color: #eee;
       text-align: center;
+      font-size: 14px;
+    }
+    
+    .config-input.paint-pattern {
+      width: 140px;
+      font-size: 15px;
+      padding: 6px;
     }
     
     .config-input[type="text"], 
@@ -182,6 +244,20 @@ export async function createImageUI({ texts, ...handlers }) {
       transition: all 0.2s;
       font-size: 14px;
     }
+    
+    .btn-half {
+          width: calc(50% - 3px);
+        }
+    
+    .btn-full {
+      width: 100%;
+    }
+    
+    .button-row {
+          display: flex;
+          gap: 6px;
+          margin: 3px 0;
+        }
     
     .btn:hover:not(:disabled) {
       transform: translateY(-2px);
@@ -297,9 +373,7 @@ export async function createImageUI({ texts, ...handlers }) {
       color: #60a5fa;
     }
     
-    .minimized .content {
-      display: none;
-    }
+
     
     .modal-overlay {
       position: fixed;
@@ -371,84 +445,6 @@ export async function createImageUI({ texts, ...handlers }) {
     
     .modal-btn:hover {
       transform: translateY(-2px);
-    }
-    
-    /* Resize Dialog Styles */
-    .resize-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.7);
-      z-index: 9999;
-      display: none;
-    }
-    
-    .resize-container {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #1a1a1a;
-      padding: 20px;
-      border-radius: 8px;
-      z-index: 10000;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
-      max-width: 90%;
-      max-height: 90%;
-      overflow: auto;
-      color: #ffffff;
-      display: none;
-    }
-    
-    .resize-container h3 {
-      margin: 0 0 15px 0;
-      color: #ffffff;
-    }
-    
-    .resize-controls {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 15px;
-    }
-    
-    .resize-controls label {
-      color: #ffffff;
-      font-size: 14px;
-    }
-    
-    .resize-slider {
-      width: 100%;
-      margin: 5px 0;
-    }
-    
-    .resize-preview {
-      max-width: 100%;
-      max-height: 300px;
-      margin: 10px 0;
-      border: 1px solid #333;
-      display: block;
-    }
-    
-    .resize-buttons {
-      display: flex;
-      gap: 10px;
-      margin-top: 15px;
-    }
-    
-    /* Resize handle */
-    .resize-handle {
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 20px;
-      height: 20px;
-      cursor: se-resize;
-      background: linear-gradient(-45deg, transparent 30%, rgba(255,255,255,0.3) 30%, rgba(255,255,255,0.3) 70%, transparent 70%);
-      border-radius: 0 0 8px 0;
-      z-index: 10;
     }
     
     /* Media queries para responsividad */
@@ -566,15 +562,17 @@ export async function createImageUI({ texts, ...handlers }) {
           <input class="config-input pixels-per-batch" type="number" min="1" max="9999" value="20">
         </div>
         <div class="config-item">
-          <label>
+          <label>${texts.useAllCharges}</label>
+          <label class="toggle-switch">
             <input class="config-checkbox use-all-charges" type="checkbox" checked>
-            ${texts.useAllCharges}
+            <span class="toggle-slider"></span>
           </label>
         </div>
         <div class="config-item">
-          <label>
+          <label>${texts.showOverlay || 'Mostrar overlay'}</label>
+          <label class="toggle-switch">
             <input class="config-checkbox show-overlay" type="checkbox" checked>
-            ${texts.showOverlay || 'Mostrar overlay'}
+            <span class="toggle-slider"></span>
           </label>
         </div>
 
@@ -606,67 +604,90 @@ export async function createImageUI({ texts, ...handlers }) {
       </div>
       
       <div class="controls">
-        <!-- Estado inicial: Solo 3 botones principales -->
-        <button class="btn btn-upload upload-btn" data-state="initial">
-          📤
-          <span>${texts.uploadImage}</span>
-        </button>
-        <button class="btn btn-load load-progress-btn" data-state="initial">
-          📁
-          <span>${texts.loadProgress}</span>
-        </button>
-        <button class="btn btn-secondary stats-btn" data-state="initial">
-          📊
-          <span>Estadísticas</span>
-        </button>
-        
-        <!-- Flujo de carga de progreso -->
-        <button class="btn btn-load load-progress-btn-flow" data-state="load-progress" style="display: none;">
-          📁
-          <span>${texts.loadProgress}</span>
-        </button>
-        <button class="btn btn-start start-btn" data-state="load-progress" style="display: none;">
-          ▶️
-          <span>${texts.startPainting}</span>
-        </button>
-        <button class="btn btn-stop stop-btn" data-state="load-progress" style="display: none;">
-          ⏹️
-          <span>${texts.stopPainting}</span>
-        </button>
-
-        
-        <!-- Flujo de subida de imagen -->
-        <button class="btn btn-primary resize-btn" data-state="upload-image" style="display: none;">
-          🔄
-          <span>${texts.resizeImage}</span>
-        </button>
-        <button class="btn btn-select select-pos-btn" data-state="upload-image" style="display: none;">
-          🎯
-          <span>${texts.selectPosition}</span>
-        </button>
-        <button class="btn btn-start start-btn-upload" data-state="upload-image" style="display: none;">
-          ▶️
-          <span>${texts.startPainting}</span>
-        </button>
-        <button class="btn btn-stop stop-btn-upload" data-state="upload-image" style="display: none;">
-          ⏹️
-          <span>${texts.stopPainting}</span>
-        </button>
-        
-        <!-- Botón de inicialización oculto por defecto -->
-        <button class="btn btn-primary init-btn" style="display: none;">
-          🤖
-          <span>${texts.initBot}</span>
-        </button>
-        
-        <!-- Botones movidos al final: Guardar progreso y Logs -->
-        <button class="btn btn-secondary save-progress-btn" data-state="load-progress,upload-image" style="display: none;">
-          💾
-          <span>Guardar progreso</span>
-        </button>
-        <button class="btn btn-secondary log-window-btn" data-state="initial,load-progress,upload-image">
+        <!-- Flujo 1: Estado inicial - Subir Imagen/Cargar Progreso + Logs -->
+        <div class="button-row" data-state="initial">
+          <button class="btn btn-upload upload-btn btn-half">
+            📤
+            <span>${texts.uploadImage}</span>
+          </button>
+          <button class="btn btn-load load-progress-btn btn-half">
+            📁
+            <span>${texts.loadProgress}</span>
+          </button>
+        </div>
+        <button class="btn btn-secondary log-window-btn btn-full" data-state="initial">
           📋
           <span>${texts.logWindow || 'Logs'}</span>
+        </button>
+        
+        <!-- Flujo 2: Carga de progreso - Cargar Progreso + Iniciar/Detener + Guardar/Logs -->
+        <div class="button-row" data-state="load-progress" style="display: none;">
+          <button class="btn btn-load load-progress-btn-flow btn-half">
+            📁
+            <span>${texts.loadProgress}</span>
+          </button>
+          <button class="btn btn-secondary stats-btn btn-half">
+            📊
+            <span>Estadísticas</span>
+          </button>
+        </div>
+        <div class="button-row" data-state="load-progress" style="display: none;">
+          <button class="btn btn-start start-btn btn-half">
+            ▶️
+            <span>${texts.startPainting}</span>
+          </button>
+          <button class="btn btn-stop stop-btn btn-half">
+            ⏹️
+            <span>${texts.stopPainting}</span>
+          </button>
+        </div>
+        <div class="button-row" data-state="load-progress" style="display: none;">
+          <button class="btn btn-secondary save-progress-btn btn-half">
+            💾
+            <span>Guardar progreso</span>
+          </button>
+          <button class="btn btn-secondary log-window-btn btn-half">
+            📋
+            <span>${texts.logWindow || 'Logs'}</span>
+          </button>
+        </div>
+        
+        <!-- Flujo 3: Subida de imagen - Redimensionar/Seleccionar + Iniciar/Detener + Guardar/Logs -->
+        <div class="button-row" data-state="upload-image" style="display: none;">
+          <button class="btn btn-primary resize-btn btn-half">
+            🔄
+            <span>${texts.resizeImage}</span>
+          </button>
+          <button class="btn btn-select select-pos-btn btn-half">
+            🎯
+            <span>${texts.selectPosition}</span>
+          </button>
+        </div>
+        <div class="button-row" data-state="upload-image" style="display: none;">
+          <button class="btn btn-start start-btn-upload btn-half">
+            ▶️
+            <span>${texts.startPainting}</span>
+          </button>
+          <button class="btn btn-stop stop-btn-upload btn-half">
+            ⏹️
+            <span>${texts.stopPainting}</span>
+          </button>
+        </div>
+        <div class="button-row" data-state="upload-image" style="display: none;">
+          <button class="btn btn-secondary save-progress-btn btn-half">
+            💾
+            <span>Guardar progreso</span>
+          </button>
+          <button class="btn btn-secondary log-window-btn btn-half">
+            📋
+            <span>${texts.logWindow || 'Logs'}</span>
+          </button>
+        </div>
+        
+        <!-- Botón de inicialización oculto por defecto -->
+        <button class="btn btn-primary init-btn btn-full" style="display: none;">
+          🤖
+          <span>${texts.initBot}</span>
         </button>
       </div>
       
@@ -686,8 +707,7 @@ export async function createImageUI({ texts, ...handlers }) {
         ${texts.waitingInit}
       </div>
       
-      <!-- Handle de redimensionamiento -->
-      <div class="resize-handle"></div>
+
     </div>
   `;
   
@@ -706,43 +726,6 @@ export async function createImageUI({ texts, ...handlers }) {
   progressFileInput.style.display = 'none';
   root.appendChild(progressFileInput);
   
-  // Modal de resize
-  const resizeOverlay = document.createElement('div');
-  resizeOverlay.className = 'resize-overlay';
-  root.appendChild(resizeOverlay);
-  
-  const resizeContainer = document.createElement('div');
-  resizeContainer.className = 'resize-container';
-  resizeContainer.innerHTML = `
-    <h3>${texts.resizeImage}</h3>
-    <div class="resize-controls">
-      <label>
-        ${texts.width}: <span class="width-value">0</span>px
-        <input type="range" class="resize-slider width-slider" min="10" max="500" value="100">
-      </label>
-      <label>
-        ${texts.height}: <span class="height-value">0</span>px
-        <input type="range" class="resize-slider height-slider" min="10" max="500" value="100">
-      </label>
-      <label>
-        <input type="checkbox" class="keep-aspect" checked>
-        ${texts.keepAspect}
-      </label>
-      <img class="resize-preview" src="" alt="Preview">
-      <div class="resize-buttons">
-        <button class="btn btn-primary confirm-resize">
-          ✅
-          <span>${texts.apply}</span>
-        </button>
-        <button class="btn btn-stop cancel-resize">
-          ❌
-          <span>${texts.cancel}</span>
-        </button>
-      </div>
-    </div>
-  `;
-  root.appendChild(resizeContainer);
-  
   // Referencias a elementos
   const elements = {
     header: container.querySelector('.header'),
@@ -760,7 +743,7 @@ export async function createImageUI({ texts, ...handlers }) {
     uploadBtn: container.querySelector('.upload-btn'),
     loadProgressBtn: container.querySelector('.load-progress-btn'),
     loadProgressBtnFlow: container.querySelector('.load-progress-btn-flow'),
-    saveProgressBtn: container.querySelector('.save-progress-btn'),
+    saveProgressBtn: container.querySelectorAll('.save-progress-btn'),
 
     resizeBtn: container.querySelector('.resize-btn'),
     selectPosBtn: container.querySelector('.select-pos-btn'),
@@ -769,29 +752,16 @@ export async function createImageUI({ texts, ...handlers }) {
     stopBtn: container.querySelector('.stop-btn'),
     stopBtnUpload: container.querySelector('.stop-btn-upload'),
     statsBtn: container.querySelector('.stats-btn'),
-    logWindowBtn: container.querySelector('.log-window-btn'),
+    logWindowBtn: container.querySelectorAll('.log-window-btn'),
     progressBar: container.querySelector('.progress-bar'),
     statsArea: container.querySelector('.stats-area'),
     status: container.querySelector('.status'),
-    content: container.querySelector('.content'),
-    resizeHandle: container.querySelector('.resize-handle')
+    content: container.querySelector('.content')
   };
   
   // Estado actual de la interfaz (manejado por la función setState)
   
-  // Referencias a elementos del resize dialog
-  const resizeElements = {
-    overlay: resizeOverlay,
-    container: resizeContainer,
-    widthSlider: resizeContainer.querySelector('.width-slider'),
-    heightSlider: resizeContainer.querySelector('.height-slider'),
-    widthValue: resizeContainer.querySelector('.width-value'),
-    heightValue: resizeContainer.querySelector('.height-value'),
-    keepAspect: resizeContainer.querySelector('.keep-aspect'),
-    preview: resizeContainer.querySelector('.resize-preview'),
-    confirmBtn: resizeContainer.querySelector('.confirm-resize'),
-    cancelBtn: resizeContainer.querySelector('.cancel-resize')
-  };
+
   
   // Estado de la UI
   let state = {
@@ -839,83 +809,12 @@ export async function createImageUI({ texts, ...handlers }) {
     container.style.top = windowConfig.y + 'px';
   }
   
-  // Configurar redimensionamiento
-  function setupResizing() {
-    let isResizing = false;
-    let startX, startY, startWidth, startHeight;
-    
-    elements.resizeHandle.addEventListener('mousedown', (e) => {
-      isResizing = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      startWidth = parseInt(document.defaultView.getComputedStyle(container).width, 10);
-      startHeight = parseInt(document.defaultView.getComputedStyle(container).height, 10);
-      
-      document.addEventListener('mousemove', handleResize);
-      document.addEventListener('mouseup', stopResize);
-      e.preventDefault();
-    });
-    
-    const handleResize = (e) => {
-      if (!isResizing) return;
-      
-      const newWidth = Math.max(250, startWidth + e.clientX - startX);
-      const newHeight = Math.max(200, startHeight + e.clientY - startY);
-      
-      container.style.width = newWidth + 'px';
-      container.style.height = newHeight + 'px';
-      
-      windowConfig.width = newWidth;
-      windowConfig.height = newHeight;
-      
-      // Escalar elementos según el nuevo tamaño
-      scaleElements(newWidth);
-    };
-    
-    const stopResize = () => {
-      isResizing = false;
-      document.removeEventListener('mousemove', handleResize);
-      document.removeEventListener('mouseup', stopResize);
-      saveWindowConfig();
-    };
-  }
+
   
-  // Escalar elementos según el tamaño de la ventana
-  function scaleElements(width) {
-    const baseWidth = 300;
-    const scale = Math.max(0.8, Math.min(1.2, width / baseWidth));
-    
-    // Escalar fuentes
-    const scaledFontSize = Math.round(14 * scale);
-    container.style.fontSize = scaledFontSize + 'px';
-    
-    // Escalar botones
-    const buttons = container.querySelectorAll('.btn');
-    buttons.forEach(btn => {
-      const scaledPadding = Math.round(10 * scale);
-      btn.style.padding = scaledPadding + 'px';
-    });
-    
-    // Escalar header
-    const header = container.querySelector('.header');
-    if (header) {
-      const scaledHeaderPadding = Math.round(12 * scale);
-      header.style.padding = scaledHeaderPadding + 'px ' + Math.round(15 * scale) + 'px';
-    }
-    
-    // Escalar contenido
-    const content = container.querySelector('.content');
-    if (content) {
-      const scaledContentPadding = Math.round(15 * scale);
-      content.style.padding = scaledContentPadding + 'px';
-    }
-  }
+
   
   // Cargar configuración guardada
   loadWindowConfig();
-  
-  // Configurar redimensionamiento
-  setupResizing();
   
   // Hacer draggable con guardado de posición
   makeDraggableWithSave(elements.header, container);
@@ -973,13 +872,20 @@ export async function createImageUI({ texts, ...handlers }) {
   
   // Event listeners
   elements.minimizeBtn.addEventListener('click', () => {
-    state.minimized = !state.minimized;
-    if (state.minimized) {
-      container.classList.add('minimized');
-      elements.minimizeBtn.innerHTML = '🔼';
+    const content = container.querySelector('.content');
+    
+    if (content.style.display === 'none') {
+      // Restaurar ventana
+      content.style.display = 'block';
+      elements.minimizeBtn.innerHTML = '➖';
+      container.style.height = 'auto';
+      container.style.minHeight = 'auto';
     } else {
-      container.classList.remove('minimized');
-      elements.minimizeBtn.innerHTML = '🔽';
+      // Minimizar ventana
+      content.style.display = 'none';
+      elements.minimizeBtn.innerHTML = '🔼';
+      container.style.height = 'auto';
+      container.style.minHeight = 'auto';
     }
   });
   
@@ -1021,16 +927,20 @@ export async function createImageUI({ texts, ...handlers }) {
   
   // Función para cambiar el estado de la interfaz
   function setState(newState) {
-    // Ocultar todos los botones
-    const allButtons = container.querySelectorAll('[data-state]');
-    allButtons.forEach(btn => {
-      btn.style.display = 'none';
+    // Ocultar todos los elementos con data-state
+    const allElements = container.querySelectorAll('[data-state]');
+    allElements.forEach(element => {
+      element.style.display = 'none';
     });
     
-    // Mostrar botones del estado actual
-    const stateButtons = container.querySelectorAll(`[data-state*="${newState}"]`);
-    stateButtons.forEach(btn => {
-      btn.style.display = 'flex';
+    // Mostrar elementos del estado actual
+    const stateElements = container.querySelectorAll(`[data-state*="${newState}"]`);
+    stateElements.forEach(element => {
+      if (element.classList.contains('button-row')) {
+        element.style.display = 'flex';
+      } else {
+        element.style.display = 'flex';
+      }
     });
     
     log(`🔄 Estado cambiado a: ${newState}`);
@@ -1061,6 +971,12 @@ export async function createImageUI({ texts, ...handlers }) {
       const success = await handlers.onUploadImage(fileInput.files[0]);
       if (success) {
         setState('upload-image');
+        // Abrir automáticamente el diálogo de redimensionar
+        if (handlers.onResizeImage) {
+          setTimeout(() => {
+            handlers.onResizeImage();
+          }, 500); // Pequeño delay para que la UI se actualice
+        }
       }
     }
   });
@@ -1083,11 +999,13 @@ export async function createImageUI({ texts, ...handlers }) {
     progressFileInput.click();
   });
   
-  // Event listener para el botón de guardar progreso
-  elements.saveProgressBtn.addEventListener('click', () => {
-    if (handlers.onSaveProgress) {
-      handlers.onSaveProgress();
-    }
+  // Event listeners para múltiples botones de guardar progreso
+  elements.saveProgressBtn.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (handlers.onSaveProgress) {
+        handlers.onSaveProgress();
+      }
+    });
   });
   
   elements.resizeBtn.addEventListener('click', () => {
@@ -1169,13 +1087,16 @@ export async function createImageUI({ texts, ...handlers }) {
   // Variable para mantener referencia a la ventana de estadísticas
   let statsWindow = null;
   
-  elements.logWindowBtn.addEventListener('click', () => {
-    if (!logWindow) {
-      logWindow = createLogWindow('image');
-      logWindow.show();
-    } else {
-      logWindow.toggle();
-    }
+  // Event listeners para múltiples botones de logs
+  elements.logWindowBtn.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!logWindow) {
+        logWindow = createLogWindow('image');
+        logWindow.show();
+      } else {
+        logWindow.toggle();
+      }
+    });
   });
   
   elements.statsBtn.addEventListener('click', () => {
@@ -1204,125 +1125,6 @@ export async function createImageUI({ texts, ...handlers }) {
     elements.status.style.animation = 'slideIn 0.3s ease-out';
   }
   
-  function showResizeDialog(processor) {
-    const { width, height } = processor.getDimensions();
-    const aspectRatio = width / height;
-    
-    // Inicializar valores
-    resizeElements.widthSlider.value = width;
-    resizeElements.heightSlider.value = height;
-    resizeElements.widthValue.textContent = width;
-    resizeElements.heightValue.textContent = height;
-    resizeElements.preview.src = processor.img.src;
-    
-    // Crear selector de paleta de colores si no existe
-    if (!resizeElements.colorPaletteSelector) {
-      // Obtener colores disponibles de los handlers
-      const availableColors = handlers.getAvailableColors ? handlers.getAvailableColors() : [];
-      
-      resizeElements.colorPaletteSelector = createColorPaletteSelector(
-        resizeElements.container.querySelector('.resize-buttons').parentNode,
-        availableColors
-      );
-      
-      // Configurar callback para cambios en la selección
-      resizeElements.colorPaletteSelector.onSelectionChange((selectedColorIds) => {
-        if (handlers.onColorSelectionChange) {
-          handlers.onColorSelectionChange(selectedColorIds);
-        }
-      });
-      
-      // Mover la paleta antes de los botones
-      const buttonsDiv = resizeElements.container.querySelector('.resize-buttons');
-      buttonsDiv.parentNode.insertBefore(resizeElements.colorPaletteSelector.element, buttonsDiv);
-    } else {
-      // Actualizar colores disponibles
-      const availableColors = handlers.getAvailableColors ? handlers.getAvailableColors() : [];
-      resizeElements.colorPaletteSelector.updateAvailableColors(availableColors);
-    }
-    
-    // Mostrar modal
-    resizeElements.overlay.style.display = 'block';
-    resizeElements.container.style.display = 'block';
-    
-    const updatePreview = () => {
-      const newWidth = parseInt(resizeElements.widthSlider.value);
-      const newHeight = parseInt(resizeElements.heightSlider.value);
-      
-      resizeElements.widthValue.textContent = newWidth;
-      resizeElements.heightValue.textContent = newHeight;
-      
-      resizeElements.preview.src = processor.generatePreview(newWidth, newHeight);
-    };
-    
-    // Event listeners para sliders
-    const onWidthChange = () => {
-      if (resizeElements.keepAspect.checked) {
-        const newWidth = parseInt(resizeElements.widthSlider.value);
-        const newHeight = Math.round(newWidth / aspectRatio);
-        resizeElements.heightSlider.value = newHeight;
-      }
-      updatePreview();
-    };
-    
-    const onHeightChange = () => {
-      if (resizeElements.keepAspect.checked) {
-        const newHeight = parseInt(resizeElements.heightSlider.value);
-        const newWidth = Math.round(newHeight * aspectRatio);
-        resizeElements.widthSlider.value = newWidth;
-      }
-      updatePreview();
-    };
-    
-    // Añadir event listeners temporales
-    resizeElements.widthSlider.addEventListener('input', onWidthChange);
-    resizeElements.heightSlider.addEventListener('input', onHeightChange);
-    
-    // Event listener para confirmar
-    const onConfirm = () => {
-      const newWidth = parseInt(resizeElements.widthSlider.value);
-      const newHeight = parseInt(resizeElements.heightSlider.value);
-      const selectedColors = resizeElements.colorPaletteSelector.getSelectedColors();
-      
-      if (handlers.onConfirmResize) {
-        handlers.onConfirmResize(processor, newWidth, newHeight, selectedColors);
-      }
-      
-      closeResizeDialog();
-    };
-    
-    // Event listener para cancelar
-    const onCancel = () => {
-      closeResizeDialog();
-    };
-    
-    resizeElements.confirmBtn.addEventListener('click', onConfirm);
-    resizeElements.cancelBtn.addEventListener('click', onCancel);
-    resizeElements.overlay.addEventListener('click', onCancel);
-    
-    // Función para limpiar listeners
-    window.cleanupResizeDialog = () => {
-      resizeElements.widthSlider.removeEventListener('input', onWidthChange);
-      resizeElements.heightSlider.removeEventListener('input', onHeightChange);
-      resizeElements.confirmBtn.removeEventListener('click', onConfirm);
-      resizeElements.cancelBtn.removeEventListener('click', onCancel);
-      resizeElements.overlay.removeEventListener('click', onCancel);
-    };
-    
-    // Generar preview inicial
-    updatePreview();
-  }
-  
-  function closeResizeDialog() {
-    resizeElements.overlay.style.display = 'none';
-    resizeElements.container.style.display = 'none';
-    
-    // Limpiar event listeners
-    if (window.cleanupResizeDialog) {
-      window.cleanupResizeDialog();
-      delete window.cleanupResizeDialog;
-    }
-  }
   
   function updateProgress(current, total, userInfo = null) {
     const percentage = total > 0 ? (current / total) * 100 : 0;
@@ -1477,6 +1279,35 @@ export async function createImageUI({ texts, ...handlers }) {
     elements.loadProgressBtn.disabled = isPainting;
   }
   
+  // Función para actualizar la interfaz con los valores del estado
+  function updateUIFromState() {
+    // Importar imageState dinámicamente para evitar dependencias circulares
+    import('./config.js').then(({ imageState }) => {
+      // Actualizar toggle de usar todas las cargas
+      if (elements.useAllCharges) {
+        elements.useAllCharges.checked = imageState.useAllChargesFirst;
+      }
+      
+      // Actualizar selector de patrón de pintado
+      if (elements.paintPattern && imageState.paintPattern) {
+        elements.paintPattern.value = imageState.paintPattern;
+      }
+      
+      // Actualizar toggle de mostrar overlay
+      if (elements.showOverlay && imageState.showOverlay !== undefined) {
+        elements.showOverlay.checked = imageState.showOverlay;
+      }
+      
+      log('✅ Interfaz actualizada con valores del estado cargado');
+    }).catch(error => {
+      log('⚠️ Error actualizando interfaz desde estado:', error);
+    });
+  }
+  
+  // Crear ventana de redimensionamiento
+  const resizeWindow = createResizeWindow();
+  resizeWindow.initialize(root);
+  
   log('✅ Interfaz de Auto-Image creada');
   
   // Inicializar en estado inicial
@@ -1492,89 +1323,22 @@ export async function createImageUI({ texts, ...handlers }) {
     enableButtonsAfterInit,
     setState,
     resetToInitialState,
-    showResizeDialog,
-    closeResizeDialog,
+    showResizeDialog: (processor) => {
+      resizeWindow.showResizeDialog(processor, {
+        getAvailableColors: handlers.getAvailableColors,
+        onColorSelectionChange: handlers.onColorSelectionChange,
+        onConfirmResize: handlers.onConfirmResize
+      });
+    },
+    closeResizeDialog: () => {
+      resizeWindow.closeResizeDialog();
+    },
     updateStatsWindow,
     setPaintingState,
-    destroy
+    updateUIFromState,
+    destroy,
+    // Exponer generador de JSON para Auto-Guard si fue provisto por los handlers
+    generateGuardJSON: handlers.generateGuardJSON,
+    elements
   };
-}
-
-export function showConfirmDialog(message, title, buttons = {}) {
-  return new Promise((resolve) => {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.background = 'rgba(0,0,0,0.7)';
-    overlay.style.zIndex = '10001';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    
-    const modal = document.createElement('div');
-    modal.style.background = '#1a1a1a';
-    modal.style.border = '2px solid #333';
-    modal.style.borderRadius = '15px';
-    modal.style.padding = '25px';
-    modal.style.color = '#eee';
-    modal.style.minWidth = '350px';
-    modal.style.maxWidth = '400px';
-    modal.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
-    modal.style.fontFamily = "'Segoe UI', Roboto, sans-serif";
-    
-    modal.innerHTML = `
-      <h3 style="margin: 0 0 15px 0; text-align: center; font-size: 18px;">${title}</h3>
-      <p style="margin: 0 0 20px 0; text-align: center; line-height: 1.4;">${message}</p>
-      <div style="display: flex; gap: 10px; justify-content: center;">
-        ${buttons.save ? `<button class="save-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #10b981; color: white;">${buttons.save}</button>` : ''}
-        ${buttons.discard ? `<button class="discard-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #ef4444; color: white;">${buttons.discard}</button>` : ''}
-        ${buttons.cancel ? `<button class="cancel-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #2d3748; color: white;">${buttons.cancel}</button>` : ''}
-      </div>
-    `;
-    
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-    
-    // Event listeners
-    const saveBtn = modal.querySelector('.save-btn');
-    const discardBtn = modal.querySelector('.discard-btn');
-    const cancelBtn = modal.querySelector('.cancel-btn');
-    
-    const cleanup = () => {
-      document.body.removeChild(overlay);
-    };
-    
-    if (saveBtn) {
-      saveBtn.addEventListener('click', () => {
-        cleanup();
-        resolve('save');
-      });
-    }
-    
-    if (discardBtn) {
-      discardBtn.addEventListener('click', () => {
-        cleanup();
-        resolve('discard');
-      });
-    }
-    
-    if (cancelBtn) {
-      cancelBtn.addEventListener('click', () => {
-        cleanup();
-        resolve('cancel');
-      });
-    }
-    
-    // Cerrar con overlay
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
-        cleanup();
-        resolve('cancel');
-      }
-    });
-  });
 }

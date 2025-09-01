@@ -1,5 +1,5 @@
 import { log } from "../core/logger.js";
-import { imageState, IMAGE_DEFAULTS } from "./config.js";
+import { imageState, IMAGE_DEFAULTS as _IMAGE_DEFAULTS } from "./config.js";
 
 /**
  * Obtener datos completos de píxeles para guardar
