@@ -873,22 +873,40 @@ export async function runImage() {
         const allPixels = processor.generatePixelQueue();
         const originalPixels = [];
         
+        // Helper para normalizar modulo positivo 0..999
+        const mod1000 = (v) => ((v % 1000) + 1000) % 1000;
+        const getColorId = (rgb) => {
+          // Intentar obtener id directamente, o resolver por coincidencia exacta de RGB en la paleta disponible
+          if (rgb && typeof rgb.id !== 'undefined') return rgb.id;
+          const palette = imageState.availableColors || [];
+          const found = palette.find(c => c.r === rgb.r && c.g === rgb.g && c.b === rgb.b);
+          return found ? found.id : undefined;
+        };
+        
         if (allPixels && allPixels.length > 0) {
           allPixels.forEach(pixel => {
-            // Usar coordenadas globales para el Guard
-            const globalX = pixel.globalX || pixel.x || ((tileX * 1000) + startX + pixel.imageX);
-            const globalY = pixel.globalY || pixel.y || ((tileY * 1000) + startY + pixel.imageY);
+            // Coordenadas globales para el Guard
+            const globalX = (typeof pixel.globalX === 'number') ? pixel.globalX : ((tileX * 1000) + startX + pixel.imageX);
+            const globalY = (typeof pixel.globalY === 'number') ? pixel.globalY : ((tileY * 1000) + startY + pixel.imageY);
             const key = `${globalX},${globalY}`;
             
+            const rgb = pixel.color || pixel.targetColor || {};
+            const colorId = getColorId(rgb);
+            
             originalPixels.push({
-              key: key,
-              x: globalX,
-              y: globalY,
-              color: {
-                r: pixel.color.r,
-                g: pixel.color.g,
-                b: pixel.color.b
-              }
+              key,
+              // Colores en nivel superior (formato esperado por Guard)
+              r: rgb.r,
+              g: rgb.g,
+              b: rgb.b,
+              colorId: typeof colorId !== 'undefined' ? colorId : null,
+              // Metadatos de coordenadas (compatibles con Guard)
+              globalX,
+              globalY,
+              localX: mod1000(globalX),
+              localY: mod1000(globalY),
+              tileX,
+              tileY
             });
           });
         }
@@ -916,16 +934,17 @@ export async function runImage() {
             pixelsPerBatch: 50,
             checkInterval: 10000
           },
-          colors: imageState.availableColors.map(color => ({
+          colors: (imageState.availableColors || []).map(color => ({
             id: color.id,
             r: color.r,
             g: color.g,
             b: color.b
           })),
+          // IMPORTANTE: el formato debe coincidir con save-load.js del Guard
           originalPixels: originalPixels
         };
         
-        log(`✅ JSON del Guard generado: área (${globalStartX},${globalStartY}) a (${globalEndX},${globalEndY}), ${originalPixels.length} píxeles de ${allPixels.length} totales`);
+        log(`✅ JSON del Guard generado: área (${globalStartX},${globalStartY}) a (${globalEndX},${globalEndY}), ${originalPixels.length} píxeles de ${allPixels?.length || 0} totales`);
          return guardData;
        }
        

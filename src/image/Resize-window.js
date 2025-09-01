@@ -46,8 +46,8 @@ export function createResizeWindow() {
       </div>
       
       <div style="padding: 15px; flex: 1; overflow-y: auto;" class="resize-content">
-        <div class="resize-preview-container" style="text-align: center; margin-bottom: 8px; height: 320px; overflow: auto; padding: 8px; background: #111; border: 1px solid #333; border-radius: 6px;">
-          <img class="resize-preview" alt="Vista previa" style="image-rendering: pixelated; image-rendering: crisp-edges; display: block; margin: 0 auto;">
+        <div class="resize-preview-container" style="display: flex; align-items: center; justify-content: center; text-align: center; margin-bottom: 8px; height: 320px; overflow: hidden; padding: 8px; background: #111; border: 1px solid #333; border-radius: 6px;">
+          <img class="resize-preview" alt="Vista previa" draggable="false" style="image-rendering: pixelated; image-rendering: crisp-edges; display: block; margin: 0 auto; width: 100%; height: 100%; object-fit: contain; -webkit-user-drag: none; user-select: none;">
         </div>
         <div class="resize-preview-info" style="font-size: 12px; color: #aaa; text-align: center; margin-bottom: 12px;"></div>
         
@@ -96,6 +96,7 @@ export function createResizeWindow() {
       overlay: resizeWindow,
       container: resizeWindow,
       preview: resizeWindow.querySelector('.resize-preview'),
+      previewContainer: resizeWindow.querySelector('.resize-preview-container'),
       widthSlider: resizeWindow.querySelector('.width-slider'),
       heightSlider: resizeWindow.querySelector('.height-slider'),
       widthValue: resizeWindow.querySelector('.width-value'),
@@ -111,6 +112,12 @@ export function createResizeWindow() {
       resizeContent: resizeWindow.querySelector('.resize-content'),
       previewInfo: resizeWindow.querySelector('.resize-preview-info')
     };
+
+    // Evitar arrastre nativo dentro de la ventana (especialmente imágenes)
+    resizeWindow.addEventListener('dragstart', (e) => e.preventDefault());
+    if (resizeElements.preview) {
+      resizeElements.preview.addEventListener('dragstart', (e) => e.preventDefault());
+    }
 
     // Hacer la ventana arrastrable
     makeDraggable(resizeWindow, resizeElements.resizeHeader);
@@ -158,49 +165,21 @@ export function createResizeWindow() {
     let currentWidth = originalWidth;
     let currentHeight = originalHeight;
     let aspectRatio = originalWidth / originalHeight;
-
+    
     // Función helper para actualizar la vista previa de forma ligera
     const updatePreview = () => {
       try {
-        // Dimensiones actuales seleccionadas
         const imgW = currentWidth;
         const imgH = currentHeight;
 
-        // Calcular el área disponible (ancho interno de la ventana menos padding, y alto del contenedor)
-        const boundsW = Math.max(100, (resizeElements.resizeWindow.clientWidth || 450) - 60);
-        const boundsH = 300; // altura interna ~320 - paddings
+        // Generar una única previsualización al tamaño seleccionado
+        const dataUrl = processor.generatePreview(imgW, imgH);
+        resizeElements.preview.src = dataUrl;
 
-        // Factor de zoom entero para ver píxeles grandes
-        const scale = Math.max(1, Math.floor(Math.min(boundsW / imgW, boundsH / imgH)));
-
-        // Preparar un lienzo con la imagen redimensionada (imgW x imgH)
-        const resizedCanvas = document.createElement('canvas');
-        resizedCanvas.width = imgW;
-        resizedCanvas.height = imgH;
-        const rctx = resizedCanvas.getContext('2d');
-        rctx.imageSmoothingEnabled = false;
-        const source = processor.img || processor.canvas;
-        if (source) {
-          rctx.drawImage(source, 0, 0, imgW, imgH);
-        }
-
-        // Lienzo de visualización con zoom pixel-perfect (imgW*scale x imgH*scale)
-        const displayCanvas = document.createElement('canvas');
-        displayCanvas.width = imgW * scale;
-        displayCanvas.height = imgH * scale;
-        const dctx = displayCanvas.getContext('2d');
-        dctx.imageSmoothingEnabled = false;
-        dctx.drawImage(resizedCanvas, 0, 0, displayCanvas.width, displayCanvas.height);
-
-        // Actualizar preview <img>
-        resizeElements.preview.src = displayCanvas.toDataURL();
-        resizeElements.preview.style.width = displayCanvas.width + 'px';
-        resizeElements.preview.style.height = displayCanvas.height + 'px';
-
-        // Info de preview
+        // Actualizar info de previsualización
         if (resizeElements.previewInfo) {
           const total = imgW * imgH;
-          resizeElements.previewInfo.textContent = `${imgW}×${imgH} px | Zoom ${scale}x | Total: ${total.toLocaleString()} píxeles`;
+          resizeElements.previewInfo.textContent = `${imgW}×${imgH} px | Total: ${total.toLocaleString()} píxeles`;
         }
       } catch (e) {
         log('⚠️ Error generando vista previa:', e);
@@ -322,6 +301,21 @@ export function createResizeWindow() {
     // Mostrar diálogo
     resizeElements.resizeWindow.style.display = 'flex';
 
+    // Observador para cambios de tamaño del contenedor de vista previa
+    if (resizeElements.previewResizeObserver) {
+      try { resizeElements.previewResizeObserver.disconnect(); } catch (_) {}
+    }
+    if (window.ResizeObserver) {
+      resizeElements.previewResizeObserver = new window.ResizeObserver(() => updatePreview());
+      if (resizeElements.previewContainer) {
+        resizeElements.previewResizeObserver.observe(resizeElements.previewContainer);
+      }
+    } else {
+      // Fallback: escuchar resize de ventana
+      resizeElements.onWindowResize = () => updatePreview();
+      window.addEventListener('resize', resizeElements.onWindowResize, { passive: true });
+    }
+
     // Generar vista previa inicial
     updatePreview();
     
@@ -338,17 +332,23 @@ export function createResizeWindow() {
     let xOffset = 0;
     let yOffset = 0;
 
+    const isInteractive = (el) => !!el.closest('button, input, select, textarea, a, label, .btn');
+
     handle.addEventListener('mousedown', dragStart);
-    document.addEventListener('mousemove', drag);
+    document.addEventListener('mousemove', drag, { passive: false });
     document.addEventListener('mouseup', dragEnd);
 
     function dragStart(e) {
+      // Solo iniciar si el click fue dentro del handle y no en un control interactivo
+      if (!handle.contains(e.target) || isInteractive(e.target)) return;
+
+      e.preventDefault();
       initialX = e.clientX - xOffset;
       initialY = e.clientY - yOffset;
-
-      if (e.target === handle) {
-        isDragging = true;
-      }
+      isDragging = true;
+      // Evitar selección de texto durante el arrastre
+      element.style.userSelect = 'none';
+      document.body.style.userSelect = 'none';
     }
 
     function drag(e) {
@@ -366,9 +366,10 @@ export function createResizeWindow() {
     }
 
     function dragEnd() {
-      initialX = currentX;
-      initialY = currentY;
       isDragging = false;
+      // Restaurar selección de texto
+      element.style.userSelect = '';
+      document.body.style.userSelect = '';
     }
   }
 
@@ -380,10 +381,20 @@ export function createResizeWindow() {
     }
     
     resizeElements.resizeWindow.style.display = 'none';
-    
+
     // Desregistrar la ventana
     unregisterWindow(resizeElements.resizeWindow);
-    
+
+    // Limpiar observers/listeners
+    if (resizeElements.previewResizeObserver) {
+      try { resizeElements.previewResizeObserver.disconnect(); } catch (_) {}
+      resizeElements.previewResizeObserver = null;
+    }
+    if (resizeElements.onWindowResize) {
+      window.removeEventListener('resize', resizeElements.onWindowResize);
+      resizeElements.onWindowResize = null;
+    }
+
     log('📏 Diálogo de redimensionamiento cerrado');
   }
 
