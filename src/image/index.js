@@ -705,38 +705,12 @@ export async function runImage() {
           
           log(`✅ Imagen redimensionada: ${analysisResult.requiredPixels} píxeles válidos de ${analysisResult.totalPixels} totales`);
 
-          // Abrir automáticamente el selector de posición después del resize
-          setTimeout(() => {
-            // Asegurar que estamos en el estado correcto y el botón está visible
-            ui.setState('upload-image');
-            log('🔄 Estado cambiado a: upload-image');
-            
-            // Esperar un poco más para que la UI se actualice completamente
-            setTimeout(() => {
-              // Usar la referencia correcta del botón desde el objeto elements de la UI
-              const selectPosBtn = ui.elements?.selectPosBtn;
-              log('🔍 Buscando botón selector de posición...');
-              
-              if (selectPosBtn) {
-                log(`📍 Botón encontrado - Disabled: ${selectPosBtn.disabled}, Visible: ${selectPosBtn.offsetParent !== null}, Display: ${window.getComputedStyle(selectPosBtn).display}`);
-                
-                // Verificar el contenedor padre también
-                const parentRow = selectPosBtn.closest('.button-row');
-                if (parentRow) {
-                  log(`📦 Contenedor padre - Display: ${window.getComputedStyle(parentRow).display}, Data-state: ${parentRow.getAttribute('data-state')}`);
-                }
-                
-                if (!selectPosBtn.disabled && selectPosBtn.offsetParent !== null && window.getComputedStyle(selectPosBtn).display !== 'none') {
-                  log('🎯 Activando automáticamente el selector de posición...');
-                  selectPosBtn.click();
-                } else {
-                  log('⚠️ No se pudo activar el selector de posición automáticamente - botón no disponible');
-                }
-              } else {
-                log('❌ Botón selector de posición no encontrado - verificar referencia UI');
-              }
-            }, 300);
-          }, 700); // Aumentar delay para que la UI se actualice completamente
+          // Ya no es necesario seleccionar posición nuevamente después del resize
+          if (imageState.startPosition && imageState.tileX != null && imageState.tileY != null) {
+            log('📍 Manteniendo posición previamente seleccionada tras el redimensionado');
+          } else {
+            log('ℹ️ No hay posición previa establecida; podrás seleccionar una cuando lo desees');
+          }
 
           // Actualizar overlay si ya hay posición seleccionada
           try {

@@ -3,6 +3,7 @@ import { createShadowRoot } from "../core/ui-utils.js";
 import { createLogWindow } from "../log_window/index.js";
 import { createPaintingStatsWindow } from "./painting-stats.js";
 import { createResizeWindow } from "./Resize-window.js";
+import { saveGuardJSON } from "./safe-guard-window.js";
 
 export async function createImageUI({ texts, ...handlers }) {
   log('🎨 Creando interfaz de Auto-Image');
@@ -619,6 +620,10 @@ export async function createImageUI({ texts, ...handlers }) {
           📋
           <span>${texts.logWindow || 'Logs'}</span>
         </button>
+        <button class="btn btn-secondary guard-json-btn btn-full" data-state="initial">
+          🛡️
+          <span>Guard JSON</span>
+        </button>
         
         <!-- Flujo 2: Carga de progreso - Cargar Progreso + Iniciar/Detener + Guardar/Logs -->
         <div class="button-row" data-state="load-progress" style="display: none;">
@@ -651,6 +656,12 @@ export async function createImageUI({ texts, ...handlers }) {
             <span>${texts.logWindow || 'Logs'}</span>
           </button>
         </div>
+        <div class="button-row" data-state="load-progress" style="display: none;">
+          <button class="btn btn-secondary guard-json-btn btn-full">
+            🛡️
+            <span>Guard JSON</span>
+          </button>
+        </div>
         
         <!-- Flujo 3: Subida de imagen - Redimensionar/Seleccionar + Iniciar/Detener + Guardar/Logs -->
         <div class="button-row" data-state="upload-image" style="display: none;">
@@ -681,6 +692,12 @@ export async function createImageUI({ texts, ...handlers }) {
           <button class="btn btn-secondary log-window-btn btn-half">
             📋
             <span>${texts.logWindow || 'Logs'}</span>
+          </button>
+        </div>
+        <div class="button-row" data-state="upload-image" style="display: none;">
+          <button class="btn btn-secondary guard-json-btn btn-full">
+            🛡️
+            <span>Guard JSON</span>
           </button>
         </div>
         
@@ -744,6 +761,7 @@ export async function createImageUI({ texts, ...handlers }) {
     loadProgressBtn: container.querySelector('.load-progress-btn'),
     loadProgressBtnFlow: container.querySelector('.load-progress-btn-flow'),
     saveProgressBtn: container.querySelectorAll('.save-progress-btn'),
+    guardJsonBtn: container.querySelectorAll('.guard-json-btn'),
 
     resizeBtn: container.querySelector('.resize-btn'),
     selectPosBtn: container.querySelector('.select-pos-btn'),
@@ -1004,6 +1022,28 @@ export async function createImageUI({ texts, ...handlers }) {
     btn.addEventListener('click', () => {
       if (handlers.onSaveProgress) {
         handlers.onSaveProgress();
+      }
+    });
+  });
+  
+  // Event listeners para Guard JSON (disponible en todos los estados)
+  elements.guardJsonBtn.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        if (!handlers.generateGuardJSON) {
+          alert('No se puede generar el JSON del Guard en este momento.');
+          return;
+        }
+        log('🛡️ Generando Guard JSON...');
+        const data = await handlers.generateGuardJSON();
+        if (!data) {
+          alert('No hay datos disponibles para guardar.');
+          return;
+        }
+        await saveGuardJSON(data);
+      } catch (err) {
+        console.error(err);
+        alert('Error al generar o guardar el Guard JSON');
       }
     });
   });
