@@ -1,6 +1,6 @@
 import { log } from "../core/logger.js";
 import { createLauncherUI } from "./ui.js";
-import { getSession, checkBackendHealth, downloadAndExecuteBot } from "./api.js";
+import { getSession, checkHealth, downloadAndExecuteBot } from "../core/wplace-api.js";
 import { launcherState, LAUNCHER_CONFIG } from "./config.js";
 import { initializeLanguage } from "../locales/index.js";
 import { createLanguageSelector } from "../core/language-selector.js";
@@ -21,6 +21,27 @@ export async function runLauncher() {
   window.__wplaceBot = { ...window.__wplaceBot, launcherRunning: true };
   
   try {
+    // Helpers para mapear datos de API unificada a la UI del launcher
+    const mapHealthInfo = (raw) => ({
+      up: Boolean(raw?.up ?? (raw?.status === 'online')),
+      database: raw?.database?.ok ?? raw?.database,
+      uptime: raw?.uptime ?? raw?.uptimeHuman ?? (typeof raw?.uptimeSeconds === 'number' ? `${raw.uptimeSeconds}s` : undefined)
+    });
+
+    const mapUserFromSession = (session) => {
+      if (!session?.success || !session?.data?.user) return null;
+      // Normalizar estructura para UI (usa name/username y charges.count)
+      const u = session.data.user;
+      return {
+        ...u,
+        charges: {
+          count: session.data.charges,
+          max: session.data.maxCharges,
+          cooldownMs: session.data.chargeRegen
+        }
+      };
+    };
+
     // Variable para el selector de idioma
     let languageSelector = null;
     
@@ -76,12 +97,13 @@ export async function runLauncher() {
     // Cargar información inicial
     log('📊 Cargando información inicial...');
     
-    // Cargar estado del backend
-    const health = await checkBackendHealth();
-    ui.setHealthInfo(health);
+    // Cargar estado del backend (mapeado)
+    const healthRaw = await checkHealth();
+    ui.setHealthInfo(mapHealthInfo(healthRaw));
     
-    // Cargar información del usuario
-    const user = await getSession();
+    // Cargar información del usuario (mapeado desde getSession)
+    const session = await getSession();
+    const user = mapUserFromSession(session);
     ui.setUserInfo(user);
     
     // Configurar refresco periódico
@@ -89,13 +111,13 @@ export async function runLauncher() {
       log('🔄 Actualizando información...');
       
       try {
-        const [newHealth, newUser] = await Promise.all([
-          checkBackendHealth(),
+        const [newHealthRaw, newSession] = await Promise.all([
+          checkHealth(),
           getSession()
         ]);
         
-        ui.setHealthInfo(newHealth);
-        ui.setUserInfo(newUser);
+        ui.setHealthInfo(mapHealthInfo(newHealthRaw));
+        ui.setUserInfo(mapUserFromSession(newSession));
       } catch (error) {
         log('❌ Error en actualización periódica:', error);
       }

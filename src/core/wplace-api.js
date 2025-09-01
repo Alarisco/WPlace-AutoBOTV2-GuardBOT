@@ -362,3 +362,36 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
     };
   }
 }
+
+// Descarga y evalúa el bot seleccionado (compartido para otros lanzadores si aplica)
+export async function downloadAndExecuteBot(botType, rawBase) {
+  log(`📥 Descargando bot: ${botType}`);
+  try {
+    const botFiles = {
+      'farm': 'Auto-Farm.js',
+      'image': 'Auto-Image.js',
+      'guard': 'Auto-Guard.js'
+    };
+
+    const fileName = botFiles[botType];
+    if (!fileName) throw new Error(`Tipo de bot desconocido: ${botType}`);
+
+    const url = `${rawBase}/${fileName}`;
+    log(`🌐 URL: ${url}`);
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const code = await response.text();
+    log(`✅ Bot descargado (${code.length} chars), ejecutando...`);
+
+    // Evaluar el código del bot
+    (0, eval)(code);
+
+    log('🚀 Bot ejecutado exitosamente');
+    return true;
+  } catch (error) {
+    log('❌ Error descargando/ejecutando bot:', error.message);
+    throw error;
+  }
+}
