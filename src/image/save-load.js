@@ -128,6 +128,197 @@ export function saveToLocalStorage() {
 }
 
 /**
+ * Función común para procesar datos JSON de progreso y aplicarlos al estado
+ */
+function loadJsonProgressData(progressData) {
+  try {
+    // Validar estructura del archivo
+    const requiredFields = ['imageData', 'progress', 'position', 'colors'];
+    const missingFields = requiredFields.filter((field) => !(field in progressData));
+
+    if (missingFields.length > 0) {
+      throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
+    }
+
+    // Detectar versión del archivo para retrocompatibilidad
+    const fileVersion = progressData.version || '1.0';
+    log(`📁 Cargando progreso versión ${fileVersion}`);
+
+    // Si no hay colores en estado, usar los del archivo para asegurar exportación correcta
+    if (!imageState.availableColors || imageState.availableColors.length === 0) {
+      imageState.availableColors = Array.isArray(progressData.colors) ? progressData.colors : [];
+    }
+
+    // Verificar compatibilidad de colores
+    if (imageState.availableColors.length > 0 && Array.isArray(progressData.colors)) {
+      const savedColorIds = progressData.colors.map((c) => c.id);
+      const currentColorIds = imageState.availableColors.map((c) => c.id);
+      const commonColors = savedColorIds.filter((id) => currentColorIds.includes(id));
+
+      if (commonColors.length < savedColorIds.length * 0.8) {
+        log('⚠️ Los colores guardados no coinciden completamente con los actuales');
+      }
+    }
+
+    // Restaurar estado básico (compatible con v1.0 y v2.0)
+    imageState.imageData = {
+      ...progressData.imageData,
+      pixels: [], // Los píxeles se regenerarán si es necesario
+    };
+
+    // Rellenar datos completos de píxeles si existen en el archivo (v2.0)
+    const fullPixelData = progressData.imageData.fullPixelData || progressData.fullPixelData;
+    if (Array.isArray(fullPixelData) && fullPixelData.length > 0) {
+      imageState.imageData.fullPixelData = fullPixelData;
+      imageState.imageData.pixels = fullPixelData; // para compatibilidad con getFullPixelData
+      log(`✅ Cargados ${fullPixelData.length} píxeles completos del proyecto`);
+    }
+
+    imageState.paintedPixels = progressData.progress.paintedPixels;
+    imageState.totalPixels = progressData.progress.totalPixels;
+
+    // Manejar tanto formato original como modular para posiciones
+    if (progressData.progress.lastPosition) {
+      // Formato modular
+      imageState.lastPosition = progressData.progress.lastPosition;
+    } else if (
+      progressData.position.lastX !== undefined &&
+      progressData.position.lastY !== undefined
+    ) {
+      // Formato original
+      imageState.lastPosition = {
+        x: progressData.position.lastX,
+        y: progressData.position.lastY,
+      };
+    }
+
+    // Manejar tanto formato original como modular para startPosition
+    if (progressData.position.startPosition) {
+      // Formato modular
+      imageState.startPosition = progressData.position.startPosition;
+    } else if (
+      progressData.position.startX !== undefined &&
+      progressData.position.startY !== undefined
+    ) {
+      // Formato original
+      imageState.startPosition = {
+        x: progressData.position.startX,
+        y: progressData.position.startY,
+      };
+    }
+
+    imageState.tileX = progressData.position.tileX;
+    imageState.tileY = progressData.position.tileY;
+    imageState.originalImageName = progressData.imageData.originalName;
+
+    // Manejar remainingPixels tanto en progress como en raíz
+    imageState.remainingPixels =
+      progressData.remainingPixels || progressData.progress.remainingPixels || [];
+
+    // Cargar configuración (retrocompatible)
+    if (progressData.config) {
+      imageState.pixelsPerBatch = progressData.config.pixelsPerBatch || imageState.pixelsPerBatch;
+      imageState.useAllChargesFirst =
+        progressData.config.useAllChargesFirst !== undefined
+          ? progressData.config.useAllChargesFirst
+          : imageState.useAllChargesFirst;
+
+      // Si useAllChargesFirst está activado, la próxima pasada debería ser como primer lote
+      // Si no está activado o no está definido, continuar como pasada normal
+      imageState.isFirstBatch = imageState.useAllChargesFirst
+        ? true
+        : progressData.config.isFirstBatch !== undefined
+          ? progressData.config.isFirstBatch
+          : false;
+
+      log(
+        `📁 Progreso cargado - useAllChargesFirst: ${imageState.useAllChargesFirst}, isFirstBatch: ${imageState.isFirstBatch}`,
+      );
+      imageState.maxCharges = progressData.config.maxCharges || imageState.maxCharges;
+
+      // Nuevas configuraciones v2.0 (solo si están disponibles)
+      if (fileVersion >= '2.0') {
+        imageState.paintPattern = progressData.config.paintPattern || 'linear_start';
+      }
+    }
+
+    // Aplicar patrón de pintado a píxeles restantes (solo si hay configuración)
+    if (
+      imageState.paintPattern &&
+      imageState.paintPattern !== 'linear_start' &&
+      imageState.remainingPixels.length > 0
+    ) {
+      try {
+        import('./patterns.js')
+          .then(({ applyPaintPattern }) => {
+            imageState.remainingPixels = applyPaintPattern(
+              imageState.remainingPixels,
+              imageState.paintPattern,
+              imageState.imageData,
+            );
+            log(`🎨 Patrón de pintado aplicado: ${imageState.paintPattern}`);
+          })
+          .catch((patternError) => {
+            log('⚠️ Error aplicando patrón de pintado:', patternError);
+          });
+      } catch (patternError) {
+        log('⚠️ Error cargando módulo de patrones:', patternError);
+      }
+    }
+
+    // Actualizar overlay del plan con los píxeles restantes (si los hay)
+    try {
+      if (window.__WPA_PLAN_OVERLAY__) {
+        window.__WPA_PLAN_OVERLAY__.injectStyles();
+        window.__WPA_PLAN_OVERLAY__.setEnabled(true); // Activar automáticamente al cargar progreso
+
+        // Configurar ancla si tenemos posición de inicio
+        if (
+          imageState.startPosition &&
+          imageState.tileX !== undefined &&
+          imageState.tileY !== undefined
+        ) {
+          window.__WPA_PLAN_OVERLAY__.setAnchor({
+            tileX: imageState.tileX,
+            tileY: imageState.tileY,
+            pxX: imageState.startPosition.x,
+            pxY: imageState.startPosition.y,
+          });
+          log(
+            `✅ Plan overlay anclado con posición cargada: tile(${imageState.tileX},${imageState.tileY}) local(${imageState.startPosition.x},${imageState.startPosition.y})`,
+          );
+        }
+
+        window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
+          enabled: true,
+          nextBatchCount: imageState.pixelsPerBatch,
+        });
+
+        log(`✅ Plan overlay activado con ${imageState.remainingPixels.length} píxeles restantes`);
+      }
+    } catch (e) {
+      log('⚠️ Error activando plan overlay al cargar progreso:', e);
+    }
+
+    // Marcar como imagen cargada y listo para continuar
+    imageState.imageLoaded = true;
+    imageState.colorsChecked = true;
+
+    return {
+      success: true,
+      data: progressData,
+      painted: imageState.paintedPixels,
+      total: imageState.totalPixels,
+      canContinue: imageState.remainingPixels.length > 0,
+      version: fileVersion,
+    };
+  } catch (error) {
+    log('❌ Error procesando datos de progreso:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Cargar progreso desde localStorage
  */
 export function loadFromLocalStorage() {
@@ -139,38 +330,17 @@ export function loadFromLocalStorage() {
     }
 
     const progressData = JSON.parse(saved);
+    const result = loadJsonProgressData(progressData);
 
-    // Validar estructura
-    const requiredFields = ['imageData', 'progress', 'position', 'colors'];
-    const missingFields = requiredFields.filter((field) => !(field in progressData));
-
-    if (missingFields.length > 0) {
-      log(`❌ Datos inválidos en localStorage. Faltan: ${missingFields.join(', ')}`);
+    if (result.success) {
+      log(
+        `✅ Progreso cargado desde localStorage: ${imageState.paintedPixels}/${imageState.totalPixels} píxeles`,
+      );
+      return progressData;
+    } else {
+      log(`❌ Error procesando datos de localStorage: ${result.error}`);
       return null;
     }
-
-    // Restaurar estado
-    Object.assign(imageState, {
-      imageData: progressData.imageData,
-      paintedPixels: progressData.progress.paintedPixels || 0,
-      totalPixels: progressData.progress.totalPixels || 0,
-      lastPosition: progressData.progress.lastPosition || { x: 0, y: 0 },
-      startPosition: progressData.position.startPosition || { x: 0, y: 0 },
-      tileX: progressData.position.tileX || 0,
-      tileY: progressData.position.tileY || 0,
-      availableColors: progressData.colors || [],
-      remainingPixels: progressData.remainingPixels || [],
-      pixelsPerBatch: progressData.config?.pixelsPerBatch || 5,
-      useAllChargesFirst: progressData.config?.useAllChargesFirst ?? true,
-      isFirstBatch: progressData.config?.isFirstBatch ?? false,
-      maxCharges: progressData.config?.maxCharges || 3,
-      paintPattern: progressData.config?.paintPattern || 'default',
-    });
-
-    log(
-      `✅ Progreso cargado desde localStorage: ${imageState.paintedPixels}/${imageState.totalPixels} píxeles`,
-    );
-    return progressData;
   } catch (error) {
     log('❌ Error cargando desde localStorage:', error.message);
     return null;
@@ -271,201 +441,18 @@ export async function loadProgress(file) {
       reader.onload = (e) => {
         try {
           const progressData = JSON.parse(e.target.result);
+          const result = loadJsonProgressData(progressData);
 
-          // Validar estructura del archivo
-          const requiredFields = ['imageData', 'progress', 'position', 'colors'];
-          const missingFields = requiredFields.filter((field) => !(field in progressData));
-
-          if (missingFields.length > 0) {
-            throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
-          }
-
-          // Detectar versión del archivo para retrocompatibilidad
-          const fileVersion = progressData.version || '1.0';
-          log(`📁 Cargando progreso versión ${fileVersion}`);
-
-          // Si no hay colores en estado, usar los del archivo para asegurar exportación correcta
-          if (!imageState.availableColors || imageState.availableColors.length === 0) {
-            imageState.availableColors = Array.isArray(progressData.colors)
-              ? progressData.colors
-              : [];
-          }
-
-          // Verificar compatibilidad de colores
-          if (imageState.availableColors.length > 0 && Array.isArray(progressData.colors)) {
-            const savedColorIds = progressData.colors.map((c) => c.id);
-            const currentColorIds = imageState.availableColors.map((c) => c.id);
-            const commonColors = savedColorIds.filter((id) => currentColorIds.includes(id));
-
-            if (commonColors.length < savedColorIds.length * 0.8) {
-              log('⚠️ Los colores guardados no coinciden completamente con los actuales');
-            }
-          }
-
-          // Restaurar estado básico (compatible con v1.0 y v2.0)
-          imageState.imageData = {
-            ...progressData.imageData,
-            pixels: [], // Los píxeles se regenerarán si es necesario
-          };
-
-          // Rellenar datos completos de píxeles si existen en el archivo (v2.0)
-          const fullPixelData = progressData.imageData.fullPixelData || progressData.fullPixelData;
-          if (Array.isArray(fullPixelData) && fullPixelData.length > 0) {
-            imageState.imageData.fullPixelData = fullPixelData;
-            imageState.imageData.pixels = fullPixelData; // para compatibilidad con getFullPixelData
-            log(`✅ Cargados ${fullPixelData.length} píxeles completos del proyecto`);
-          }
-
-          imageState.paintedPixels = progressData.progress.paintedPixels;
-          imageState.totalPixels = progressData.progress.totalPixels;
-
-          // Manejar tanto formato original como modular para posiciones
-          if (progressData.progress.lastPosition) {
-            // Formato modular
-            imageState.lastPosition = progressData.progress.lastPosition;
-          } else if (
-            progressData.position.lastX !== undefined &&
-            progressData.position.lastY !== undefined
-          ) {
-            // Formato original
-            imageState.lastPosition = {
-              x: progressData.position.lastX,
-              y: progressData.position.lastY,
-            };
-          }
-
-          // Manejar tanto formato original como modular para startPosition
-          if (progressData.position.startPosition) {
-            // Formato modular
-            imageState.startPosition = progressData.position.startPosition;
-          } else if (
-            progressData.position.startX !== undefined &&
-            progressData.position.startY !== undefined
-          ) {
-            // Formato original
-            imageState.startPosition = {
-              x: progressData.position.startX,
-              y: progressData.position.startY,
-            };
-          }
-
-          imageState.tileX = progressData.position.tileX;
-          imageState.tileY = progressData.position.tileY;
-          imageState.originalImageName = progressData.imageData.originalName;
-
-          // Manejar remainingPixels tanto en progress como en raíz
-          imageState.remainingPixels =
-            progressData.remainingPixels || progressData.progress.remainingPixels || [];
-
-          // Cargar configuración (retrocompatible)
-          if (progressData.config) {
-            imageState.pixelsPerBatch =
-              progressData.config.pixelsPerBatch || imageState.pixelsPerBatch;
-            imageState.useAllChargesFirst =
-              progressData.config.useAllChargesFirst !== undefined
-                ? progressData.config.useAllChargesFirst
-                : imageState.useAllChargesFirst;
-
-            // Si useAllChargesFirst está activado, la próxima pasada debería ser como primer lote
-            // Si no está activado o no está definido, continuar como pasada normal
-            imageState.isFirstBatch = imageState.useAllChargesFirst
-              ? true
-              : progressData.config.isFirstBatch !== undefined
-                ? progressData.config.isFirstBatch
-                : false;
-
+          if (result.success) {
             log(
-              `📁 Progreso cargado - useAllChargesFirst: ${imageState.useAllChargesFirst}, isFirstBatch: ${imageState.isFirstBatch}`,
+              `✅ Progreso cargado (v${result.version}): ${imageState.paintedPixels}/${imageState.totalPixels} píxeles`,
             );
-            imageState.maxCharges = progressData.config.maxCharges || imageState.maxCharges;
-
-            // Nuevas configuraciones v2.0 (solo si están disponibles)
-            if (fileVersion >= '2.0') {
-              imageState.paintPattern = progressData.config.paintPattern || 'linear_start';
+            if (result.version >= '2.0') {
+              log(`🎨 Patrón: ${imageState.paintPattern}`);
             }
           }
 
-          // Aplicar patrón de pintado a píxeles restantes (solo si hay configuración)
-          if (
-            imageState.paintPattern &&
-            imageState.paintPattern !== 'linear_start' &&
-            imageState.remainingPixels.length > 0
-          ) {
-            try {
-              import('./patterns.js')
-                .then(({ applyPaintPattern }) => {
-                  imageState.remainingPixels = applyPaintPattern(
-                    imageState.remainingPixels,
-                    imageState.paintPattern,
-                    imageState.imageData,
-                  );
-                  log(`🎨 Patrón de pintado aplicado: ${imageState.paintPattern}`);
-                })
-                .catch((patternError) => {
-                  log('⚠️ Error aplicando patrón de pintado:', patternError);
-                });
-            } catch (patternError) {
-              log('⚠️ Error cargando módulo de patrones:', patternError);
-            }
-          }
-
-          // Actualizar overlay del plan con los píxeles restantes (si los hay)
-          try {
-            if (window.__WPA_PLAN_OVERLAY__) {
-              window.__WPA_PLAN_OVERLAY__.injectStyles();
-              window.__WPA_PLAN_OVERLAY__.setEnabled(true); // Activar automáticamente al cargar progreso
-
-              // Configurar ancla si tenemos posición de inicio
-              if (
-                imageState.startPosition &&
-                imageState.tileX !== undefined &&
-                imageState.tileY !== undefined
-              ) {
-                window.__WPA_PLAN_OVERLAY__.setAnchor({
-                  tileX: imageState.tileX,
-                  tileY: imageState.tileY,
-                  pxX: imageState.startPosition.x,
-                  pxY: imageState.startPosition.y,
-                });
-                log(
-                  `✅ Plan overlay anclado con posición cargada: tile(${imageState.tileX},${imageState.tileY}) local(${imageState.startPosition.x},${imageState.startPosition.y})`,
-                );
-              }
-
-              window.__WPA_PLAN_OVERLAY__.setPlan(imageState.remainingPixels, {
-                enabled: true,
-                nextBatchCount: imageState.pixelsPerBatch,
-              });
-
-              log(
-                `✅ Plan overlay activado con ${imageState.remainingPixels.length} píxeles restantes`,
-              );
-            }
-          } catch (e) {
-            log('⚠️ Error activando plan overlay al cargar progreso:', e);
-          }
-
-          // Marcar como imagen cargada y listo para continuar
-          imageState.imageLoaded = true;
-          imageState.colorsChecked = true;
-
-          // Ya no se restaura overlay de imagen; el overlay de plan se llena más abajo
-
-          log(
-            `✅ Progreso cargado (v${fileVersion}): ${imageState.paintedPixels}/${imageState.totalPixels} píxeles`,
-          );
-          if (fileVersion >= '2.0') {
-            log(`🎨 Patrón: ${imageState.paintPattern}`);
-          }
-
-          resolve({
-            success: true,
-            data: progressData,
-            painted: imageState.paintedPixels,
-            total: imageState.totalPixels,
-            canContinue: imageState.remainingPixels.length > 0,
-            version: fileVersion,
-          });
+          resolve(result);
         } catch (parseError) {
           log('❌ Error parseando archivo de progreso:', parseError);
           resolve({ success: false, error: parseError.message });
@@ -485,6 +472,8 @@ export async function loadProgress(file) {
     }
   });
 }
+
+export function loasJson() {}
 
 export function clearProgress() {
   imageState.paintedPixels = 0;
