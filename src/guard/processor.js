@@ -153,13 +153,13 @@ function xyzToLab(x, y, z) {
   return { l, a, b };
 }
 
-function rgbToLab(r, g, b) {
+export function rgbToLab(r, g, b) {
   const xyz = rgbToXyz(r, g, b);
   return xyzToLab(xyz.x, xyz.y, xyz.z);
 }
 
 // Función para calcular diferencia Delta E en espacio LAB
-function calculateDeltaE(lab1, lab2) {
+export function calculateDeltaE(lab1, lab2) {
   const deltaL = lab1.l - lab2.l;
   const deltaA = lab1.a - lab2.a;
   const deltaB = lab1.b - lab2.b;

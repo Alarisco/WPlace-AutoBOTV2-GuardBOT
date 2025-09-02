@@ -1,7 +1,7 @@
 // Ventana de análisis para superponer JSON sobre canvas actual
 import { log } from '../core/logger.js';
 import { guardState } from './config.js';
-import { analyzeAreaPixels } from './processor.js';
+import { analyzeAreaPixels, rgbToLab, calculateDeltaE } from './processor.js';
 import { registerWindow, unregisterWindow } from '../core/window-manager.js';
 import { t } from '../locales/index.js';
 
@@ -227,12 +227,7 @@ export function createAnalysisWindow() {
         <span id="zoomValue" style="font-size: 12px; color: #cbd5e0;">100%</span>
       </div>
       <div style="margin-bottom: 15px;">
-        <label style="display: block; margin-bottom: 5px; font-size: 14px;">🎚️ Opacidad:</label>
-        <input type="range" id="opacitySlider" min="0.1" max="1" step="0.1" value="0.8" style="width: 100%;">
-        <span id="opacityValue" style="font-size: 12px; color: #cbd5e0;">80%</span>
-      </div>
-      <div style="margin-bottom: 15px;">
-        ${createToggle('autoRefresh', `🔄 ${t('guard.autoRefresh')}`, false)}
+        ${createToggle('autoRefresh', `🔄 ${t('guard.autoRefresh')}`, true)}
         <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
           <label style="font-size: 12px; color: #cbd5e0;">Intervalo (s):</label>
           <input type="number" id="refreshInterval" min="1" max="60" value="5" style="width: 60px; padding: 4px; background: #4b5563; color: white; border: 1px solid #6b7280; border-radius: 4px;">
@@ -276,7 +271,7 @@ export function createAnalysisWindow() {
     display: block;
     margin: 0;
     border: 1px solid #333;
-    cursor: crosshair;
+    cursor: grab;
   `;
 
   // Handle de redimensionamiento
@@ -659,27 +654,18 @@ function renderVisualization(canvas, analysis) {
 function setupControls(controlPanel, canvas, analysis) {
   const zoomSlider = controlPanel.querySelector('#zoomSlider');
   const zoomValue = controlPanel.querySelector('#zoomValue');
-  const opacitySlider = controlPanel.querySelector('#opacitySlider');
-  const opacityValue = controlPanel.querySelector('#opacityValue');
   const refreshBtn = controlPanel.querySelector('#refreshAnalysis');
   const autoRefreshCheckbox = controlPanel.querySelector('#autoRefresh');
   const refreshIntervalInput = controlPanel.querySelector('#refreshInterval');
   const autoFitZoomBtn = controlPanel.querySelector('#autoFitZoom');
   const _repositionBtn = controlPanel.querySelector('#repositionArea');
   
-  // Control de zoom
+  // Control de zoom (slider)
   zoomSlider.addEventListener('input', (e) => {
     const zoom = parseFloat(e.target.value);
     zoomValue.textContent = `${Math.round(zoom * 100)}%`;
     canvas.style.transform = `scale(${zoom})`;
     canvas.style.transformOrigin = 'top left';
-  });
-  
-  // Control de opacidad
-  opacitySlider.addEventListener('input', (e) => {
-    const opacity = parseFloat(e.target.value);
-    opacityValue.textContent = `${Math.round(opacity * 100)}%`;
-    canvas.style.opacity = opacity;
   });
   
   // Auto-ajuste de zoom
@@ -705,37 +691,37 @@ function setupControls(controlPanel, canvas, analysis) {
   });
 
   // Auto-refresco
-   autoRefreshCheckbox.addEventListener('change', () => {
-     updateToggleState('autoRefresh', autoRefreshCheckbox.checked);
-     if (autoRefreshCheckbox.checked) {
-       const interval = parseInt(refreshIntervalInput.value) * 1000;
-       autoRefreshInterval = window.setInterval(async () => {
-         await refreshAnalysisData(canvas, controlPanel);
-       }, interval);
-       log(`🔄 ${t('guard.autoRefreshEnabled')} ${refreshIntervalInput.value} segundos`);
-     } else {
-       if (autoRefreshInterval) {
-         window.clearInterval(autoRefreshInterval);
-         autoRefreshInterval = null;
-       }
-       log(`🔄 ${t('guard.autoRefreshDisabled')}`);
-     }
-   });
+  autoRefreshCheckbox.addEventListener('change', () => {
+    updateToggleState('autoRefresh', autoRefreshCheckbox.checked);
+    if (autoRefreshCheckbox.checked) {
+      const interval = parseInt(refreshIntervalInput.value) * 1000;
+      autoRefreshInterval = window.setInterval(async () => {
+        await refreshAnalysisData(canvas, controlPanel);
+      }, interval);
+      log(`🔄 ${t('guard.autoRefreshEnabled')} ${refreshIntervalInput.value} segundos`);
+    } else {
+      if (autoRefreshInterval) {
+        window.clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+      }
+      log(`🔄 ${t('guard.autoRefreshDisabled')}`);
+    }
+  });
 
   // Cambio de intervalo
-   refreshIntervalInput.addEventListener('change', () => {
-     if (autoRefreshCheckbox.checked) {
-       // Reiniciar el intervalo con el nuevo valor
-       if (autoRefreshInterval) {
-         window.clearInterval(autoRefreshInterval);
-       }
-       const interval = parseInt(refreshIntervalInput.value) * 1000;
-       autoRefreshInterval = window.setInterval(async () => {
-         await refreshAnalysisData(canvas, controlPanel);
-       }, interval);
-       log(`🔄 ${t('guard.autoRefreshIntervalUpdated')} ${refreshIntervalInput.value} segundos`);
-     }
-   });
+  refreshIntervalInput.addEventListener('change', () => {
+    if (autoRefreshCheckbox.checked) {
+      // Reiniciar el intervalo con el nuevo valor
+      if (autoRefreshInterval) {
+        window.clearInterval(autoRefreshInterval);
+      }
+      const interval = parseInt(refreshIntervalInput.value) * 1000;
+      autoRefreshInterval = window.setInterval(async () => {
+        await refreshAnalysisData(canvas, controlPanel);
+      }, interval);
+      log(`🔄 ${t('guard.autoRefreshIntervalUpdated')} ${refreshIntervalInput.value} segundos`);
+    }
+  });
   
   // Botón de actualizar
   refreshBtn.addEventListener('click', async () => {
@@ -757,69 +743,100 @@ function setupControls(controlPanel, canvas, analysis) {
       
       // Preservar el zoom actual durante el refresco
       const currentZoom = parseFloat(zoomSlider.value);
-      const currentOpacity = parseFloat(opacitySlider.value);
       
       renderVisualization(canvas, analysis);
       
-      // Restaurar el zoom y opacidad después del renderizado
+      // Restaurar el zoom después del renderizado
       canvas.style.transform = `scale(${currentZoom})`;
       canvas.style.transformOrigin = 'top left';
-      canvas.style.opacity = currentOpacity;
       
       log(`👁️ ${t('guard.visualizationUpdated')}: ${id} = ${toggle.checked}`);
     });
   });
 
+  // Interacciones tipo mapa: zoom con rueda y arrastre para mover
+  const canvasArea = canvas.parentElement;
+  canvasArea.style.overflow = 'auto';
 
+  const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
+  canvasArea.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = 1.1;
+    const oldZoom = parseFloat(zoomSlider.value);
+    const newZoom = clamp(oldZoom * (e.deltaY < 0 ? factor : 1 / factor), 0.5, 5);
+
+    // Coordenadas del puntero relativas al contenido desplazable
+    const rect = canvasArea.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const contentX = canvasArea.scrollLeft + mouseX;
+    const contentY = canvasArea.scrollTop + mouseY;
+
+    // Aplicar zoom
+    zoomSlider.value = newZoom;
+    zoomValue.textContent = `${Math.round(newZoom * 100)}%`;
+    canvas.style.transform = `scale(${newZoom})`;
+    canvas.style.transformOrigin = 'top left';
+
+    // Ajustar scroll para mantener el punto bajo el cursor
+    const scaleRatio = newZoom / oldZoom;
+    canvasArea.scrollLeft = contentX * scaleRatio - mouseX;
+    canvasArea.scrollTop = contentY * scaleRatio - mouseY;
+  }, { passive: false });
+
+  let isPanning = false;
+  let startX = 0;
+  let startY = 0;
+  let scrollLeftStart = 0;
+  let scrollTopStart = 0;
+
+  canvasArea.addEventListener('mousedown', (e) => {
+    // Botón izquierdo para arrastrar
+    if (e.button !== 0) return;
+    isPanning = true;
+    canvasArea.style.cursor = 'grabbing';
+    const rect = canvasArea.getBoundingClientRect();
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+    scrollLeftStart = canvasArea.scrollLeft;
+    scrollTopStart = canvasArea.scrollTop;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isPanning) return;
+    const rect = canvasArea.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const dx = x - startX;
+    const dy = y - startY;
+    canvasArea.scrollLeft = scrollLeftStart - dx;
+    canvasArea.scrollTop = scrollTopStart - dy;
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!isPanning) return;
+    isPanning = false;
+    canvasArea.style.cursor = 'grab';
+  });
 
   // Auto-ajuste inicial del zoom
   setTimeout(() => {
     autoFitZoomBtn.click();
   }, 100);
+
+  // Activar Auto-refresco por defecto si está marcado
+  updateToggleState('autoRefresh', autoRefreshCheckbox.checked);
+  if (autoRefreshCheckbox.checked) {
+    const interval = parseInt(refreshIntervalInput.value) * 1000;
+    autoRefreshInterval = window.setInterval(async () => {
+      await refreshAnalysisData(canvas, controlPanel);
+    }, interval);
+  }
 }
 
 
 
-// Funciones auxiliares para LAB (duplicadas desde processor.js para independencia)
-function rgbToLab(r, g, b) {
-  // Normalizar valores RGB a 0-1
-  r = r / 255;
-  g = g / 255;
-  b = b / 255;
-
-  // Aplicar corrección gamma
-  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
-  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
-  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
-
-  // Convertir a XYZ usando matriz sRGB
-  const x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
-  const y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
-  const z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
-
-  // Usar iluminante D65
-  const xn = 0.95047;
-  const yn = 1.00000;
-  const zn = 1.08883;
-
-  const fx = (x / xn) > 0.008856 ? Math.pow(x / xn, 1/3) : (7.787 * (x / xn) + 16/116);
-  const fy = (y / yn) > 0.008856 ? Math.pow(y / yn, 1/3) : (7.787 * (y / yn) + 16/116);
-  const fz = (z / zn) > 0.008856 ? Math.pow(z / zn, 1/3) : (7.787 * (z / zn) + 16/116);
-
-  const l = 116 * fy - 16;
-  const a = 500 * (fx - fy);
-  const bLab = 200 * (fy - fz);
-
-  return { l, a, b: bLab };
-}
-
-function calculateDeltaE(lab1, lab2) {
-  const deltaL = lab1.l - lab2.l;
-  const deltaA = lab1.a - lab2.a;
-  const deltaB = lab1.b - lab2.b;
-  
-  return Math.sqrt(deltaL * deltaL + deltaA * deltaA + deltaB * deltaB);
-}
 
 // Función para actualizar las coordenadas mostradas
 function updateCoordinatesDisplay(controlPanel) {
@@ -975,28 +992,28 @@ function captureSnapshot(canvas, controlPanel) {
     // Crear un canvas temporal para capturar la imagen sin transformaciones
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
-    
+
     // Configurar el canvas temporal con las mismas dimensiones
     tempCanvas.width = canvas.width;
     tempCanvas.height = canvas.height;
-    
+
     // Copiar el contenido del canvas original
     tempCtx.drawImage(canvas, 0, 0);
-    
+
     // Convertir a blob y descargar
-     tempCanvas.toBlob((blob) => {
-       const link = document.createElement('a');
-       // eslint-disable-next-line no-undef
-       link.href = URL.createObjectURL(blob);
-      
+    tempCanvas.toBlob((blob) => {
+      const link = document.createElement('a');
+      // eslint-disable-next-line no-undef
+      link.href = URL.createObjectURL(blob);
+
       // Crear nombre de archivo con timestamp y precisión
       const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
       link.download = `snapshot-${timestamp}-precision-${accuracy}%.png`;
-      
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       log(`📸 Snapshot capturado: precisión ${accuracy}%`);
     }, 'image/png');
     
