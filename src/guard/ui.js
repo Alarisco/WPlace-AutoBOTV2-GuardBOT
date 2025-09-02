@@ -1,6 +1,8 @@
 import { hasProgress } from './save-load.js';
 import { createConfigWindow } from './config-window.js';
 import { registerWindow, unregisterWindow } from '../core/window-manager.js';
+import { guardState } from './config.js';
+import { log } from '../core/logger.js';
 
 export function createGuardUI(texts) {
   // Crear contenedor principal
@@ -34,7 +36,7 @@ export function createGuardUI(texts) {
       </div>
       <button id="minimizeBtn" style="background: none; border: none; color: #eee; cursor: pointer; opacity: 0.7; padding: 5px; transition: opacity 0.2s ease;">➖</button>
     </div>
-    
+
     <div style="padding: 15px; flex: 1; overflow-y: auto;">
       <!-- Estado de inicialización -->
       <div id="initSection">
@@ -42,7 +44,7 @@ export function createGuardUI(texts) {
           🤖 ${texts.initBot}
         </button>
       </div>
-      
+
       <!-- Selección de área -->
       <div id="areaSection" style="display: none;">
         <!-- Botones de área - en dos columnas con transición -->
@@ -54,7 +56,7 @@ export function createGuardUI(texts) {
             📁 Cargar Archivo
           </button>
         </div>
-        
+
         <!-- Fila 1: Iniciar / Detener -->
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
           <button id="startBtn" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; opacity: 0.5;" disabled>
@@ -72,6 +74,16 @@ export function createGuardUI(texts) {
           </button>
           <button id="saveBtn" style="flex: 1; padding: 8px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all 0.3s ease; opacity: 0.5;" disabled>
             💾 ${texts.save || 'Guardar'}
+          </button>
+        </div>
+
+        <!-- Fila 2.5: LocalStorage -->
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+          <button id="loadStorageBtn" style="flex: 1; padding: 8px; background: #374151; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
+            📂 Cargar del navegador
+          </button>
+          <button id="clearStorageBtn" style="flex: 1; padding: 8px; background: #dc2626; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
+            🗑️ Borrar del navegador
           </button>
         </div>
 
@@ -107,7 +119,7 @@ export function createGuardUI(texts) {
 
 
       </div>
-      
+
       <!-- Estadísticas -->
       <div id="statsSection" style="background: #2d3748; padding: 10px; border-radius: 6px; margin-top: 10px;">
         <div style="font-size: 13px; margin-bottom: 5px;">
@@ -125,7 +137,7 @@ export function createGuardUI(texts) {
         <div id="countdownSection" style="font-size: 13px; margin-bottom: 5px; display: none;">
           <span>⏰ Próximo lote en: </span><span id="countdownTimer">--</span>
         </div>
-        
+
         <!-- Estadísticas de Análisis -->
         <hr style="border: none; border-top: 1px solid #4a5568; margin: 10px 0;">
         <div style="font-size: 13px; margin-bottom: 5px;">
@@ -141,15 +153,15 @@ export function createGuardUI(texts) {
           <span style="color: #8b5cf6;">🎯 Precisión: </span><span id="accuracyCount">-</span>
         </div>
       </div>
-      
+
       </div>
-      
+
       <!-- Estado -->
       <div id="statusBar" style="background: #2d3748; padding: 8px; border-radius: 4px; text-align: center; font-size: 13px; margin-top: 10px;">
         ⏳ ${texts.waitingInit}
       </div>
      </div>
-     
+
      <!-- Indicador de redimensionamiento -->
      <div style="
        position: absolute;
@@ -193,6 +205,8 @@ export function createGuardUI(texts) {
     logWindowBtn: container.querySelector('#logWindowBtn'),
     configBtn: container.querySelector('#configBtn'),
     repositionBtn: container.querySelector('#repositionBtn'),
+    loadStorageBtn: container.querySelector('#loadStorageBtn'),
+    clearStorageBtn: container.querySelector('#clearStorageBtn'),
     minimizeBtn: container.querySelector('#minimizeBtn'),
     initSection: container.querySelector('#initSection'),
     areaSection: container.querySelector('#areaSection'),
@@ -209,21 +223,21 @@ export function createGuardUI(texts) {
     statusBar: container.querySelector('#statusBar'),
     areaFileInput: areaFileInput,
     saveBtn: container.querySelector('#saveBtn'),
-  analyzeBtn: container.querySelector('#analyzeBtn'),
-  areaActionsRow: container.querySelector('#areaActionsRow')
+    analyzeBtn: container.querySelector('#analyzeBtn'),
+    areaActionsRow: container.querySelector('#areaActionsRow'),
   };
 
   // API de la UI
   const ui = {
     elements,
-    
+
     updateStatus: (message, type = 'info') => {
       elements.statusBar.textContent = message;
       const colors = {
         info: '#60a5fa',
         success: '#10b981',
         warning: '#f59e0b',
-        error: '#ef4444'
+        error: '#ef4444',
       };
       elements.statusBar.style.color = colors[type] || colors.info;
     },
@@ -253,22 +267,24 @@ export function createGuardUI(texts) {
         ui.showCountdown(false);
         return;
       }
-      
+
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
-      const timeStr = minutes > 0 
-        ? `${minutes}m ${remainingSeconds}s`
-        : `${remainingSeconds}s`;
-      
+      const timeStr = minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${remainingSeconds}s`;
+
       elements.countdownTimer.textContent = timeStr;
       ui.showCountdown(true);
     },
 
     updateAnalysisStats: (analysisStats) => {
-      if (analysisStats.correct !== undefined) elements.correctPixelsCount.textContent = analysisStats.correct;
-      if (analysisStats.incorrect !== undefined) elements.incorrectPixelsCount.textContent = analysisStats.incorrect;
-      if (analysisStats.missing !== undefined) elements.missingPixelsCount.textContent = analysisStats.missing;
-      if (analysisStats.accuracy !== undefined) elements.accuracyCount.textContent = `${analysisStats.accuracy}%`;
+      if (analysisStats.correct !== undefined)
+        elements.correctPixelsCount.textContent = analysisStats.correct;
+      if (analysisStats.incorrect !== undefined)
+        elements.incorrectPixelsCount.textContent = analysisStats.incorrect;
+      if (analysisStats.missing !== undefined)
+        elements.missingPixelsCount.textContent = analysisStats.missing;
+      if (analysisStats.accuracy !== undefined)
+        elements.accuracyCount.textContent = `${analysisStats.accuracy}%`;
     },
 
     showAreaSection: () => {
@@ -293,7 +309,7 @@ export function createGuardUI(texts) {
       elements.startBtn.disabled = false;
       elements.startBtn.style.opacity = '1';
       elements.startBtn.style.cursor = 'pointer';
-      
+
       // Habilitar otros botones cuando hay área seleccionada
       ui.updateButtonsState();
     },
@@ -302,7 +318,7 @@ export function createGuardUI(texts) {
       // El botón de reposicionamiento solo está disponible si hay progreso (área + píxeles)
       const hasProgressData = hasProgress();
       elements.repositionBtn.disabled = !hasProgressData;
-      
+
       if (hasProgressData) {
         elements.repositionBtn.style.opacity = '1';
         elements.repositionBtn.style.cursor = 'pointer';
@@ -325,7 +341,7 @@ export function createGuardUI(texts) {
     updateButtonsState: () => {
       // Verificar si hay área seleccionada o archivo cargado
       const hasArea = hasProgress() || (window.guardState && window.guardState.protectionArea);
-      
+
       // Actualizar botón de análisis
       elements.analyzeBtn.disabled = !hasArea;
       if (hasArea) {
@@ -335,7 +351,7 @@ export function createGuardUI(texts) {
         elements.analyzeBtn.style.opacity = '0.5';
         elements.analyzeBtn.style.cursor = 'not-allowed';
       }
-      
+
       // Actualizar botón de vigía
       elements.watchBtn.disabled = !hasArea;
       if (hasArea) {
@@ -345,7 +361,7 @@ export function createGuardUI(texts) {
         elements.watchBtn.style.opacity = '0.5';
         elements.watchBtn.style.cursor = 'not-allowed';
       }
-      
+
       // Actualizar botón de guardar
       elements.saveBtn.disabled = !hasArea;
       if (hasArea) {
@@ -355,7 +371,7 @@ export function createGuardUI(texts) {
         elements.saveBtn.style.opacity = '0.5';
         elements.saveBtn.style.cursor = 'not-allowed';
       }
-      
+
       // Actualizar botón de reposicionamiento
       ui.updateRepositionBtn();
     },
@@ -366,12 +382,12 @@ export function createGuardUI(texts) {
         elements.startBtn.disabled = true;
         elements.startBtn.style.opacity = '0.5';
         elements.startBtn.style.cursor = 'not-allowed';
-        
+
         // Habilitar botón de detener con transición suave
         elements.stopBtn.disabled = false;
         elements.stopBtn.style.opacity = '1';
         elements.stopBtn.style.cursor = 'pointer';
-        
+
         elements.selectAreaBtn.disabled = true;
         // Deshabilitar reposicionamiento mientras está corriendo
         elements.repositionBtn.disabled = true;
@@ -379,17 +395,19 @@ export function createGuardUI(texts) {
         if (elements.areaActionsRow) {
           elements.areaActionsRow.style.maxHeight = '0px';
           elements.areaActionsRow.style.opacity = '0';
-          setTimeout(() => { elements.areaActionsRow.style.display = 'none'; }, 300);
+          setTimeout(() => {
+            elements.areaActionsRow.style.display = 'none';
+          }, 300);
         }
       } else {
         // Deshabilitar botón de detener con transición suave
         elements.stopBtn.disabled = true;
         elements.stopBtn.style.opacity = '0.5';
         elements.stopBtn.style.cursor = 'not-allowed';
-        
+
         // Habilitar botón de iniciar solo si hay área seleccionada
         ui.updateStartButtonState();
-        
+
         elements.selectAreaBtn.disabled = false;
         // Actualizar estado de todos los botones
         ui.updateButtonsState();
@@ -403,13 +421,17 @@ export function createGuardUI(texts) {
           });
         }
       }
-
     },
 
     updateCoordinates: (coords) => {
       // Las coordenadas ahora se muestran en analysis-window.js
       // Solo actualizamos el estado de los botones
-      if (coords.x1 !== undefined && coords.y1 !== undefined && coords.x2 !== undefined && coords.y2 !== undefined) {
+      if (
+        coords.x1 !== undefined &&
+        coords.y1 !== undefined &&
+        coords.x2 !== undefined &&
+        coords.y2 !== undefined
+      ) {
         // Habilitar botón de iniciar cuando hay área seleccionada
         ui.updateStartButtonState();
         // Actualizar estado de todos los botones
@@ -420,12 +442,12 @@ export function createGuardUI(texts) {
     updateStartButtonState: () => {
       // Verificar si hay área seleccionada o archivo cargado
       const hasArea = hasProgress() || (window.guardState && window.guardState.protectionArea);
-      
+
       if (hasArea && !elements.startBtn.disabled) {
         // Ya está habilitado, no hacer nada
         return;
       }
-      
+
       if (hasArea) {
         // Habilitar botón de iniciar con transición suave
         elements.startBtn.disabled = false;
@@ -444,7 +466,7 @@ export function createGuardUI(texts) {
       container.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
       container.style.opacity = '0';
       container.style.transform = 'scale(0.95) translateY(-20px)';
-      
+
       // Completar el cierre después de la transición
       setTimeout(() => {
         // Desregistrar ventana del gestor
@@ -452,7 +474,7 @@ export function createGuardUI(texts) {
         container.remove();
         areaFileInput.remove();
       }, 300);
-    }
+    },
   };
 
   // Event listener para botón de minimizar
@@ -460,34 +482,34 @@ export function createGuardUI(texts) {
     const content = container.querySelector('div[style*="padding: 15px"]');
     const statsSection = container.querySelector('#statsSection');
     const statusBar = container.querySelector('#statusBar');
-    
+
     if (content.style.display === 'none') {
       // Restaurar ventana sin transición
       content.style.display = 'block';
-      
+
       if (statsSection) {
         statsSection.style.display = 'block';
       }
-      
+
       if (statusBar) {
         statusBar.style.display = 'block';
       }
-      
+
       elements.minimizeBtn.textContent = '➖';
       container.style.height = 'auto';
       container.style.minHeight = '200px';
     } else {
       // Minimizar ventana sin transición
       content.style.display = 'none';
-      
+
       if (statsSection) {
         statsSection.style.display = 'none';
       }
-      
+
       if (statusBar) {
         statusBar.style.display = 'none';
       }
-      
+
       elements.minimizeBtn.textContent = '🔼';
       container.style.height = 'auto';
       container.style.minHeight = 'auto';
@@ -501,7 +523,7 @@ export function createGuardUI(texts) {
     setTimeout(() => {
       elements.configBtn.style.transform = 'scale(1)';
     }, 150);
-    
+
     createConfigWindow();
   });
 
@@ -512,9 +534,64 @@ export function createGuardUI(texts) {
     setTimeout(() => {
       elements.analyzeBtn.style.transform = 'scale(1)';
     }, 150);
-    
+
     const { createAnalysisWindow } = await import('./analysis-window.js');
     createAnalysisWindow();
+  });
+
+  // Event listener para cargar desde localStorage
+  elements.loadStorageBtn.addEventListener('click', async () => {
+    try {
+      const { loadFromLocalStorage } = await import('./save-load.js');
+
+      const result = loadFromLocalStorage();
+      if (result) {
+        log('✅ Progreso de Guard cargado desde navegador');
+
+        // Actualizar coordenadas en la interfaz
+        if (guardState.protectionArea) {
+          elements.x1Input.value = guardState.protectionArea.x1;
+          elements.y1Input.value = guardState.protectionArea.y1;
+          elements.x2Input.value = guardState.protectionArea.x2;
+          elements.y2Input.value = guardState.protectionArea.y2;
+        }
+
+        // Actualizar estado de la interfaz
+        ui.updateButtonsState();
+
+        // Mostrar mensaje de éxito
+        ui.updateStatus('📂 Progreso cargado desde el navegador', 'success');
+      } else {
+        ui.updateStatus('⚠️ No hay progreso guardado en el navegador', 'warning');
+      }
+    } catch (error) {
+      log('❌ Error cargando desde navegador:', error);
+      ui.updateStatus('❌ Error cargando desde el navegador', 'error');
+    }
+  });
+
+  // Event listener para limpiar localStorage
+  elements.clearStorageBtn.addEventListener('click', async () => {
+    try {
+      if (
+        window.confirm(
+          '¿Estás seguro de que quieres borrar el progreso guardado en el navegador? Esta acción no se puede deshacer.',
+        )
+      ) {
+        const { clearLocalStorage } = await import('./save-load.js');
+
+        const success = clearLocalStorage();
+        if (success) {
+          log('✅ Progreso de Guard eliminado del navegador');
+          ui.updateStatus('🗑️ Progreso eliminado del navegador', 'success');
+        } else {
+          ui.updateStatus('❌ Error eliminando progreso del navegador', 'error');
+        }
+      }
+    } catch (error) {
+      log('❌ Error eliminando progreso:', error);
+      ui.updateStatus('❌ Error eliminando progreso', 'error');
+    }
   });
 
   // Inicializar estado de todos los botones
@@ -537,7 +614,7 @@ export function showConfirmDialog(message, title, buttons = {}) {
     overlay.style.display = 'flex';
     overlay.style.alignItems = 'center';
     overlay.style.justifyContent = 'center';
-    
+
     const modal = document.createElement('div');
     modal.style.background = '#1a1a1a';
     modal.style.border = '2px solid #333';
@@ -548,7 +625,7 @@ export function showConfirmDialog(message, title, buttons = {}) {
     modal.style.maxWidth = '400px';
     modal.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
     modal.style.fontFamily = "'Segoe UI', Roboto, sans-serif";
-    
+
     modal.innerHTML = `
       <h3 style="margin: 0 0 15px 0; text-align: center; font-size: 18px;">${title}</h3>
       <p style="margin: 0 0 20px 0; text-align: center; line-height: 1.4;">${message}</p>
@@ -558,45 +635,45 @@ export function showConfirmDialog(message, title, buttons = {}) {
         ${buttons.cancel ? `<button class="cancel-btn" style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; min-width: 100px; background: #2d3748; color: white;">${buttons.cancel}</button>` : ''}
       </div>
     `;
-    
+
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
-    
+
     // Registrar modal para manejo de z-index
     registerWindow(modal);
-    
+
     // Event listeners
     const saveBtn = modal.querySelector('.save-btn');
     const discardBtn = modal.querySelector('.discard-btn');
     const cancelBtn = modal.querySelector('.cancel-btn');
-    
+
     const cleanup = () => {
       // Desregistrar modal del gestor
       unregisterWindow(modal);
       document.body.removeChild(overlay);
     };
-    
+
     if (saveBtn) {
       saveBtn.addEventListener('click', () => {
         cleanup();
         resolve('save');
       });
     }
-    
+
     if (discardBtn) {
       discardBtn.addEventListener('click', () => {
         cleanup();
         resolve('discard');
       });
     }
-    
+
     if (cancelBtn) {
       cancelBtn.addEventListener('click', () => {
         cleanup();
         resolve('cancel');
       });
     }
-    
+
     // Cerrar al hacer click fuera
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {

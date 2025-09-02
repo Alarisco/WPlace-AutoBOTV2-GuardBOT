@@ -1,46 +1,49 @@
 import { guardState } from './config.js';
 import { log } from '../core/logger.js';
 
+// Clave para localStorage del progreso de guard
+const GUARD_STORAGE_KEY = 'wplace-auto-guard-progress';
+
 // Función para dividir el área de protección en múltiples partes
 function splitProtectionArea(area, splitCount) {
   const { x1, y1, x2, y2 } = area;
   const width = x2 - x1;
   const height = y2 - y1;
   const areas = [];
-  
+
   if (splitCount <= 1) {
     return [area];
   }
-  
+
   // Determinar si dividir horizontal o verticalmente basado en las dimensiones
   const divideHorizontally = width >= height;
-  
+
   if (divideHorizontally) {
     const segmentWidth = Math.floor(width / splitCount);
     for (let i = 0; i < splitCount; i++) {
-      const startX = x1 + (i * segmentWidth);
+      const startX = x1 + i * segmentWidth;
       const endX = i === splitCount - 1 ? x2 : startX + segmentWidth;
       areas.push({
         x1: startX,
         y1: y1,
         x2: endX,
-        y2: y2
+        y2: y2,
       });
     }
   } else {
     const segmentHeight = Math.floor(height / splitCount);
     for (let i = 0; i < splitCount; i++) {
-      const startY = y1 + (i * segmentHeight);
+      const startY = y1 + i * segmentHeight;
       const endY = i === splitCount - 1 ? y2 : startY + segmentHeight;
       areas.push({
         x1: x1,
         y1: startY,
         x2: x2,
-        y2: endY
+        y2: endY,
       });
     }
   }
-  
+
   return areas;
 }
 
@@ -48,15 +51,128 @@ function splitProtectionArea(area, splitCount) {
 function getPixelsInArea(area, pixelsMap) {
   const pixels = [];
   const { x1, y1, x2, y2 } = area;
-  
+
   for (const [key, value] of pixelsMap.entries()) {
     const [x, y] = key.split(',').map(Number);
     if (x >= x1 && x <= x2 && y >= y1 && y <= y2) {
       pixels.push({ key, ...value });
     }
   }
-  
+
   return pixels;
+}
+
+/**
+ * Crear datos de progreso para guardar
+ */
+function createProgressData() {
+  if (!guardState.protectionArea || !guardState.originalPixels.size) {
+    return null;
+  }
+
+  // Convertir Map a Array para serialización
+  const originalPixels = Array.from(guardState.originalPixels.entries()).map(([key, value]) => ({
+    key,
+    ...value,
+  }));
+
+  return {
+    timestamp: Date.now(),
+    version: '2.0',
+    protectionArea: { ...guardState.protectionArea },
+    originalPixels: originalPixels,
+    config: {
+      enabledProtection: guardState.enabledProtection,
+      intervalMs: guardState.intervalMs,
+      maxRetries: guardState.maxRetries,
+    },
+  };
+}
+
+/**
+ * Guardar progreso en localStorage
+ */
+export function saveToLocalStorage() {
+  try {
+    const progressData = createProgressData();
+    if (!progressData) {
+      log('⚠️ No hay datos para guardar en localStorage');
+      return false;
+    }
+
+    localStorage.setItem(GUARD_STORAGE_KEY, JSON.stringify(progressData));
+    log('💾 Progreso de Guard guardado automáticamente en localStorage');
+    return true;
+  } catch (error) {
+    log('❌ Error guardando Guard en localStorage:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Cargar progreso desde localStorage
+ */
+export function loadFromLocalStorage() {
+  try {
+    const saved = localStorage.getItem(GUARD_STORAGE_KEY);
+    if (!saved) {
+      log('📂 No hay progreso de Guard guardado en localStorage');
+      return null;
+    }
+
+    const progressData = JSON.parse(saved);
+
+    // Validar estructura
+    const requiredFields = ['protectionArea', 'originalPixels'];
+    const missingFields = requiredFields.filter((field) => !(field in progressData));
+
+    if (missingFields.length > 0) {
+      log(`❌ Datos inválidos de Guard en localStorage. Faltan: ${missingFields.join(', ')}`);
+      return null;
+    }
+
+    // Restaurar estado
+    guardState.protectionArea = progressData.protectionArea;
+
+    // Convertir Array de vuelta a Map
+    guardState.originalPixels.clear();
+    progressData.originalPixels.forEach((pixel) => {
+      guardState.originalPixels.set(pixel.key, {
+        x: pixel.x,
+        y: pixel.y,
+        color: pixel.color,
+      });
+    });
+
+    // Restaurar configuración si existe
+    if (progressData.config) {
+      guardState.enabledProtection = progressData.config.enabledProtection ?? true;
+      guardState.intervalMs = progressData.config.intervalMs ?? 5000;
+      guardState.maxRetries = progressData.config.maxRetries ?? 3;
+    }
+
+    log(
+      `✅ Progreso de Guard cargado desde localStorage: ${guardState.originalPixels.size} píxeles`,
+    );
+    return progressData;
+  } catch (error) {
+    log('❌ Error cargando Guard desde localStorage:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Limpiar progreso de localStorage
+ */
+export function clearLocalStorage() {
+  try {
+    localStorage.removeItem(GUARD_STORAGE_KEY);
+    log('🗑️ Progreso de Guard eliminado de localStorage');
+    return true;
+  } catch (error) {
+    log('❌ Error limpiando Guard de localStorage:', error.message);
+    return false;
+  }
 }
 
 export function saveProgress(filename = null, splitCount = null) {
@@ -64,56 +180,64 @@ export function saveProgress(filename = null, splitCount = null) {
     if (!guardState.protectionArea || !guardState.originalPixels.size) {
       throw new Error('No hay progreso para guardar');
     }
-    
-    const areas = splitCount && splitCount > 1 ? 
-      splitProtectionArea(guardState.protectionArea, splitCount) : 
-      [guardState.protectionArea];
-    
+
+    // Guardar también en localStorage automáticamente
+    saveToLocalStorage();
+
+    const areas =
+      splitCount && splitCount > 1
+        ? splitProtectionArea(guardState.protectionArea, splitCount)
+        : [guardState.protectionArea];
+
     const results = [];
-    
+
     for (let i = 0; i < areas.length; i++) {
       const area = areas[i];
       const areaPixels = getPixelsInArea(area, guardState.originalPixels);
-      
+
       const progressData = {
-        version: "1.0",
+        version: '1.0',
         timestamp: Date.now(),
         protectionData: {
           area: { ...area },
           protectedPixels: areaPixels.length,
-          splitInfo: splitCount > 1 ? { 
-            total: splitCount, 
-            current: i + 1,
-            originalArea: { ...guardState.protectionArea }
-          } : null
+          splitInfo:
+            splitCount > 1
+              ? {
+                  total: splitCount,
+                  current: i + 1,
+                  originalArea: { ...guardState.protectionArea },
+                }
+              : null,
         },
         progress: {
           totalRepaired: guardState.totalRepaired,
-          lastCheck: guardState.lastCheck
+          lastCheck: guardState.lastCheck,
         },
         config: {
           maxProtectionSize: 100000,
           pixelsPerBatch: guardState.pixelsPerBatch,
-          checkInterval: 10000
+          checkInterval: 10000,
         },
         // Filtrar solo los datos serializables de los colores (sin elementos DOM)
-        colors: guardState.availableColors.map(color => ({
+        colors: guardState.availableColors.map((color) => ({
           id: color.id,
           r: color.r,
           g: color.g,
-          b: color.b
+          b: color.b,
         })),
         // Convertir Map a array para serialización - solo píxeles del área
-        originalPixels: areaPixels
+        originalPixels: areaPixels,
       };
-      
+
       const dataStr = JSON.stringify(progressData, null, 2);
       const blob = new window.Blob([dataStr], { type: 'application/json' });
-      
+
       const suffix = splitCount > 1 ? `_parte${i + 1}de${splitCount}` : '';
-      const finalFilename = filename || 
+      const finalFilename =
+        filename ||
         `wplace_GUARD_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}${suffix}.json`;
-      
+
       // Crear y disparar descarga
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -123,17 +247,16 @@ export function saveProgress(filename = null, splitCount = null) {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       results.push({ success: true, filename: finalFilename });
       log(`✅ Progreso guardado: ${finalFilename}`);
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       filename: results.length === 1 ? results[0].filename : `${results.length} archivos`,
-      files: results
+      files: results,
     };
-    
   } catch (error) {
     log('❌ Error guardando progreso:', error);
     return { success: false, error: error.message };
@@ -144,36 +267,36 @@ export async function loadProgress(file) {
   try {
     const text = await file.text();
     const progressData = JSON.parse(text);
-    
+
     log('📁 Archivo cargado correctamente');
-    
+
     // Validar estructura del archivo
     const requiredFields = ['protectionData', 'originalPixels', 'colors'];
-    const missingFields = requiredFields.filter(field => !(field in progressData));
-    
+    const missingFields = requiredFields.filter((field) => !(field in progressData));
+
     if (missingFields.length > 0) {
       throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
     }
-    
+
     // Verificar compatibilidad de colores
     if (guardState.availableColors.length > 0) {
-      const savedColorIds = progressData.colors.map(c => c.id);
-      const currentColorIds = guardState.availableColors.map(c => c.id);
-      const commonColors = savedColorIds.filter(id => currentColorIds.includes(id));
-      
+      const savedColorIds = progressData.colors.map((c) => c.id);
+      const currentColorIds = guardState.availableColors.map((c) => c.id);
+      const commonColors = savedColorIds.filter((id) => currentColorIds.includes(id));
+
       if (commonColors.length < savedColorIds.length * 0.8) {
         log('⚠️ Los colores guardados no coinciden completamente con los actuales');
       }
     }
-    
+
     // Si no hay colores detectados aún, poblarlos desde el archivo
     if (!guardState.availableColors || guardState.availableColors.length === 0) {
       guardState.availableColors = Array.isArray(progressData.colors)
-        ? progressData.colors.map(c => ({ id: c.id, r: c.r, g: c.g, b: c.b }))
+        ? progressData.colors.map((c) => ({ id: c.id, r: c.r, g: c.g, b: c.b }))
         : [];
       log(`🎨 Colores cargados desde archivo: ${guardState.availableColors.length}`);
     }
-    
+
     // Restaurar estado
     if (progressData.protectionData) {
       guardState.protectionArea = progressData.protectionData.area;
@@ -184,14 +307,14 @@ export async function loadProgress(file) {
       guardState.protectionArea = progressData.protectionArea;
       guardState.isVirtualArea = false;
     }
-    
+
     // Convertir array de píxeles de vuelta a Map
     guardState.originalPixels = new Map();
     for (const pixelData of progressData.originalPixels) {
       const { key, ...pixelInfo } = pixelData;
       guardState.originalPixels.set(key, pixelInfo);
     }
-    
+
     // Restaurar estadísticas si están disponibles
     if (progressData.progress) {
       guardState.totalRepaired = progressData.progress.totalRepaired || 0;
@@ -201,36 +324,35 @@ export async function loadProgress(file) {
       guardState.totalRepaired = progressData.statistics.totalRepaired || 0;
       guardState.lastCheck = progressData.statistics.lastCheck || 0;
     }
-    
+
     // Limpiar cambios previos
     guardState.changes.clear();
-    
+
     // Actualizar UI con los datos cargados
     if (guardState.ui) {
       guardState.ui.updateCoordinates({
         x1: guardState.protectionArea.x1,
         y1: guardState.protectionArea.y1,
         x2: guardState.protectionArea.x2,
-        y2: guardState.protectionArea.y2
+        y2: guardState.protectionArea.y2,
       });
-      
+
       guardState.ui.updateProgress(guardState.originalPixels.size, 0);
       guardState.ui.updateStats({
-        repaired: guardState.totalRepaired
+        repaired: guardState.totalRepaired,
       });
-      
+
       guardState.ui.enableStartBtn();
     }
-    
+
     log(`✅ Progreso cargado: ${guardState.originalPixels.size} píxeles protegidos`);
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       data: progressData,
       protectedPixels: guardState.originalPixels.size,
-      area: guardState.protectionArea
+      area: guardState.protectionArea,
     };
-    
   } catch (error) {
     log('❌ Error cargando progreso:', error);
     return { success: false, error: error.message };
@@ -243,19 +365,18 @@ export function clearProgress() {
   guardState.changes.clear();
   guardState.totalRepaired = 0;
   guardState.lastCheck = 0;
-  
+
   if (guardState.ui) {
     guardState.ui.updateCoordinates({ x1: '', y1: '', x2: '', y2: '' });
     guardState.ui.updateProgress(0, 0);
     guardState.ui.updateStats({ repaired: 0 });
   }
-  
+
   log('🧹 Progreso limpiado');
 }
 
 export function hasProgress() {
-  return guardState.protectionArea && 
-         guardState.originalPixels.size > 0;
+  return guardState.protectionArea && guardState.originalPixels.size > 0;
 }
 
 export function getProgressInfo() {
@@ -263,14 +384,16 @@ export function getProgressInfo() {
     hasProgress: hasProgress(),
     protectedPixels: guardState.originalPixels.size,
     totalRepaired: guardState.totalRepaired,
-    area: guardState.protectionArea ? {
-      width: guardState.protectionArea.x2 - guardState.protectionArea.x1,
-      height: guardState.protectionArea.y2 - guardState.protectionArea.y1,
-      x1: guardState.protectionArea.x1,
-      y1: guardState.protectionArea.y1,
-      x2: guardState.protectionArea.x2,
-      y2: guardState.protectionArea.y2
-    } : null
+    area: guardState.protectionArea
+      ? {
+          width: guardState.protectionArea.x2 - guardState.protectionArea.x1,
+          height: guardState.protectionArea.y2 - guardState.protectionArea.y1,
+          x1: guardState.protectionArea.x1,
+          y1: guardState.protectionArea.y1,
+          x2: guardState.protectionArea.x2,
+          y2: guardState.protectionArea.y2,
+        }
+      : null,
   };
 }
 
