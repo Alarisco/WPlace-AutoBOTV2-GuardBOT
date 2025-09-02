@@ -243,19 +243,23 @@ async function executeTurnstile(sitekey, action = 'paint') {
 
   log('👀 Falling back to interactive Turnstile (visible).');
   
-  // Implementar sistema de reintentos para la ventana interactiva
-  const MAX_RETRIES = 3;
-  const TIMEOUTS = [10000, 15000, 30000]; // Timeouts progresivos: 5s, 10s, 30s
+  // Sistema de reintentos indefinidos con timeout inicial de 30s
+  const INITIAL_TIMEOUT = 30000; // 30 segundos para el primer intento
+  const RETRY_INTERVAL = 30000;  // 30 segundos entre reintentos
   
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const currentTimeout = TIMEOUTS[attempt - 1];
-    log(`🔄 Intento ${attempt}/${MAX_RETRIES} de resolución automática del CAPTCHA (timeout: ${currentTimeout/1000}s)...`);
+  let attempt = 1;
+  let hasShownFirstRetryNotification = false;
+  
+  while (true) {
+    const currentTimeout = attempt === 1 ? INITIAL_TIMEOUT : RETRY_INTERVAL;
+    log(`🔄 Intento ${attempt} de resolución del CAPTCHA (timeout: ${currentTimeout/1000}s)...`);
     
-    // Mostrar mensaje informativo al usuario sobre los reintentos
-    if (attempt === 2) {
-      log(`ℹ️ Primer intento falló. Reintentando automáticamente (2/${MAX_RETRIES})...`);
-    } else if (attempt === 3) {
-      log(`ℹ️ Segundo intento falló. Último reintento automático (3/${MAX_RETRIES})...`);
+    // Mostrar notificación al usuario a partir del primer reintento
+    if (attempt > 1 && !hasShownFirstRetryNotification) {
+      showUserNotification(`🔄 CAPTCHA: Reintentando automáticamente cada 30 segundos (intento ${attempt})`, 'info');
+      hasShownFirstRetryNotification = true;
+    } else if (attempt > 2) {
+      showUserNotification(`🔄 CAPTCHA: Intento ${attempt} - Continuando automáticamente`, 'info');
     }
     
     try {
@@ -267,28 +271,33 @@ async function executeTurnstile(sitekey, action = 'paint') {
         } catch { /* Ignore removal errors */ }
       }
       
-      // Crear nueva ventana interactiva con timeout progresivo
-      const token = await createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, attempt < MAX_RETRIES, currentTimeout);
+      // Crear nueva ventana interactiva
+      const token = await createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, true, currentTimeout);
       
       if (token && token.length > 20) {
         log(`✅ CAPTCHA resuelto exitosamente en el intento ${attempt}`);
+        if (attempt > 1) {
+          showUserNotification('✅ CAPTCHA resuelto exitosamente', 'success');
+        }
         return token;
       }
       
-      if (attempt < MAX_RETRIES) {
-        log(`⚠️ Intento ${attempt} falló, reintentando en 2 segundos...`);
-        await sleep(2000);
+      log(`⚠️ Intento ${attempt} falló, reintentando en 30 segundos...`);
+      if (attempt > 1) {
+        showUserNotification(`⚠️ Intento ${attempt} falló, reintentando en 30 segundos...`, 'info');
       }
+      await sleep(30000); // Esperar 30 segundos antes del siguiente intento
+      
     } catch (error) {
       log(`❌ Error en intento ${attempt}:`, error.message);
-      if (attempt < MAX_RETRIES) {
-        await sleep(2000);
+      if (attempt > 1) {
+        showUserNotification(`❌ Error en intento ${attempt}, reintentando en 30 segundos`, 'error');
       }
+      await sleep(30000);
     }
+    
+    attempt++;
   }
-  
-  log('🚨 Todos los intentos automáticos fallaron, mostrando ventana manual...');
-  return await createNewTurnstileWidgetInteractive(sitekey, action);
 }
 
 async function createNewTurnstileWidgetInvisible(sitekey, action) {
@@ -322,60 +331,6 @@ async function createNewTurnstileWidgetInvisible(sitekey, action) {
     } catch (e) {
       log('Invisible Turnstile failed:', e);
       resolve(null);
-    }
-  });
-}
-
-async function createNewTurnstileWidgetInteractive(sitekey, action) {
-  return new Promise((resolve, reject) => {
-    try {
-      if (_turnstileWidgetId && window.turnstile?.remove) {
-        try { window.turnstile.remove(_turnstileWidgetId); } catch { /* Ignore removal errors */ }
-      }
-
-      const overlay = ensureTurnstileOverlayContainer();
-      const host = overlay.querySelector('#turnstile-overlay-host');
-      host.innerHTML = '';
-
-      const timeoutId = setTimeout(() => {
-        log('⏰ Interactive Turnstile timed out');
-        resolve(null);
-      }, 120000); // give users up to 2 minutes
-
-      const widgetId = window.turnstile.render(host, {
-        sitekey,
-        action,
-        size: 'normal',
-        retry: 'auto',
-        'retry-interval': 8000,
-        callback: (token) => {
-          clearTimeout(timeoutId);
-          // Hide overlay after success
-          try { overlay.remove(); } catch { /* Ignore removal errors */ }
-          log('✅ Interactive Turnstile solved');
-          resolve(token);
-        },
-        'error-callback': (error) => {
-          log('🚨 Interactive Turnstile error:', error);
-        },
-        'timeout-callback': () => {
-          log('⏰ Turnstile timeout callback (interactive)');
-        },
-        'expired-callback': () => {
-          log('⚠️ Interactive Turnstile token expired');
-        }
-      });
-
-      _turnstileWidgetId = widgetId;
-      _lastSitekey = sitekey;
-      if (!widgetId) {
-        clearTimeout(timeoutId);
-        resolve(null);
-        return;
-      }
-    } catch (error) {
-      log('❌ Error creating interactive Turnstile widget:', error);
-      reject(error);
     }
   });
 }
@@ -512,6 +467,74 @@ function detectSitekey(fallback = '0x4AAAAAABpqJe8FO0N84q0F') {
 // Helper functions
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Función para mostrar notificaciones al usuario
+function showUserNotification(message, type = 'info') {
+  // Crear o reutilizar contenedor de notificaciones
+  let notificationContainer = document.getElementById('turnstile-notifications');
+  if (!notificationContainer) {
+    notificationContainer = document.createElement('div');
+    notificationContainer.id = 'turnstile-notifications';
+    notificationContainer.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 100001;
+      max-width: 350px;
+      pointer-events: none;
+    `;
+    document.body.appendChild(notificationContainer);
+  }
+
+  // Crear notificación
+  const notification = document.createElement('div');
+  const bgColor = type === 'error' ? 'rgba(220, 38, 38, 0.9)' : 
+                  type === 'success' ? 'rgba(34, 197, 94, 0.9)' : 
+                  'rgba(59, 130, 246, 0.9)';
+  
+  notification.style.cssText = `
+    background: ${bgColor};
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font: 500 14px/1.4 "Segoe UI", sans-serif;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.2);
+    opacity: 0;
+    transform: translateX(100%);
+    transition: all 0.3s ease;
+    pointer-events: auto;
+  `;
+  
+  notification.textContent = message;
+  notificationContainer.appendChild(notification);
+  
+  // Animar entrada
+  if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+    window.requestAnimationFrame(() => {
+      notification.style.opacity = '1';
+      notification.style.transform = 'translateX(0)';
+    });
+  } else {
+    setTimeout(() => {
+      notification.style.opacity = '1';
+      notification.style.transform = 'translateX(0)';
+    }, 10);
+  }
+  
+  // Auto-remover después de 5 segundos
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    notification.style.transform = 'translateX(100%)';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 5000);
 }
 
 function waitForSelector(selector, interval = 200, timeout = 10000) {
