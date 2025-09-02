@@ -1,4 +1,5 @@
 import { log } from "../core/logger.js";
+import { guardState } from "./config.js";
 
 /**
  * Algoritmos de patrones de protección para reparar píxeles
@@ -240,8 +241,16 @@ export function getCenterPattern(changes, count) {
     maxY = Math.max(maxY, y);
   });
   
-  const centerX = (minX + maxX) / 2;
-  const centerY = (minY + maxY) / 2;
+  // Preferir el centro del área protegida si existe para mayor estabilidad
+  let centerX;
+  let centerY;
+  if (guardState?.protectionArea && typeof guardState.protectionArea.x1 === 'number' && typeof guardState.protectionArea.x2 === 'number' && typeof guardState.protectionArea.y1 === 'number' && typeof guardState.protectionArea.y2 === 'number') {
+    centerX = (guardState.protectionArea.x1 + guardState.protectionArea.x2) / 2;
+    centerY = (guardState.protectionArea.y1 + guardState.protectionArea.y2) / 2;
+  } else {
+    centerX = (minX + maxX) / 2;
+    centerY = (minY + maxY) / 2;
+  }
   
   // Ordenar por distancia al centro
   const withDistance = changesArray.map(coord => {

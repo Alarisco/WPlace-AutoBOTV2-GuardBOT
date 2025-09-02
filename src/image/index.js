@@ -860,9 +860,15 @@ export async function runImage() {
         if (allPixels && allPixels.length > 0) {
           allPixels.forEach(pixel => {
             // Coordenadas globales para el Guard
-            const globalX = (typeof pixel.globalX === 'number') ? pixel.globalX : ((tileX * 1000) + startX + pixel.imageX);
-            const globalY = (typeof pixel.globalY === 'number') ? pixel.globalY : ((tileY * 1000) + startY + pixel.imageY);
-            const key = `${globalX},${globalY}`;
+            const pxGlobalX = (typeof pixel.globalX === 'number') ? pixel.globalX : ((tileX * 1000) + startX + pixel.imageX);
+            const pxGlobalY = (typeof pixel.globalY === 'number') ? pixel.globalY : ((tileY * 1000) + startY + pixel.imageY);
+            const key = `${pxGlobalX},${pxGlobalY}`;
+            
+            // Calcular tile/local por píxel (preferir los provistos por el generador si existen)
+            const pxTileX = (typeof pixel.tileX === 'number') ? pixel.tileX : Math.floor(pxGlobalX / 1000);
+            const pxTileY = (typeof pixel.tileY === 'number') ? pixel.tileY : Math.floor(pxGlobalY / 1000);
+            const pxLocalX = (typeof pixel.localX === 'number') ? pixel.localX : mod1000(pxGlobalX);
+            const pxLocalY = (typeof pixel.localY === 'number') ? pixel.localY : mod1000(pxGlobalY);
             
             const rgb = pixel.color || pixel.targetColor || {};
             const colorId = getColorId(rgb);
@@ -875,12 +881,12 @@ export async function runImage() {
               b: rgb.b,
               colorId: typeof colorId !== 'undefined' ? colorId : null,
               // Metadatos de coordenadas (compatibles con Guard)
-              globalX,
-              globalY,
-              localX: mod1000(globalX),
-              localY: mod1000(globalY),
-              tileX,
-              tileY
+              globalX: pxGlobalX,
+              globalY: pxGlobalY,
+              localX: pxLocalX,
+              localY: pxLocalY,
+              tileX: pxTileX,
+              tileY: pxTileY
             });
           });
         }
