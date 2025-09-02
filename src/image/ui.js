@@ -4,6 +4,7 @@ import { createLogWindow } from "../log_window/index.js";
 import { createPaintingStatsWindow } from "./painting-stats.js";
 import { createResizeWindow } from "./Resize-window.js";
 import { saveGuardJSON } from "./safe-guard-window.js";
+import { registerWindow, unregisterWindow, bringWindowToFront } from '../core/window-manager.js';
 
 export async function createImageUI({ texts, ...handlers }) {
   log('🎨 Creando interfaz de Auto-Image');
@@ -44,7 +45,6 @@ export async function createImageUI({ texts, ...handlers }) {
       border-radius: 8px;
       padding: 0;
       box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-      z-index: 9998;
       font-family: 'Segoe UI', Roboto, sans-serif;
       color: #eee;
       animation: slideIn 0.4s ease-out;
@@ -834,7 +834,13 @@ export async function createImageUI({ texts, ...handlers }) {
   // Cargar configuración guardada
   loadWindowConfig();
   
-  // Hacer draggable con guardado de posición
+  // Registrar ventana con el window manager para gestión de z-index y arrastre
+  registerWindow(container);
+  
+  // Traer la ventana al frente inicialmente
+  bringWindowToFront(container);
+  
+  // Hacer el header arrastrable manualmente para mantener guardado de posición
   makeDraggableWithSave(elements.header, container);
   
   // Función personalizada de arrastre que guarda la posición
@@ -1287,6 +1293,8 @@ export async function createImageUI({ texts, ...handlers }) {
     if (statsWindow) {
       statsWindow.destroy();
     }
+    // Desregistrar ventana del window manager
+    unregisterWindow(container);
     host.remove();
   }
   

@@ -1,6 +1,6 @@
 import { log } from "../core/logger.js";
 import { createColorPaletteSelector } from "./color-palette-selector.js";
-import { registerWindow, unregisterWindow } from '../core/window-manager.js';
+import { registerWindow, unregisterWindow, bringWindowToFront } from '../core/window-manager.js';
 
 /**
  * Crea y gestiona el diálogo de redimensionamiento de imagen
@@ -26,7 +26,6 @@ export function createResizeWindow() {
       border-radius: 8px;
       color: #eee;
       font-family: 'Segoe UI', Roboto, sans-serif;
-      z-index: 9999;
       box-shadow: 0 5px 15px rgba(0,0,0,0.5);
       resize: both;
       overflow: auto;
@@ -300,6 +299,9 @@ export function createResizeWindow() {
     
     // Mostrar diálogo
     resizeElements.resizeWindow.style.display = 'flex';
+    
+    // Traer la ventana al frente
+    bringWindowToFront(resizeElements.resizeWindow);
 
     // Observador para cambios de tamaño del contenedor de vista previa
     if (resizeElements.previewResizeObserver) {

@@ -7,7 +7,7 @@ export function createShadowRoot(hostId = null) {
     position: fixed;
     top: 10px;
     right: 10px;
-    z-index: 2147483647;
+    z-index: 0; /* No forzar al frente; el window-manager ajustará según corresponda */
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   `;
   

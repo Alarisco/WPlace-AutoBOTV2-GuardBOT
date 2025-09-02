@@ -26,7 +26,14 @@ export function registerWindow(windowElement) {
   
   // Establecer z-index inicial si no tiene uno
   if (!windowElement.style.zIndex) {
+    // Asignar un z-index inicial y avanzar el contador
     windowElement.style.zIndex = currentMaxZIndex++;
+
+    // Si la ventana está dentro de un Shadow DOM, sincronizar también el host
+    const root = windowElement.getRootNode && windowElement.getRootNode();
+    if (root && root.host && root.host.style) {
+      root.host.style.zIndex = windowElement.style.zIndex;
+    }
   }
 }
 
@@ -56,6 +63,12 @@ export function bringWindowToFront(windowElement) {
   // Incrementar el z-index máximo y asignarlo a esta ventana
   currentMaxZIndex++;
   windowElement.style.zIndex = currentMaxZIndex;
+
+  // Si está dentro de un Shadow DOM, también elevar el host para que el stacking funcione entre contextos
+  const root = windowElement.getRootNode && windowElement.getRootNode();
+  if (root && root.host && root.host.style) {
+    root.host.style.zIndex = currentMaxZIndex;
+  }
 }
 
 /**

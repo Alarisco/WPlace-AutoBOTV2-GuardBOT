@@ -1,4 +1,5 @@
 import { log } from "../core/logger.js";
+import { registerWindow, unregisterWindow } from '../core/window-manager.js';
 
 /**
  * Crea y gestiona el diálogo de confirmación para Auto-Guard
@@ -52,6 +53,9 @@ export function createSafeGuardWindow() {
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
       
+      // Registrar modal en window manager
+      registerWindow(overlay);
+      
       // Event listeners
       const confirmBtn = modal.querySelector('.confirm-btn');
       const saveBtn = modal.querySelector('.save-btn');
@@ -59,6 +63,8 @@ export function createSafeGuardWindow() {
       const cancelBtn = modal.querySelector('.cancel-btn');
       
       const cleanup = () => {
+        // Desregistrar modal del window manager
+        unregisterWindow(overlay);
         document.body.removeChild(overlay);
       };
       
@@ -253,9 +259,14 @@ El archivo se guardará automáticamente y podrás importarlo en Auto-Guard.js.`
     notification.textContent = message;
     document.body.appendChild(notification);
     
+    // Registrar notificación en window manager
+    registerWindow(notification);
+    
     // Auto-remover después de 3 segundos
     setTimeout(() => {
       if (document.body.contains(notification)) {
+        // Desregistrar notificación del window manager
+        unregisterWindow(notification);
         document.body.removeChild(notification);
       }
     }, 3000);

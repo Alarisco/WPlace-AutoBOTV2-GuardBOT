@@ -1,5 +1,5 @@
 import { log } from '../core/logger.js';
-import { registerWindow, unregisterWindow } from '../core/window-manager.js';
+import { registerWindow, unregisterWindow, bringWindowToFront } from '../core/window-manager.js';
 
 /* global Blob, URL */
 
@@ -428,6 +428,7 @@ class LogWindow {
   show() {
     if (this.container) {
       this.container.style.display = 'flex';
+      bringWindowToFront(this.container);
       this.isVisible = true;
       this.config.visible = true;
       this.updateLogDisplay();

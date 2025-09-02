@@ -1,5 +1,6 @@
 import { log } from "../core/logger.js";
-import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
+import { createShadowRoot } from "../core/ui-utils.js";
+import { registerWindow, unregisterWindow, bringWindowToFront } from '../core/window-manager.js';
 import { COLOR_MAP } from "./palette.js";
 
 /**
@@ -291,8 +292,8 @@ export function createPaintingStatsWindow() {
     refreshBtn: container.querySelector('.refresh-btn')
   };
   
-  // Hacer draggable
-  makeDraggable(elements.header, container);
+  // Registrar ventana en window manager
+  registerWindow(container);
   
   // Estado de la ventana
   let visible = false;
@@ -318,6 +319,7 @@ export function createPaintingStatsWindow() {
   // Funciones públicas
   function show() {
     container.style.display = 'block';
+    bringWindowToFront(container);
     visible = true;
     log('📊 Ventana de estadísticas mostrada');
   }
@@ -511,6 +513,8 @@ export function createPaintingStatsWindow() {
   }
   
   function destroy() {
+    // Desregistrar ventana del window manager
+    unregisterWindow(container);
     host.remove();
   }
   
