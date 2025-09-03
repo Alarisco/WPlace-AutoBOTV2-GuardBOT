@@ -379,16 +379,42 @@ export async function downloadAndExecuteBot(botType, rawBase) {
     const url = `${rawBase}/${fileName}`;
     log(`🌐 URL: ${url}`);
 
-    const response = await fetch(url);
+    const response = await fetch(url, { cache: 'no-cache' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const code = await response.text();
-    log(`✅ Bot descargado (${code.length} chars), ejecutando...`);
+    log(`✅ Bot descargado (${code.length} chars), inyectando...`);
 
-    // Evaluar el código del bot
-    (0, eval)(code);
+    const sourceURL = `\n//# sourceURL=${url}`;
+    const BlobCtor = (typeof globalThis !== 'undefined' && globalThis.Blob) ? globalThis.Blob : null;
+    const URLObj = (typeof globalThis !== 'undefined' && globalThis.URL) ? globalThis.URL : null;
 
-    log('🚀 Bot ejecutado exitosamente');
+    if (!BlobCtor || !URLObj) {
+      // Entorno sin APIs del navegador: usar eval como último recurso
+      (0, eval)(code + sourceURL);
+      log('🚀 Bot ejecutado con eval (sin Blob/URL)');
+      return true;
+    }
+
+    const blob = new BlobCtor([code + sourceURL], { type: 'text/javascript' });
+    const blobUrl = URLObj.createObjectURL(blob);
+
+    // Intentar inyección mediante etiqueta <script>
+    try {
+      await new Promise((resolve, reject) => {
+  const s = document.createElement('script');
+        s.src = blobUrl;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.documentElement.appendChild(s);
+      });
+      log('🚀 Bot inyectado y ejecutado (script)');
+    } catch (e) {
+      // Fallback: import dinámico (puede requerir que el código sea ESM)
+      log('ℹ️ Fallback a import(blobUrl)');
+      await import(blobUrl);
+      log('🚀 Bot ejecutado (import)');
+    }
     return true;
   } catch (error) {
     log('❌ Error descargando/ejecutando bot:', error.message);

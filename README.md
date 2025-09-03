@@ -63,6 +63,8 @@
 
 ### Instalación Universal
 
+> Importante: Si tu marcador dejó de funcionar, debes actualizarlo al nuevo formato que inyecta el script mediante un Blob. Copia el bookmarklet actualizado de abajo para cada bot.
+
 1. **Copia el código del bot deseado**
 2. **Crea un marcador en tu navegador:**
    - Botón derecho en la barra de marcadores → "Agregar página"
@@ -93,7 +95,7 @@
 Un único marcador que te deja elegir entre Auto-Farm, Auto-Image o **Auto-Guard** en cada ejecución.
 
 ```javascript
-javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Launcher.js").then(r=>r.text()).then(eval)
+javascript:(async()=>{const U="https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Launcher.js";try{const r=await fetch(U,{cache:"no-cache"});if(!r.ok)throw new Error(r.status+" "+r.statusText);const code=await r.text();const blob=new Blob([code+"\n//# sourceURL="+U],{type:"text/javascript"});const blobUrl=URL.createObjectURL(blob);try{await new Promise((ok,err)=>{const s=document.createElement("script");s.src=blobUrl;s.onload=ok;s.onerror=err;document.documentElement.appendChild(s);});}catch(e){await import(blobUrl);}}catch(e){alert("[Auto-Launcher] No se pudo cargar/inyectar: "+e.message+"\nPrueba en otra página o usa la Opción C (módulo).");}})();
 ```
 
 — O usa los bots por separado —
@@ -102,7 +104,7 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs
 **Protección automática para tus obras de arte**
 
 ```javascript
-javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Guard.js").then(t=>t.text()).then(eval);
+javascript:(async()=>{const U="https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Guard.js";try{const r=await fetch(U,{cache:"no-cache"});if(!r.ok)throw new Error(r.status+" "+r.statusText);const code=await r.text();const blob=new Blob([code+"\n//# sourceURL="+U],{type:"text/javascript"});const blobUrl=URL.createObjectURL(blob);try{await new Promise((ok,err)=>{const s=document.createElement("script");s.src=blobUrl;s.onload=ok;s.onerror=err;document.documentElement.appendChild(s);});}catch(e){await import(blobUrl);}}catch(e){alert("[Auto-Guard] No se pudo cargar/inyectar: "+e.message+"\nPrueba en otra página o usa la Opción C (módulo).");}})();
 ```
 
 **Características:**
@@ -117,7 +119,7 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs
 **Farmeo automático de experiencia y cargas**
 
 ```javascript
-javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/refs/heads/main/Auto-Farm.js").then(t=>t.text()).then(eval);
+javascript:(async()=>{const U="https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Farm.js";try{const r=await fetch(U,{cache:"no-cache"});if(!r.ok)throw new Error(r.status+" "+r.statusText);const code=await r.text();const blob=new Blob([code+"\n//# sourceURL="+U],{type:"text/javascript"});const blobUrl=URL.createObjectURL(blob);try{await new Promise((ok,err)=>{const s=document.createElement("script");s.src=blobUrl;s.onload=ok;s.onerror=err;document.documentElement.appendChild(s);});}catch(e){await import(blobUrl);}}catch(e){alert("[Auto-Farm] No se pudo cargar/inyectar: "+e.message+"\nPrueba en otra página o usa la Opción C (módulo).");}})();
 ```
 
 **Características:**
@@ -131,7 +133,7 @@ javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/re
 **Creación automática de pixel art desde imágenes**
 
 ```javascript
-javascript:fetch("https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2/refs/heads/main/Auto-Image.js").then(t=>t.text()).then(eval);
+javascript:(async()=>{const U="https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main/Auto-Image.js";try{const r=await fetch(U,{cache:"no-cache"});if(!r.ok)throw new Error(r.status+" "+r.statusText);const code=await r.text();const blob=new Blob([code+"\n//# sourceURL="+U],{type:"text/javascript"});const blobUrl=URL.createObjectURL(blob);try{await new Promise((ok,err)=>{const s=document.createElement("script");s.src=blobUrl;s.onload=ok;s.onerror=err;document.documentElement.appendChild(s);});}catch(e){await import(blobUrl);}}catch(e){alert("[Auto-Image] No se pudo cargar/inyectar: "+e.message+"\nPrueba en otra página o usa la Opción C (módulo).");}})();
 ```
 
 **Características:**
