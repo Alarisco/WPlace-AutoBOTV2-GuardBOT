@@ -4,6 +4,8 @@ import { getSession, checkHealth, downloadAndExecuteBot } from "../core/wplace-a
 import { launcherState, LAUNCHER_CONFIG } from "./config.js";
 import { initializeLanguage } from "../locales/index.js";
 import { createLanguageSelector } from "../core/language-selector.js";
+import { sessionStart, sessionPing, sessionEnd, trackEvent } from "../core/metrics/client.js";
+import { getMetricsConfig } from "../core/metrics/config.js";
 
 export async function runLauncher() {
   log('🚀 Iniciando WPlace Auto-Launcher (versión modular)');
@@ -58,6 +60,7 @@ export async function runLauncher() {
       
       onLaunch: async (botType) => {
         log(`🚀 Lanzando bot: ${botType}`);
+  try { trackEvent('launcher_start_bot', { botVariant: 'launcher', metadata: { botType } }); } catch {}
         await downloadAndExecuteBot(botType, LAUNCHER_CONFIG.RAW_BASE);
       },
       
@@ -130,13 +133,52 @@ export async function runLauncher() {
         languageSelector.unmount();
       }
       window.__wplaceBot.launcherRunning = false;
+      try {
+        const mcfg = getMetricsConfig();
+        if (mcfg.ENABLED && window.__wplaceMetrics?.launcherSessionActive) {
+          sessionEnd({ botVariant: 'launcher' });
+          window.__wplaceMetrics.launcherSessionActive = false;
+        }
+        if (window.__wplaceMetrics?.launcherPingInterval) {
+          window.clearInterval(window.__wplaceMetrics.launcherPingInterval);
+          window.__wplaceMetrics.launcherPingInterval = null;
+        }
+        if (window.__wplaceMetrics?.launcherVisibilityHandler) {
+          document.removeEventListener('visibilitychange', window.__wplaceMetrics.launcherVisibilityHandler);
+          delete window.__wplaceMetrics.launcherVisibilityHandler;
+        }
+        if (window.__wplaceMetrics?.launcherFocusHandler) {
+          window.removeEventListener('focus', window.__wplaceMetrics.launcherFocusHandler);
+          delete window.__wplaceMetrics.launcherFocusHandler;
+        }
+      } catch {}
     });
     
     log('✅ Auto-Launcher inicializado correctamente');
+    // Iniciar sesión de métricas del launcher
+    try {
+      const mcfg = getMetricsConfig({ VARIANT: 'launcher' });
+      if (mcfg.ENABLED) {
+        if (!window.__wplaceMetrics) window.__wplaceMetrics = {};
+        window.__wplaceMetrics.launcherSessionActive = true;
+        sessionStart({ botVariant: 'launcher' });
+        const pingEvery = Math.max(60_000, mcfg.PING_INTERVAL_MS || 300_000);
+  window.__wplaceMetrics.launcherPingInterval = window.setInterval(() => sessionPing({ botVariant: 'launcher' }), pingEvery);
+
+  // Pings al recuperar visibilidad/foco
+  const visibilityHandler = () => { if (!document.hidden) { try { sessionPing({ botVariant: 'launcher', metadata: { reason: 'visibility' } }); } catch {} } };
+  const focusHandler = () => { try { sessionPing({ botVariant: 'launcher', metadata: { reason: 'focus' } }); } catch {} };
+  document.addEventListener('visibilitychange', visibilityHandler);
+  window.addEventListener('focus', focusHandler);
+  window.__wplaceMetrics.launcherVisibilityHandler = visibilityHandler;
+  window.__wplaceMetrics.launcherFocusHandler = focusHandler;
+      }
+    } catch {}
     
   } catch (error) {
     log('❌ Error inicializando Auto-Launcher:', error);
     window.__wplaceBot.launcherRunning = false;
+  try { trackEvent('error', { botVariant: 'launcher', metadata: { message: String(error?.message || error) } }); } catch {}
     throw error;
   }
 }

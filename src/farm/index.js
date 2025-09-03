@@ -5,6 +5,8 @@ import { loop, paintOnce } from "./loop.js";
 import { getSession, checkHealth } from "../core/wplace-api.js";
 import { initializeLanguage, t } from "../locales/index.js";
 import { loadFarmCfg } from "../core/storage.js";
+import { sessionStart, sessionPing, sessionEnd } from "../core/metrics/client.js";
+import { getMetricsConfig } from "../core/metrics/config.js";
 
 export async function runFarm() {
   log('🚀 Iniciando WPlace Auto-Farm (versión con selección de zona)');
@@ -18,6 +20,22 @@ export async function runFarm() {
   let currentUserInfo = null; // Variable global para información del usuario
 
   try {
+    // Iniciar sesión de métricas para Farm
+    try {
+      const mcfg = getMetricsConfig({ VARIANT: 'auto-farm' });
+      if (mcfg.ENABLED) {
+        if (!window.__wplaceMetrics) window.__wplaceMetrics = {};
+  log(`[METRICS] enabled → ${mcfg.BASE_URL}`);
+        window.__wplaceMetrics.farmSessionActive = true;
+        sessionStart({ botVariant: 'auto-farm' });
+          // Ping rápido tras el inicio para reflejar presencia inmediata
+          setTimeout(() => {
+            try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'init' } }); } catch {}
+          }, 3000);
+        const pingEvery = Math.max(60_000, mcfg.PING_INTERVAL_MS || 300_000);
+        window.__wplaceMetrics.farmPingInterval = window.setInterval(() => sessionPing({ botVariant: 'auto-farm' }), pingEvery);
+      }
+    } catch {}
     // Cargar configuración guardada o usar defaults
     const savedConfig = loadFarmCfg(FARM_DEFAULTS);
     const config = { ...FARM_DEFAULTS, ...savedConfig};
@@ -84,8 +102,11 @@ export async function runFarm() {
         ui.setStatus(t('farm.startingBot'), 'info');
         ui.updateButtonStates(true);
 
+  // Refrescar presencia al iniciar realmente el loop
+  try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'start' } }); } catch {}
+
         // Iniciar el loop principal
-        await loop(
+  await loop(
           config,
           farmState,
           ui.setStatus,
@@ -202,6 +223,25 @@ export async function runFarm() {
       if (window.__wplaceBot) {
         window.__wplaceBot.farmRunning = false;
       }
+      try {
+        const mcfg = getMetricsConfig();
+        if (mcfg.ENABLED && window.__wplaceMetrics?.farmSessionActive) {
+          sessionEnd({ botVariant: 'auto-farm' });
+          window.__wplaceMetrics.farmSessionActive = false;
+        }
+        if (window.__wplaceMetrics?.farmPingInterval) {
+          window.clearInterval(window.__wplaceMetrics.farmPingInterval);
+          window.__wplaceMetrics.farmPingInterval = null;
+        }
+        if (window.__wplaceMetrics?.farmVisibilityHandler) {
+          document.removeEventListener('visibilitychange', window.__wplaceMetrics.farmVisibilityHandler);
+          delete window.__wplaceMetrics.farmVisibilityHandler;
+        }
+        if (window.__wplaceMetrics?.farmFocusHandler) {
+          window.removeEventListener('focus', window.__wplaceMetrics.farmFocusHandler);
+          delete window.__wplaceMetrics.farmFocusHandler;
+        }
+      } catch {}
     });
 
     // Verificar salud del backend inicialmente
@@ -217,6 +257,26 @@ export async function runFarm() {
     });
 
     log('✅ Auto-Farm inicializado correctamente');
+
+    // Considerar al usuario online aunque esté ocioso: ping al recuperar visibilidad/foco
+    try {
+      const mcfg = getMetricsConfig();
+      if (mcfg.ENABLED) {
+        const visibilityHandler = () => {
+          if (!document.hidden) {
+            try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'visibility' } }); } catch {}
+          }
+        };
+        const focusHandler = () => {
+          try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'focus' } }); } catch {}
+        };
+        document.addEventListener('visibilitychange', visibilityHandler);
+        window.addEventListener('focus', focusHandler);
+        window.__wplaceMetrics = window.__wplaceMetrics || {};
+        window.__wplaceMetrics.farmVisibilityHandler = visibilityHandler;
+        window.__wplaceMetrics.farmFocusHandler = focusHandler;
+      }
+    } catch {}
     
   } catch (error) {
     log('❌ Error inicializando Auto-Farm:', error);

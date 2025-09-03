@@ -9,6 +9,8 @@ import { initializeLanguage, getSection, t } from "../locales/index.js";
 import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
 import { sleep } from "../core/timing.js";
 import { guardOverlay } from "./overlay.js";
+import { sessionStart, sessionEnd, sessionPing, trackEvent } from "../core/metrics/client.js";
+import { getMetricsConfig } from "../core/metrics/config.js";
 
 
 // Globals del navegador
@@ -70,6 +72,23 @@ export async function runGuard() {
     // Configurar event listeners
     setupEventListeners();
     
+    // Iniciar sesión de métricas (no bloqueante)
+    (async () => {
+      try {
+        const mcfg = getMetricsConfig({ VARIANT: 'auto-guard' });
+        if (!mcfg.ENABLED) return;
+        if (!window.__wplaceMetrics) window.__wplaceMetrics = {};
+  log(`[METRICS] enabled → ${mcfg.BASE_URL}`);
+        window.__wplaceMetrics.guardSessionActive = true;
+        sessionStart({ botVariant: 'auto-guard', metadata: { source: 'guard' } });
+        // Pings periódicos
+        const pingEvery = Math.max(60_000, mcfg.PING_INTERVAL_MS || 300_000);
+        window.__wplaceMetrics.guardPingInterval = setInterval(() => {
+          sessionPing({ botVariant: 'auto-guard' });
+        }, pingEvery);
+      } catch {}
+    })();
+    
     // Función para auto-inicio del bot (robusta): valida colores reales y hace fallback a clic de Paint
     async function tryAutoInit() {
       log('🤖 Intentando auto-inicio del Guard...');
@@ -119,12 +138,14 @@ export async function runGuard() {
       try {
         guardState.ui.updateStatus(t('guard.autoInitializing'), 'info');
         log('🤖 Intentando auto-inicio...');
+        try { trackEvent('auto_init_attempt', { botVariant: 'auto-guard' }); } catch {}
         
         const autoInitSuccess = await tryAutoInit();
         
         if (autoInitSuccess) {
           guardState.ui.updateStatus(t('guard.autoInitSuccess'), 'success');
           log('✅ Auto-inicio exitoso');
+          try { trackEvent('auto_init_result', { botVariant: 'auto-guard', metadata: { success: true } }); } catch {}
           
           // Ocultar el botón de inicialización manual
           guardState.ui.setInitButtonVisible(false);
@@ -137,12 +158,14 @@ export async function runGuard() {
         } else {
           guardState.ui.updateStatus(t('guard.autoInitFailed'), 'warning');
           log('⚠️ Auto-inicio falló, se requiere inicio manual');
+          try { trackEvent('auto_init_result', { botVariant: 'auto-guard', metadata: { success: false } }); } catch {}
           // Asegurar que el botón de inicio manual esté visible
           guardState.ui.setInitButtonVisible(true);
         }
       } catch (error) {
         log('❌ Error en auto-inicio:', error);
         guardState.ui.updateStatus(t('guard.manualInitRequired'), 'warning');
+        try { trackEvent('auto_init_result', { botVariant: 'auto-guard', metadata: { success: false, error: String(error?.message || error) } }); } catch {}
       }
   }, 1000); // 1s
     
@@ -152,7 +175,41 @@ export async function runGuard() {
       if (window.__wplaceBot) {
         window.__wplaceBot.guardRunning = false;
       }
+      try {
+        const mcfg = getMetricsConfig();
+        if (mcfg.ENABLED) {
+          if (window.__wplaceMetrics?.guardPingInterval) {
+            clearInterval(window.__wplaceMetrics.guardPingInterval);
+            window.__wplaceMetrics.guardPingInterval = null;
+          }
+          if (window.__wplaceMetrics?.guardSessionActive) {
+            sessionEnd({ botVariant: 'auto-guard' });
+            window.__wplaceMetrics.guardSessionActive = false;
+          }
+        }
+      } catch {}
     });
+
+    // Considerar al usuario online aunque esté ocioso: ping al recuperar visibilidad y foco
+    try {
+      const mcfg = getMetricsConfig();
+      if (mcfg.ENABLED) {
+        const visibilityHandler = () => {
+          if (!document.hidden) {
+            try { sessionPing({ botVariant: 'auto-guard', metadata: { reason: 'visibility' } }); } catch {}
+          }
+        };
+        const focusHandler = () => {
+          try { sessionPing({ botVariant: 'auto-guard', metadata: { reason: 'focus' } }); } catch {}
+        };
+        document.addEventListener('visibilitychange', visibilityHandler);
+        window.addEventListener('focus', focusHandler);
+        // Guardar para limpiar en unload
+        window.__wplaceMetrics = window.__wplaceMetrics || {};
+        window.__wplaceMetrics.guardVisibilityHandler = visibilityHandler;
+        window.__wplaceMetrics.guardFocusHandler = focusHandler;
+      }
+    } catch {}
     
     log('✅ Auto-Guard cargado correctamente');
     
@@ -227,6 +284,7 @@ function setupEventListeners() {
     } else {
       // Si no está corriendo o está en modo protección, iniciar vigía
       startWatch();
+  try { trackEvent('mode_change', { botVariant: 'auto-guard', metadata: { mode: 'watch' } }); } catch {}
     }
   });
   
@@ -483,7 +541,8 @@ async function captureAreaFromCoordinates(upperLeft, lowerRight) {
     guardState.ui.updateStatus(t('guard.areaCaptured', { count: pixelMap.size }), 'success');
     guardState.ui.enableStartBtn();
     
-    log(`✅ Área capturada: ${pixelMap.size} píxeles protegidos`);
+  log(`✅ Área capturada: ${pixelMap.size} píxeles protegidos`);
+  try { trackEvent('area_captured', { botVariant: 'auto-guard', metadata: { count: pixelMap.size, x1: area.x1, y1: area.y1, x2: area.x2, y2: area.y2 } }); } catch {}
     
   } catch (error) {
     log('❌ Error capturando área:', error);
@@ -504,6 +563,7 @@ async function startGuard() {
   guardState.ui.updateStatus(t('guard.protectionStarted'), 'success');
   
   log('🛡️ Iniciando protección del área');
+  try { trackEvent('mode_change', { botVariant: 'auto-guard', metadata: { mode: 'protect' } }); } catch {}
   
   // Configurar intervalo de verificación
   guardState.checkInterval = setInterval(checkForChanges, GUARD_DEFAULTS.CHECK_INTERVAL);
@@ -553,6 +613,21 @@ function stopGuard() {
   // Detener monitoreo de cargas
   stopChargeMonitoring();
   
+  // Finalizar sesión de métricas si estaba activa
+  try {
+    const mcfg = getMetricsConfig();
+    if (mcfg.ENABLED) {
+      if (window.__wplaceMetrics?.guardPingInterval) {
+        clearInterval(window.__wplaceMetrics.guardPingInterval);
+        window.__wplaceMetrics.guardPingInterval = null;
+      }
+      if (window.__wplaceMetrics?.guardSessionActive) {
+  sessionEnd({ botVariant: 'auto-guard' });
+        window.__wplaceMetrics.guardSessionActive = false;
+      }
+    }
+  } catch {}
+  
   if (guardState.ui) {
     guardState.ui.setRunningState(false);
     guardState.ui.updateWatchButton(false); // Actualizar botón a estado "iniciar"
@@ -561,6 +636,7 @@ function stopGuard() {
   }
   
   log(wasWatchMode ? '⏹️ Vigía detenido' : '⏹️ Protección detenida');
+  try { trackEvent('mode_change', { botVariant: 'auto-guard', metadata: { mode: 'stopped' } }); } catch {}
 }
 
 // Variables para el sistema de reposicionamiento
@@ -868,6 +944,7 @@ async function confirmRepositioning(newArea, newPixels, statusDiv) {
   
   guardState.ui.updateStatus('✅ Área reposicionada correctamente', 'success');
   log('✅ Reposicionamiento confirmado - patrón de colores trasladado a nueva ubicación');
+  try { trackEvent('reposition_confirm', { botVariant: 'auto-guard', metadata: { size: newPixels.size, x1: newArea.x1, y1: newArea.y1, x2: newArea.x2, y2: newArea.y2 } }); } catch {}
   log(`📋 Protegiendo ${newPixels.size} píxeles con los colores originales en coordenadas (${newArea.x1},${newArea.y1}) → (${newArea.x2},${newArea.y2})`);
   
   // Forzar una nueva verificación inmediata para detectar cambios en la nueva ubicación
@@ -890,6 +967,7 @@ function retryRepositioning(statusDiv) {
   
   // Reiniciar proceso
   startRepositioning();
+  try { trackEvent('reposition_retry', { botVariant: 'auto-guard' }); } catch {}
 }
 
 // Función para cancelar el reposicionamiento
@@ -903,6 +981,7 @@ function cancelRepositioning(statusDiv) {
   
   guardState.ui.updateStatus('❌ Reposicionamiento cancelado', 'warning');
   log('❌ Reposicionamiento cancelado');
+  try { trackEvent('reposition_cancel', { botVariant: 'auto-guard' }); } catch {}
 }
 
 // Función para limpiar el estado de reposicionamiento

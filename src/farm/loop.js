@@ -3,6 +3,7 @@ import { postPixelBatchImage } from "../core/wplace-api.js";
 import { generateMultipleCoords, generateMultipleColors } from "./coords.js";
 import { sleep, sleepWithCountdown } from "../core/timing.js";
 import { log } from "../core/logger.js";
+import { pixelsPainted } from "../core/metrics/client.js";
 
 // Update canvas pixel function
 export async function updateCanvasPixel(localX, localY, color) {
@@ -141,7 +142,8 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
     // Actualizar la sesión para obtener las cargas actualizadas (única consulta tras pintar)
     await getSession();
     
-    setStatus(`✅ Lote pintado: ${actualPainted}/${pixelCount} píxeles en zona (${cfg.BASE_X},${cfg.BASE_Y}) radio ${cfg.FARM_RADIUS}px`, 'success');
+  setStatus(`✅ Lote pintado: ${actualPainted}/${pixelCount} píxeles en zona (${cfg.BASE_X},${cfg.BASE_Y}) radio ${cfg.FARM_RADIUS}px`, 'success');
+  try { pixelsPainted(actualPainted, { botVariant: 'auto-farm', metadata: { tileX: cfg.TILE_X, tileY: cfg.TILE_Y } }); } catch {}
     flashEffect();
     
     // Emitir evento personalizado para notificar que se pintó un lote

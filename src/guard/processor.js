@@ -4,6 +4,8 @@ import { ensureToken } from "../core/turnstile.js";
 import { guardState, GUARD_DEFAULTS } from "./config.js";
 import { sleep } from "../core/timing.js";
 import { getPixelsByPattern } from "./patterns.js";
+import { pixelsRepaired, reportError, trackEvent } from "../core/metrics/client.js";
+import { getMetricsConfig } from "../core/metrics/config.js";
 
 // Variables para monitoreo de cargas
 let chargeMonitorInterval = null;
@@ -553,7 +555,7 @@ export async function checkForChanges() {
       }
     }
 
-    if (changedCount > 0) {
+  if (changedCount > 0) {
       log(`🚨 Detectados ${changedCount} cambios en el área protegida`);
       guardState.changes = changes;
       
@@ -566,8 +568,19 @@ export async function checkForChanges() {
         updateAnalysisStatsInUI(guardState.originalPixels, currentPixels);
       }
       
+      // Métricas: resumen de análisis (con cambios)
+      try {
+        let incorrect = 0;
+        let missing = 0;
+        for (const v of changes.values()) {
+          if (v.type === 'deleted') missing++;
+          else incorrect++;
+        }
+        debouncedAnalysisSummary({ total: guardState.originalPixels.size, incorrect, missing });
+      } catch {}
+
       // Iniciar reparación automática si está habilitada y no está en modo vigía
-      if (guardState.running && !guardState.watchMode) {
+  if (guardState.running && !guardState.watchMode) {
         await repairChanges(changes);
       } else if (guardState.watchMode) {
         // En modo vigía, solo registrar los cambios sin reparar
@@ -576,7 +589,7 @@ export async function checkForChanges() {
           guardState.ui.updateStatus(`👁️ Vigía: ${changes.size} cambios detectados`, 'warning');
         }
       }
-    } else {
+  } else {
       // Actualizar timestamp de última verificación
       guardState.lastCheck = Date.now();
       if (guardState.ui) {
@@ -586,6 +599,15 @@ export async function checkForChanges() {
         // Actualizar estadísticas de análisis también cuando no hay cambios
         updateAnalysisStatsInUI(guardState.originalPixels, currentPixels);
       }
+
+      // Métricas: resumen de análisis (sin cambios)
+      try {
+        debouncedAnalysisSummary({
+          total: guardState.originalPixels.size,
+          incorrect: 0,
+          missing: 0
+        });
+      } catch {}
     }
 
   } catch (error) {
@@ -657,7 +679,7 @@ export async function repairChanges(changes) {
         const spendableCharges = Math.max(0, availableCharges - guardState.minChargesToWait);
         const requiredCharges = guardState.pixelsPerBatch;
         
-        if (spendableCharges < requiredCharges) {
+          if (spendableCharges < requiredCharges) {
           const totalNeeded = guardState.minChargesToWait + requiredCharges;
           log(`⚠️ Cargas insuficientes para lote completo: ${availableCharges}/${totalNeeded} (necesita ${requiredCharges} + ${guardState.minChargesToWait} mínimo). Esperando más cargas...`);
           if (guardState.ui) {
@@ -668,6 +690,7 @@ export async function repairChanges(changes) {
             _nextChargeTime = Date.now() + timeToWait;
             startCountdownTimer();
           }
+            try { trackEvent('repair_wait', { botVariant: 'auto-guard', metadata: { available: availableCharges, minToWait: guardState.minChargesToWait, required: requiredCharges } }); } catch {}
           return;
         }
         
@@ -760,11 +783,42 @@ export async function repairChanges(changes) {
           }
           
           log(`✅ Reparados ${result.painted} píxeles en tile (${tileX},${tileY})`);
+          // Métricas: acumular por lote
+          try {
+            const mcfg = getMetricsConfig({ VARIANT: 'auto-guard' });
+            if (mcfg.ENABLED) {
+              // Enviar por lote (tile) para granularidad sin saturar
+              pixelsRepaired(result.painted, {
+                botVariant: 'auto-guard',
+                metadata: {
+                  tileX, tileY,
+                  batchSize: tileChanges.length,
+                  pendingAfter: guardState.changes.size
+                }
+              });
+            }
+          } catch {}
         } else {
           log(`❌ Error reparando tile (${tileX},${tileY}):`, result.error);
+          try {
+            const mcfg = getMetricsConfig();
+            if (mcfg.ENABLED && result.error) {
+              reportError(`repair tile ${tileX},${tileY}: ${result.error}`, {
+                botVariant: 'auto-guard'
+              });
+            }
+          } catch {}
         }
       } catch (error) {
         log(`❌ Error reparando tile (${tileX},${tileY}):`, error);
+        try {
+          const mcfg = getMetricsConfig();
+          if (mcfg.ENABLED && error?.message) {
+            reportError(`exception tile ${tileX},${tileY}: ${error.message}`, {
+              botVariant: 'auto-guard'
+            });
+          }
+        } catch {}
       }
       
       // Delay entre tiles si hay múltiples
@@ -780,8 +834,8 @@ export async function repairChanges(changes) {
       }
     }
     
-    const remainingCharges = Math.floor(guardState.currentCharges);
-    const pendingChanges = guardState.changes.size;
+  const remainingCharges = Math.floor(guardState.currentCharges);
+  const pendingChanges = guardState.changes.size;
     
     log(`🛠️ Reparación completada: ${totalRepaired} píxeles reparados, ${remainingCharges} cargas restantes`);
     
@@ -820,6 +874,22 @@ export async function repairChanges(changes) {
   } finally {
     _isRepairing = false;
   }
+}
+
+// Debounce simple para resumen de análisis
+let _analysisDebounceId = null;
+function debouncedAnalysisSummary({ total, incorrect, missing }) {
+  if (_analysisDebounceId) {
+    clearTimeout(_analysisDebounceId);
+  }
+  _analysisDebounceId = setTimeout(() => {
+    try {
+      trackEvent('analysis_summary', {
+        botVariant: 'auto-guard',
+        metadata: { total, incorrect, missing }
+      });
+    } catch {}
+  }, 1500);
 }
 
 // Pintar múltiples píxeles en un solo tile

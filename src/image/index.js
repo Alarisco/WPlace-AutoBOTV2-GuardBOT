@@ -9,6 +9,8 @@ import { getSession } from "../core/wplace-api.js";
 import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
 import { isPaletteOpen, autoClickPaintButton } from "../core/dom.js";
 import "./plan-overlay-blue-marble.js";
+import { sessionStart, sessionPing, sessionEnd, pixelsPainted, reportError } from "../core/metrics/client.js";
+import { getMetricsConfig } from "../core/metrics/config.js";
 
 export async function runImage() {
   console.log('[WPA-Image] 🚀 runImage() iniciado');
@@ -50,6 +52,18 @@ export async function runImage() {
   };
 
   try {
+    // Iniciar sesión de métricas
+    try {
+      const mcfg = getMetricsConfig({ VARIANT: 'auto-image' });
+      if (mcfg.ENABLED) {
+        if (!window.__wplaceMetrics) window.__wplaceMetrics = {};
+  log(`[METRICS] enabled → ${mcfg.BASE_URL}`);
+        window.__wplaceMetrics.imageSessionActive = true;
+        sessionStart({ botVariant: 'auto-image' });
+        const pingEvery = Math.max(60_000, mcfg.PING_INTERVAL_MS || 300_000);
+        window.__wplaceMetrics.imagePingInterval = window.setInterval(() => sessionPing({ botVariant: 'auto-image' }), pingEvery);
+      }
+    } catch {}
     // Inicializar configuración
     const config = { ...IMAGE_DEFAULTS };
     
@@ -543,6 +557,7 @@ export async function runImage() {
               }
               
               ui.updateProgress(painted, total, currentUserInfo);
+              try { if (painted) pixelsPainted(painted, { botVariant: 'auto-image' }); } catch {}
               
               // Actualizar display de cooldown si hay cooldown activo
               if (imageState.inCooldown && imageState.nextBatchCooldown > 0) {
@@ -576,6 +591,7 @@ export async function runImage() {
             (error) => {
               ui.setStatus(t('image.paintingError'), 'error');
               log('❌ Error en proceso de pintado:', error);
+              try { reportError(String(error?.message || error), { botVariant: 'auto-image' }); } catch {}
               imageState.running = false;
             }
           );
@@ -958,10 +974,49 @@ export async function runImage() {
       if (window.__wplaceBot) {
         window.__wplaceBot.imageRunning = false;
       }
+      try {
+        const mcfg = getMetricsConfig();
+        if (mcfg.ENABLED && window.__wplaceMetrics?.imageSessionActive) {
+          sessionEnd({ botVariant: 'auto-image' });
+          window.__wplaceMetrics.imageSessionActive = false;
+        }
+        if (window.__wplaceMetrics?.imagePingInterval) {
+          window.clearInterval(window.__wplaceMetrics.imagePingInterval);
+          window.__wplaceMetrics.imagePingInterval = null;
+        }
+        if (window.__wplaceMetrics?.imageVisibilityHandler) {
+          document.removeEventListener('visibilitychange', window.__wplaceMetrics.imageVisibilityHandler);
+          delete window.__wplaceMetrics.imageVisibilityHandler;
+        }
+        if (window.__wplaceMetrics?.imageFocusHandler) {
+          window.removeEventListener('focus', window.__wplaceMetrics.imageFocusHandler);
+          delete window.__wplaceMetrics.imageFocusHandler;
+        }
+      } catch {}
     });
 
     log('✅ Auto-Image inicializado correctamente');
     
+    // Considerar al usuario online aunque esté ocioso: ping al recuperar visibilidad/foco
+    try {
+      const mcfg = getMetricsConfig();
+      if (mcfg.ENABLED) {
+        const visibilityHandler = () => {
+          if (!document.hidden) {
+            try { sessionPing({ botVariant: 'auto-image', metadata: { reason: 'visibility' } }); } catch {}
+          }
+        };
+        const focusHandler = () => {
+          try { sessionPing({ botVariant: 'auto-image', metadata: { reason: 'focus' } }); } catch {}
+        };
+        document.addEventListener('visibilitychange', visibilityHandler);
+        window.addEventListener('focus', focusHandler);
+        window.__wplaceMetrics = window.__wplaceMetrics || {};
+        window.__wplaceMetrics.imageVisibilityHandler = visibilityHandler;
+        window.__wplaceMetrics.imageFocusHandler = focusHandler;
+      }
+    } catch {}
+
     // Intentar auto-inicio después de que la UI esté lista
     setTimeout(async () => {
       try {
