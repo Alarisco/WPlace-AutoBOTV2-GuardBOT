@@ -18,6 +18,8 @@ export const FARM_DEFAULTS = {
   BASE_Y: null,            // Posición Y base (local al tile) - se establece al seleccionar zona
   FARM_RADIUS: 500,        // Radio de farming en píxeles (500px por defecto para zona segura)
   POSITION_SELECTED: false, // Flag para indicar si se seleccionó una posición
+  // Auto-compra de cargas usando droplets cuando >= 500
+  AUTO_BUY_ENABLED: false,
   UI_THEME: {
     primary: '#000000',
     secondary: '#111111',
@@ -36,6 +38,7 @@ export const farmState = {
   painted: 0,
   last: null,          // {x,y,color,status,json}
   charges: { count: 0, max: 0, cooldownMs: 30000 },
+  droplets: 0,
   user: null,
   panel: null,
   captureMode: false,  // sniffer activo para capturar TILE_X/Y desde un POST real

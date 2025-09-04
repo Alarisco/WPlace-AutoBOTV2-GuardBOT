@@ -168,10 +168,11 @@ export const es = {
     tileY: "Tile Y",
     customPalette: "Paleta personalizada",
     paletteExample: "ej: #FF0000,#00FF00,#0000FF",
-    capture: "Capturar",
+  capture: "Capturar",
     painted: "Pintados",
     charges: "Cargas",
-    retries: "Fallos",
+  retries: "Fallos",
+  position: "Posición",
     tile: "Tile",
     configSaved: "Configuración guardada",
     configLoaded: "Configuración cargada",
@@ -187,7 +188,7 @@ export const es = {
     selectPosition: "Seleccionar Zona",
     selectPositionAlert: "🎯 Pinta un píxel en una zona DESPOBLADA del mapa para establecer el área de farming",
     waitingPosition: "👆 Esperando que pintes el píxel de referencia...",
-    positionSet: "✅ ¡Zona establecida! Radio: 500px",
+  positionSet: "✅ ¡Zona establecida!",
     positionTimeout: "❌ Tiempo agotado para seleccionar zona",
     missingPosition: "❌ Selecciona una zona primero usando 'Seleccionar Zona'",
     farmRadius: "Radio farm",
@@ -201,7 +202,44 @@ export const es = {
     logWindowTitle: "Logs - {botName}",
     downloadLogs: "Descargar Logs",
     clearLogs: "Limpiar Logs",
-    closeLogs: "Cerrar"
+    closeLogs: "Cerrar",
+
+    // Claves adicionales usadas en src/farm/ui.js
+    ready: "Listo",
+    once: "Una vez",
+    recapture: "Re-capturar",
+
+    // Secciones anidadas para estadísticas y configuración
+    stats: {
+      painted: "Pintados",
+      charges: "Cargas",
+      droplets: "Gotas",
+      user: "Usuario",
+      retries: "Reintentos"
+    },
+    config: {
+      minCharges: "Cargas mínimas",
+      delay: "Espera (seg)",
+      pixelsPerBatch: "Píxeles por lote"
+    },
+    color: {
+      fixed: "Fijo",
+      range: "Rango",
+      random: "Aleatorio",
+      selected: "Color seleccionado",
+      min: "Mín",
+      max: "Máx"
+    },
+
+    // Auto-compra y compras manuales
+    autobuy: {
+      title: "Auto-compra (+5 cargas)",
+      hint: "Se activará automáticamente cuando tengas ≥ 500 gotas"
+    },
+    buyCharges: "Comprar +5 cargas",
+    buying: "Comprando...",
+    buyOk: "Compra realizada. Actualiza sesión.",
+    buyFail: "No se pudo comprar"
   },
 
   // Common/Shared
@@ -237,6 +275,7 @@ export const es = {
     title: "WPlace Auto-Guard",
     initBot: "Inicializar Guard-BOT",
     selectArea: "Seleccionar Área",
+  save: "Guardar",
     captureArea: "Capturar Área",
     startProtection: "Iniciar",
     stopProtection: "Detener",

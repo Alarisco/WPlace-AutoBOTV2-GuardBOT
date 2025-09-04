@@ -107,7 +107,8 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
   const firstLocalX = coords[0];
   const firstLocalY = coords[1];
   
-  setStatus(`🌾 Farmeando ${pixelCount} píxeles en radio ${cfg.FARM_RADIUS}px desde (${cfg.BASE_X},${cfg.BASE_Y}) tile(${cfg.TILE_X},${cfg.TILE_Y})...`, 'status');
+  // Mensaje neutro (pintado lineal); no mencionar radio
+  setStatus(`🌾 Pintando ${pixelCount} píxeles desde base (${cfg.BASE_X},${cfg.BASE_Y}) tile(${cfg.TILE_X},${cfg.TILE_Y})...`, 'status');
   
   const t = await ensureToken();
   // Usar el mismo formato que Auto-Image: text/plain con { colors, coords, t }
@@ -143,7 +144,8 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
     // Actualizar la sesión para obtener las cargas actualizadas (única consulta tras pintar)
     await getSession();
     
-  setStatus(`✅ Lote pintado: ${actualPainted}/${pixelCount} píxeles en zona (${cfg.BASE_X},${cfg.BASE_Y}) radio ${cfg.FARM_RADIUS}px`, 'success');
+  // Mensaje de éxito sin referencia a radio
+  setStatus(`✅ Lote pintado: ${actualPainted}/${pixelCount} píxeles en zona (${cfg.BASE_X},${cfg.BASE_Y})`, 'success');
   try { pixelsPainted(actualPainted, { botVariant: 'auto-farm', metadata: { tileX: cfg.TILE_X, tileY: cfg.TILE_Y } }); } catch {}
     // Ping de presencia como respaldo si ha pasado suficiente tiempo desde el último
     try {

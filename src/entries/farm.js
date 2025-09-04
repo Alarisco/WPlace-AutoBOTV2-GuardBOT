@@ -1,7 +1,7 @@
 import { log } from "../core/logger.js";
 import { farmState, FARM_DEFAULTS } from "../farm/config.js";
 import { loadFarmCfg, saveFarmCfg, resetToSafeDefaults } from "../core/storage.js";
-import { getSession, checkHealth } from "../core/wplace-api.js";
+import { getSession, checkHealth, purchaseProduct } from "../core/wplace-api.js";
 import { createFarmUI, autoCalibrateTile } from "../farm/ui.js";
 import { loop, paintWithRetry } from "../farm/loop.js";
 import { coordinateCapture } from "../core/capture.js";
@@ -104,10 +104,19 @@ import { getMetricsConfig } from "../core/metrics/config.js";
       if (result.success) {
         cfg.TILE_X = result.tileX;
         cfg.TILE_Y = result.tileY;
-        saveFarmCfg(cfg);
-        ui.updateConfig();
-        ui.setStatus(`🎯 Coordenadas capturadas: tile(${result.tileX},${result.tileY})`, 'success');
-        log(`✅ Coordenadas capturadas automáticamente: tile(${result.tileX},${result.tileY})`);
+        // Guardar posición base local y marcar selección
+        if (Number.isFinite(result.localX) && Number.isFinite(result.localY)) {
+          cfg.BASE_X = result.localX;
+          cfg.BASE_Y = result.localY;
+          cfg.POSITION_SELECTED = true;
+        }
+  saveFarmCfg(cfg);
+  // Refrescar UI tras guardar
+  ui.updateConfig();
+  // Pequeño retraso para asegurar que el Shadow DOM refleja el cambio
+  setTimeout(() => ui.updateConfig(), 50);
+        ui.setStatus(`🎯 Zona lista: tile(${result.tileX},${result.tileY}) base(${cfg.BASE_X},${cfg.BASE_Y})`, 'success');
+        log(`✅ Coordenadas capturadas: tile(${result.tileX},${result.tileY}) base(${cfg.BASE_X},${cfg.BASE_Y})`);
       } else {
         ui.setStatus(`❌ ${t('common.error', 'No se pudieron capturar coordenadas')}`, 'error');
       }
@@ -135,11 +144,13 @@ import { getMetricsConfig } from "../core/metrics/config.js";
   async function updateStats() {
     try {
       const session = await getSession();
-      if (session.success && session.data) {
+  if (session.success && session.data) {
         farmState.charges.count = session.data.charges || 0;
         farmState.charges.max = session.data.maxCharges || 50;
         farmState.charges.regen = session.data.chargeRegen || 30000;
         farmState.user = session.data.user;
+        // droplets
+        farmState.droplets = session.data.droplets ?? (session.data.user?.droplets ?? 0);
         
         // Actualizar configuración con datos de la sesión
         cfg.CHARGE_REGEN_MS = farmState.charges.regen;
@@ -149,6 +160,36 @@ import { getMetricsConfig } from "../core/metrics/config.js";
         farmState.health = health;
         
         ui.updateStats(farmState.painted, farmState.charges.count, farmState.retryCount, health);
+        // Auto-compra: si está habilitado y tenemos >= 500 droplets
+        try {
+          if (cfg.AUTO_BUY_ENABLED && (farmState.droplets || 0) >= 500) {
+            ui.setStatus(t('farm.autobuy.buying','Comprando automáticamente...'), 'status');
+            const res = await purchaseProduct(70, 1);
+            if (res.success) {
+              if (ui.notify) ui.notify(t('farm.autobuy.bought','Compra OK. Actualizando sesión...'), 'success');
+              ui.setStatus(t('farm.autobuy.bought','Compra OK. Actualizando sesión...'), 'success');
+              // Restar 500 droplets inmediatamente en UI
+              try {
+                farmState.droplets = Math.max(0, (farmState.droplets || 0) - 500);
+                ui.updateStats(farmState.painted, farmState.charges.count, farmState.retryCount, farmState.health);
+              } catch {}
+              // Reconsultar sesión para reflejar nuevas cargas/droplets
+              const after = await getSession();
+              if (after.success && after.data) {
+                farmState.charges.count = after.data.charges || farmState.charges.count;
+                farmState.charges.max = after.data.maxCharges || farmState.charges.max;
+                farmState.droplets = after.data.droplets ?? farmState.droplets;
+                farmState.user = after.data.user || farmState.user;
+                ui.updateStats(farmState.painted, farmState.charges.count, farmState.retryCount, farmState.health);
+              }
+            } else {
+              if (ui.notify) ui.notify(t('farm.autobuy.failed','No se pudo comprar automáticamente'), 'error');
+              ui.setStatus(t('farm.autobuy.failed','No se pudo comprar automáticamente'), 'error');
+            }
+          }
+        } catch(e) {
+          console.warn('Auto-buy error:', e);
+        }
         return session.data;
       }
       return null;
@@ -261,6 +302,22 @@ import { getMetricsConfig } from "../core/metrics/config.js";
   if (captureBtn) {
     captureBtn.addEventListener('click', enableCaptureOnce);
   }
+
+  // Fallback: escuchar evento global de captura por si el callback no llega
+  window.addEventListener('wplace-capture', (ev) => {
+    try {
+      const d = ev?.detail || window.__wplaceLastCapture;
+      if (!d || !d.success) return;
+      cfg.TILE_X = d.tileX; cfg.TILE_Y = d.tileY;
+      if (Number.isFinite(d.localX) && Number.isFinite(d.localY)) {
+        cfg.BASE_X = d.localX; cfg.BASE_Y = d.localY; cfg.POSITION_SELECTED = true;
+      }
+      saveFarmCfg(cfg);
+      ui.updateConfig();
+      setTimeout(() => ui.updateConfig(), 50);
+      ui.setStatus(`🎯 Zona lista: tile(${d.tileX},${d.tileY}) base(${cfg.BASE_X},${cfg.BASE_Y})`, 'success');
+    } catch {}
+  });
 
   // Configurar el botón "Una vez"
   const onceBtn = ui.getElement().shadowRoot.getElementById('once-btn');

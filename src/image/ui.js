@@ -295,6 +295,12 @@ export async function createImageUI({ texts, ...handlers }) {
       background: #ef4444;
       color: white;
     }
+    /* Estilo reforzado cuando la pintura está activa */
+    .btn-stop-running {
+      background: #ef4444 !important;
+      color: #fff !important;
+      box-shadow: 0 0 0 2px rgba(239,68,68,0.35);
+    }
     
     .btn-select {
       background: #f59e0b;
@@ -1322,6 +1328,15 @@ export async function createImageUI({ texts, ...handlers }) {
     // Habilitar/deshabilitar botones de parada según el estado
     elements.stopBtn.disabled = !isPainting;
     elements.stopBtnUpload.disabled = !isPainting;
+
+    // Asegurar botón Detener en rojo visible cuando está pintando
+    if (isPainting) {
+      elements.stopBtn.classList.add('btn-stop-running');
+      elements.stopBtnUpload.classList.add('btn-stop-running');
+    } else {
+      elements.stopBtn.classList.remove('btn-stop-running');
+      elements.stopBtnUpload.classList.remove('btn-stop-running');
+    }
     
     // Deshabilitar/habilitar botón de cargar progreso durante la pintura
     elements.loadProgressBtn.disabled = isPainting;

@@ -1,5 +1,5 @@
 import { fetchWithTimeout } from "./http.js";
-import { ensureToken } from "./turnstile.js";
+import { ensureToken, invalidateToken } from "./turnstile.js";
 import { log } from "./logger.js";
 
 const BASE = "https://backend.wplace.live";
@@ -9,6 +9,7 @@ export async function getSession() {
     const me = await fetch(`${BASE}/me`, { credentials: 'include' }).then(r => r.json());
     const user = me || null;
     const c = me?.charges || {};
+  const droplets = me?.droplets ?? 0;
     const charges = {
       count: c.count ?? 0,        // Mantener valor decimal original
       max: c.max ?? 0,            // Mantener valor original (puede variar por usuario)
@@ -21,7 +22,8 @@ export async function getSession() {
         user, 
         charges: charges.count,
         maxCharges: charges.max,
-        chargeRegen: charges.cooldownMs
+    chargeRegen: charges.cooldownMs,
+    droplets
       }
     };
   } catch (error) { 
@@ -31,8 +33,9 @@ export async function getSession() {
       data: {
         user: null, 
         charges: 0,
-        maxCharges: 0,
-        chargeRegen: 30000
+    maxCharges: 0,
+    chargeRegen: 30000,
+    droplets: 0
       }
     }; 
   }
@@ -71,6 +74,25 @@ export async function checkHealth() {
       status: 'offline',
       error: error.message
     };
+  }
+}
+
+// Compra de producto (ej. aumentar cargas máximas en +5)
+export async function purchaseProduct(productId = 70, amount = 1) {
+  try {
+    const body = JSON.stringify({ product: { id: productId, amount } });
+    const r = await fetchWithTimeout(`${BASE}/purchase`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body,
+      credentials: 'include',
+      timeout: 15000
+    });
+    let json = {};
+    try { json = await r.json(); } catch { json = {}; }
+    return { success: r.ok, status: r.status, json };
+  } catch (error) {
+    return { success: false, status: 0, json: { error: error.message } };
   }
 }
 
@@ -131,7 +153,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // Timeout de 15 segundos
 
-    const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
+  const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
@@ -141,7 +163,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
 
     clearTimeout(timeoutId);
 
-    if (response.status === 403) {
+  if (response.status === 403) {
       try { await response.json(); } catch { /* Ignore JSON parsing errors */ }
       console.error("❌ 403 Forbidden. Turnstile token might be invalid or expired.");
       
@@ -188,6 +210,9 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
           retryData = {}; // Ignorar errores de JSON parse
         }
         
+        if (retryResponse.ok) {
+          try { invalidateToken(); } catch {}
+        }
         return {
           status: retryResponse.status,
           json: retryData,
@@ -204,6 +229,32 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
       }
     }
 
+    // Si el servidor devuelve 5xx, intentar una vez con token nuevo
+    if (response.status >= 500 && response.status <= 504) {
+      try {
+        const newToken = await ensureToken(true);
+        const retryBody = JSON.stringify({ colors, coords, t: newToken });
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), 15000);
+        const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: retryBody,
+          signal: retryController.signal
+        });
+        clearTimeout(retryTimeoutId);
+        let retryData = null;
+        try { const text = await retryResponse.text(); retryData = text ? JSON.parse(text) : {}; } catch { retryData = {}; }
+        if (retryResponse.ok) {
+          try { invalidateToken(); } catch {}
+        }
+        return { status: retryResponse.status, json: retryData, success: retryResponse.ok };
+      } catch (e) {
+        // Continuar devolviendo el 5xx original si falla
+      }
+    }
+
     let responseData = null;
     try {
       const text = await response.text();
@@ -214,6 +265,9 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
       responseData = {}; // Ignorar errores de JSON parse
     }
 
+    if (response.ok) {
+      try { invalidateToken(); } catch {}
+    }
     return {
       status: response.status,
       json: responseData,
@@ -249,7 +303,7 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
 
     log(`[API] Response: ${response.status} ${response.statusText}`);
 
-    if (response.status === 403) {
+  if (response.status === 403) {
       try { await response.json(); } catch { /* Ignore JSON parsing errors */ }
       console.error("❌ 403 Forbidden. Turnstile token might be invalid or expired.");
       
@@ -311,7 +365,11 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
         
         const painted = retryData?.painted || 0;
         log(`[API] Retry result: ${painted} pixels painted`);
-        
+
+        if (retryResponse.ok) {
+          try { invalidateToken(); } catch {}
+        }
+
         return {
           status: retryResponse.status,
           json: retryData,
@@ -327,6 +385,34 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
           success: false,
           painted: 0
         };
+      }
+    }
+
+    // Intentar una vez con token nuevo si es 5xx
+    if (response.status >= 500 && response.status <= 504) {
+      try {
+        const newToken = await ensureToken(true);
+        const retryBody = JSON.stringify({ colors, coords, t: newToken });
+        log(`[API] Retrying after ${response.status} with fresh token: ${newToken.substring(0, 50)}...`);
+        const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: retryBody
+        });
+        let retryData = null;
+        try {
+          const text = await retryResponse.text();
+          retryData = text && text.trim() ? JSON.parse(text) : {};
+        } catch { retryData = {}; }
+        const painted = retryData?.painted || 0;
+        log(`[API] Retry after ${response.status}: ${painted} pixels painted`);
+        if (retryResponse.ok) {
+          try { invalidateToken(); } catch {}
+        }
+        return { status: retryResponse.status, json: retryData, success: retryResponse.ok, painted };
+      } catch (e) {
+        // Seguir al manejo estándar abajo
       }
     }
 
@@ -346,6 +432,9 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
     const painted = responseData?.painted || 0;
     log(`[API] Success: ${painted} pixels painted`);
 
+    if (response.ok) {
+      try { invalidateToken(); } catch {}
+    }
     return {
       status: response.status,
       json: responseData,

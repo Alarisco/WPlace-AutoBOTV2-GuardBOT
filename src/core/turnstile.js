@@ -242,6 +242,8 @@ async function executeTurnstile(sitekey, action = 'paint') {
   if (invisible && invisible.length > 20) return invisible;
 
   log('👀 Falling back to interactive Turnstile (visible).');
+  // Aviso inicial al usuario del primer intento interactivo
+  try { showUserNotificationTopCenter('🔄 Resolviendo CAPTCHA...', 'info'); } catch {}
   
   // Sistema de reintentos indefinidos con timeout inicial de 30s
   const INITIAL_TIMEOUT = 30000; // 30 segundos para el primer intento
@@ -471,70 +473,65 @@ function sleep(ms) {
 
 // Función para mostrar notificaciones al usuario
 function showUserNotification(message, type = 'info') {
-  // Crear o reutilizar contenedor de notificaciones
-  let notificationContainer = document.getElementById('turnstile-notifications');
-  if (!notificationContainer) {
-    notificationContainer = document.createElement('div');
-    notificationContainer.id = 'turnstile-notifications';
-    notificationContainer.style.cssText = `
+  // Compatibilidad: delegar a top-center para unificar con Auto-Farm
+  showUserNotificationTopCenter(message, type);
+}
+
+// Estilo top-center como Auto-Farm
+function showUserNotificationTopCenter(message, type = 'info', timeout = 3000) {
+  let c = document.getElementById('wplace-toast-container');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'wplace-toast-container';
+    c.style.cssText = `
       position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 100001;
-      max-width: 350px;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2147483647;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
       pointer-events: none;
     `;
-    document.body.appendChild(notificationContainer);
+    document.body.appendChild(c);
   }
 
-  // Crear notificación
-  const notification = document.createElement('div');
-  const bgColor = type === 'error' ? 'rgba(220, 38, 38, 0.9)' : 
-                  type === 'success' ? 'rgba(34, 197, 94, 0.9)' : 
-                  'rgba(59, 130, 246, 0.9)';
-  
-  notification.style.cssText = `
-    background: ${bgColor};
+  const bg = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6';
+  const el = document.createElement('div');
+  el.className = 'wplace-toast';
+  el.textContent = message;
+  el.style.cssText = `
+    min-width: 240px;
+    max-width: 80vw;
+    margin: 0 auto;
+    background: ${bg};
     color: white;
-    padding: 12px 16px;
-    border-radius: 8px;
-    margin-bottom: 8px;
-    font: 500 14px/1.4 "Segoe UI", sans-serif;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    padding: 10px 14px;
+    font-weight: 600;
+    letter-spacing: .2px;
+    transform: translateY(-10px) scale(0.98);
     opacity: 0;
-    transform: translateX(100%);
-    transition: all 0.3s ease;
+    transition: transform .25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity .25s ease;
     pointer-events: auto;
   `;
-  
-  notification.textContent = message;
-  notificationContainer.appendChild(notification);
-  
-  // Animar entrada
-  if (typeof window !== 'undefined' && window.requestAnimationFrame) {
-    window.requestAnimationFrame(() => {
-      notification.style.opacity = '1';
-      notification.style.transform = 'translateX(0)';
-    });
-  } else {
-    setTimeout(() => {
-      notification.style.opacity = '1';
-      notification.style.transform = 'translateX(0)';
-    }, 10);
-  }
-  
-  // Auto-remover después de 5 segundos
-  setTimeout(() => {
-    notification.style.opacity = '0';
-    notification.style.transform = 'translateX(100%)';
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 300);
-  }, 5000);
+  c.appendChild(el);
+
+  const raf = (cb) => (typeof window !== 'undefined' && window.requestAnimationFrame ? window.requestAnimationFrame(cb) : setTimeout(cb, 16));
+  raf(() => {
+    el.style.transform = 'translateY(0) scale(1)';
+    el.style.opacity = '1';
+  });
+
+  const remove = () => {
+    el.style.transform = 'translateY(-10px) scale(0.98)';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 250);
+  };
+  if (timeout > 0) setTimeout(remove, timeout);
+  el.addEventListener('click', remove);
 }
 
 function waitForSelector(selector, interval = 200, timeout = 10000) {
@@ -560,6 +557,7 @@ async function handleCaptchaFallback() {
     const executeFlow = async () => {
       try {
         log("🎯 Starting automatic CAPTCHA solving process...");
+  try { showUserNotificationTopCenter('Intentando resolver... Tiempo de espera maximo 30 s', 'info'); } catch {}
         
         // Clear any existing token to force fresh generation
         invalidateToken();

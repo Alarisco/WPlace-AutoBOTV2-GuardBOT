@@ -1,995 +1,591 @@
-import { log } from "../core/logger.js";
-import { FARM_DEFAULTS, farmState } from "./config.js";
-import { saveFarmCfg, loadFarmCfg, resetFarmCfg } from "../core/storage.js";
-import { dragHeader, clamp } from "../core/utils.js";
 import { t } from "../locales/index.js";
-import { createLogWindow } from "../log_window/index.js";
+import { COLOR_MAP, getColorName } from "./palette.js";
+import { farmState } from "./config.js";
+import { clamp } from "../core/utils.js";
+import { log } from "../core/logger.js";
+import { registerWindow } from "../core/window-manager.js";
 
 export function createFarmUI(config, onStart, onStop) {
-  const shadowHost = document.createElement('div');
-  shadowHost.id = 'wplace-farm-ui';
-  shadowHost.style.cssText = `
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    z-index: 2147483647;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  `;
-  
-  const shadow = shadowHost.attachShadow({ mode: 'open' });
-  
+  const host = document.createElement('div');
+  host.id = 'wplace-farm-ui';
+  host.style.cssText = 'position: fixed; top: 12px; right: 12px; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;';
+  const root = host.attachShadow({ mode: 'open' });
+
   const style = document.createElement('style');
   style.textContent = `
-    .wplace-container {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border: 2px solid #4a5568;
-      border-radius: 12px;
-      padding: 16px;
-      min-width: 320px;
-      max-width: 400px;
-      color: white;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-      font-size: 14px;
-      backdrop-filter: blur(10px);
-      position: relative;
-    }
-    
-    .wplace-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.2);
-      cursor: move;
-    }
-    
-    .wplace-title {
-      font-weight: bold;
-      font-size: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    .wplace-minimize {
-      background: rgba(255,255,255,0.2);
-      border: none;
-      border-radius: 4px;
-      color: white;
-      padding: 4px 8px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-    
-    .wplace-minimize:hover {
-      background: rgba(255,255,255,0.3);
-    }
-    
-    .wplace-content {
-      display: block;
-    }
-    
-    .wplace-content.minimized {
-      display: none;
-    }
-    
-    .wplace-section {
-      margin-bottom: 12px;
-    }
-    
-    .wplace-section-title {
-      font-weight: bold;
-      margin-bottom: 8px;
-      font-size: 13px;
-      color: #e2e8f0;
-      cursor: pointer;
-      user-select: none;
-    }
-    
-    .wplace-row {
-      display: flex;
-      align-items: center;
-      margin-bottom: 8px;
-      gap: 8px;
-    }
-    
-    .wplace-label {
-      flex: 1;
-      font-size: 12px;
-      color: #cbd5e0;
-    }
-    
-    .wplace-input {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 4px;
-      color: white;
-      padding: 4px 8px;
-      font-size: 12px;
-      width: 80px;
-    }
-    
-    .wplace-input:focus {
-      outline: none;
-      border-color: #90cdf4;
-      background: rgba(255,255,255,0.15);
-    }
-    
-    .wplace-input.wide {
-      width: 100%;
-    }
-    
-    .wplace-select {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 4px;
-      color: white;
-      padding: 4px 8px;
-      font-size: 12px;
-      width: 100px;
-    }
-    
-    .wplace-button {
-      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
-      border: none;
-      border-radius: 6px;
-      color: white;
-      padding: 8px 16px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 500;
-      margin: 2px;
-      transition: all 0.2s;
-      min-width: 60px;
-    }
-    
-    .wplace-button:hover {
-      background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
-      transform: translateY(-1px);
-    }
-    
-    .wplace-button:active {
-      transform: translateY(0);
-    }
-    
-    .wplace-button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-    
-    .wplace-button.start {
-      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-    }
-    
-    .wplace-button.start:hover:not(:disabled) {
-      background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
-    }
-    
-    .wplace-button.stop {
-      background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-    }
-    
-    .wplace-button.stop:hover:not(:disabled) {
-      background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
-    }
-    
-    .wplace-button.secondary {
-      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-    }
-    
-    .wplace-button.secondary:hover:not(:disabled) {
-      background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
-    }
-    
-    .wplace-button.small {
-      padding: 4px 8px;
-      font-size: 11px;
-      min-width: 40px;
-    }
-    
-    .wplace-status {
-      background: rgba(0,0,0,0.3);
-      border-radius: 6px;
-      padding: 8px;
-      margin: 8px 0;
-      font-size: 12px;
-      min-height: 20px;
-      word-wrap: break-word;
-      transition: all 0.3s ease;
-    }
-    
-    .wplace-status.success {
-      background: rgba(72, 187, 120, 0.2);
-      border-left: 3px solid #48bb78;
-    }
-    
-    .wplace-status.error {
-      background: rgba(245, 101, 101, 0.2);
-      border-left: 3px solid #f56565;
-    }
-    
-    .wplace-status.status {
-      background: rgba(66, 153, 225, 0.2);
-      border-left: 3px solid #4299e1;
-    }
-    
-    .wplace-stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    
-    .wplace-stat {
-      background: rgba(0,0,0,0.2);
-      border-radius: 4px;
-      padding: 6px;
-      text-align: center;
-    }
-    
-    .wplace-stat-value {
-      font-weight: bold;
-      font-size: 14px;
-    }
-    
-    .wplace-stat-label {
-      font-size: 10px;
-      color: #a0aec0;
-      margin-top: 2px;
-    }
-    
-    .wplace-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-top: 8px;
-    }
-    
-    .wplace-advanced {
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(255,255,255,0.1);
-    }
-    
-    .wplace-theme-preview {
-      display: flex;
-      gap: 2px;
-      flex-wrap: wrap;
-      margin-top: 4px;
-      min-height: 16px;
-    }
-    
-    .wplace-color-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 2px;
-      border: 1px solid rgba(255,255,255,0.3);
-    }
-    
-    .wplace-health {
-      font-size: 10px;
-      color: #a0aec0;
-      margin-top: 4px;
-      text-align: center;
-    }
-    
-    .wplace-health.online {
-      color: #48bb78;
-    }
-    
-    .wplace-health.offline {
-      color: #f56565;
-    }
-    
-    .wplace-zone-info {
-      background: rgba(0,0,0,0.2);
-      border-radius: 6px;
-      padding: 8px;
-      margin: 8px 0;
-      font-size: 11px;
-    }
-    
-    .wplace-zone-text {
-      color: #e2e8f0;
-      margin-bottom: 4px;
-    }
-    
-    .wplace-zone-warning {
-      color: #ffd700;
-      font-size: 10px;
-      font-style: italic;
-    }
-    
-    #zone-display {
-      font-weight: bold;
-      color: #90cdf4;
-    }
+    .panel{background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.5);width:320px;overflow:hidden}
+  .header{display:flex;justify-content:space-between;align-items:center;background:#111827;color:#93c5fd;padding:10px 12px;font-weight:600;cursor:move;user-select:none}
+  .min-btn{background:transparent;border:1px solid #374151;color:#e5e7eb;border-radius:6px;width:26px;height:22px;line-height:20px;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer;transition:all .2s}
+  .min-btn:hover{background:#1f2937}
+  .body{padding:12px;max-height:1000px;transition:max-height .35s ease, opacity .25s ease, padding .25s ease}
+  .body.collapsed{max-height:0;opacity:.0;overflow:hidden;padding:0}
+    .row{display:flex;gap:8px;margin:8px 0}
+    .btn{flex:1;padding:8px 10px;border:none;border-radius:8px;font-weight:700;cursor:pointer;transition:all .2s;font-size:13px}
+    .btn.primary{background:#2563eb;color:#fff}
+    .btn.ghost{background:transparent;border:1px solid #374151;color:#e5e7eb}
+  .btn.ghost.danger{background:#ef4444;color:#fff;border-color:#ef4444}
+    .btn.primary:disabled,.btn.ghost:disabled{opacity:.5;cursor:not-allowed}
+    .card{background:#111827;padding:10px;border-radius:8px;margin-top:10px}
+    .stat{display:flex;justify-content:space-between;margin:4px 0;font-size:12px;opacity:.95}
+    .status{margin-top:10px;padding:8px;border-radius:6px;text-align:center;font-size:12px;background:rgba(255,255,255,.06)}
+    .label{font-size:12px;color:#cbd5e1}
+    select,input{background:#111827;border:1px solid #374151;color:#e5e7eb;border-radius:6px;padding:6px 8px;font-size:12px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .colors{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+    .swatch{width:20px;height:20px;border:1px solid #374151;border-radius:4px;cursor:pointer}
+  .active{outline:2px solid #93c5fd}
+  /* Lista texto/valor para la configuración */
+  .list{display:flex;flex-direction:column;gap:8px}
+  .list-item{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .list-item .label{font-size:12px;color:#cbd5e1}
+  .list-item input{width:84px;text-align:center}
+  /* Parpadeo naranja para botón Capturar */
+  @keyframes wpa-blink-orange{0%,100%{background:transparent;border-color:#f59e0b;color:#fde68a}50%{background:#f59e0b33;border-color:#f59e0b;color:#fff}}
+  .blink-orange{animation:wpa-blink-orange 1s infinite; border-width:2px !important}
   `;
-  
-  shadow.appendChild(style);
-  
-  const container = document.createElement('div');
-  container.className = 'wplace-container';
-  
-  // Estado interno de la UI
-  const uiState = {
-    minimized: false,
-    showAdvanced: false
-  };
-  
-  container.innerHTML = `
-    <div class="wplace-header">
-      <div class="wplace-title">
-        🤖 ${t('farm.title')}
+  root.appendChild(style);
+
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="header"><span>🧑‍🌾 WPlace Farm</span><button id="minBtn" class="min-btn" title="${t('image.minimize','Minimizar')}">–</button></div>
+    <div class="body">
+      <div class="row">
+        <button class="btn primary" id="startBtn">${t('farm.start','Iniciar')}</button>
+        <button class="btn ghost" id="stopBtn" disabled>${t('farm.stop','Detener')}</button>
+        <button class="btn ghost" id="logsBtn">${t('farm.logWindow','Logs')}</button>
       </div>
-      <button class="wplace-minimize">−</button>
-    </div>
-    
-    <div class="wplace-content">
-      <!-- Estado y controles principales -->
-      <div class="wplace-section">
-        <div class="wplace-status" id="status">💤 ${t('farm.stopped')}</div>
-        
-        <div class="wplace-stats">
-          <div class="wplace-stat">
-            <div class="wplace-stat-value" id="painted-count">0</div>
-            <div class="wplace-stat-label">${t('farm.painted')}</div>
-          </div>
-          <div class="wplace-stat">
-            <div class="wplace-stat-value" id="charges-count">0</div>
-            <div class="wplace-stat-label">${t('farm.charges')}</div>
-          </div>
-          <div class="wplace-stat">
-            <div class="wplace-stat-value" id="retry-count">0</div>
-            <div class="wplace-stat-label">${t('farm.retries')}</div>
-          </div>
-          <div class="wplace-stat">
-            <div class="wplace-stat-value" id="tile-pos">0,0</div>
-            <div class="wplace-stat-label">${t('farm.tile')}</div>
-          </div>
-        </div>
-        
-        <div class="wplace-buttons">
-          <button class="wplace-button start" id="start-btn">▶️ ${t('farm.start')}</button>
-          <button class="wplace-button stop" id="stop-btn" disabled>⏹️ ${t('farm.stop')}</button>
-          <button class="wplace-button small" id="select-position-btn">🌍 ${t('farm.selectPosition')}</button>
-          <button class="wplace-button small" id="once-btn">🎨 ${t('farm.paintOnce')}</button>
-          <button class="wplace-button secondary small" id="log-window-btn">📋 ${t('farm.logWindow') || 'Logs'}</button>
-        </div>
-        
-        <!-- Información de la zona seleccionada -->
-        <div class="wplace-zone-info" id="zone-info">
-          <div class="wplace-zone-text">📍 ${t('farm.positionInfo')}: <span id="zone-display">${t('farm.noPosition')}</span></div>
-          <div class="wplace-zone-warning">⚠️ ${t('farm.selectEmptyArea')}</div>
-        </div>
-        
-        <div class="wplace-health" id="health-status">🔍 ${t('farm.checkingStatus')}</div>
+
+      <div class="card">
+  <div class="stat"><span>${t('farm.stats.painted','Pintados')}</span><span id="painted">0</span></div>
+  <div class="stat"><span>${t('farm.stats.charges','Cargas')}</span><span id="charges">0/0</span></div>
+  <div class="stat"><span>${t('farm.stats.droplets','Gotas')}</span><span id="droplets">0</span></div>
+  <div class="stat"><span>${t('farm.stats.user','Usuario')}</span><span id="username">-</span></div>
+  <div class="stat"><span>${t('farm.stats.retries','Reintentos')}</span><span id="retries">0</span></div>
       </div>
-      
-      <!-- Configuración básica -->
-      <div class="wplace-section">
-        <div class="wplace-section-title">⚙️ ${t('farm.configuration')}</div>
-        
-        <div class="wplace-row">
-          <span class="wplace-label">${t('farm.delay')}:</span>
-          <input type="number" class="wplace-input" id="delay-input" min="1000" max="300000" step="1000">
+
+      <div class="card" id="cfgCard">
+        <div class="list">
+          <div class="list-item">
+            <span class="label">${t('farm.config.minCharges','Cargas mínimas')}</span>
+            <input type="number" id="minCharges" min="0" max="100" value="${config.MIN_CHARGES ?? 10}" />
+          </div>
+          <div class="list-item">
+            <span class="label">${t('farm.config.delay','Espera (seg)')}</span>
+            <input type="number" id="delaySeconds" min="1" max="120" value="${Math.round((config.DELAY_MS||15000)/1000) || 15}" />
+          </div>
+          <div class="list-item">
+            <span class="label">${t('farm.pixelsPerBatch','Píxeles por lote')}</span>
+            <input type="number" id="pixelsPerBatch" min="1" max="50" value="${config.PIXELS_PER_BATCH ?? 20}" />
+          </div>
         </div>
-        
-        <div class="wplace-row">
-          <span class="wplace-label">${t('farm.pixelsPerBatch')}:</span>
-          <input type="number" class="wplace-input" id="pixels-input" min="1" max="50">
-        </div>
-        
-        <div class="wplace-row">
-          <span class="wplace-label">${t('farm.minCharges')}:</span>
-          <input type="number" class="wplace-input" id="min-charges-input" min="0" max="50" step="0.1">
-        </div>
-        
-        <div class="wplace-row">
-          <span class="wplace-label">${t('farm.colorMode')}:</span>
-          <select class="wplace-select" id="color-mode-select">
-            <option value="random">${t('farm.random')}</option>
-            <option value="fixed">${t('farm.fixed')}</option>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <label class="label">${t('farm.colorMode','Modo de color')}</label>
+          <select id="colorMode">
+            <option value="fixed">${t('farm.color.fixed','Fijo')}</option>
+            <option value="range">${t('farm.color.range','Rango')}</option>
+            <option value="random">${t('farm.color.random','Aleatorio')}</option>
           </select>
         </div>
-        
-        <div class="wplace-row" id="color-range-row">
-          <span class="wplace-label">${t('farm.range')}:</span>
-          <input type="number" class="wplace-input" id="color-min-input" min="1" max="32" style="width: 35px;">
-          <span style="color: #cbd5e0;">-</span>
-          <input type="number" class="wplace-input" id="color-max-input" min="1" max="32" style="width: 35px;">
+        <div id="fixedPicker" class="row" style="flex-direction:column">
+          <div class="label" id="selectedColorLabel">${t('farm.color.selected','Color seleccionado')}: -</div>
+          <div class="colors" id="colorGrid"></div>
         </div>
-        
-        <div class="wplace-row" id="color-fixed-row" style="display: none;">
-          <span class="wplace-label">${t('farm.fixedColor')}:</span>
-          <input type="number" class="wplace-input" id="color-fixed-input" min="1" max="32">
+        <div id="rangePicker" class="grid2" style="display:none;">
+          <div><label class="label">${t('farm.color.min','Mín')}</label><select id="colorMin"></select></div>
+          <div><label class="label">${t('farm.color.max','Máx')}</label><select id="colorMax"></select></div>
         </div>
       </div>
-      
-      <!-- Configuración avanzada (colapsable) -->
-      <div class="wplace-section">
-        <div class="wplace-section-title" id="advanced-toggle">
-          🔧 ${t('farm.advanced')} <span id="advanced-arrow">▶</span>
-        </div>
-        
-        <div class="wplace-advanced" id="advanced-section" style="display: none;">
-          <div class="wplace-row">
-            <span class="wplace-label">${t('farm.tileX')}:</span>
-            <input type="number" class="wplace-input" id="tile-x-input">
-          </div>
-          
-          <div class="wplace-row">
-            <span class="wplace-label">${t('farm.tileY')}:</span>
-            <input type="number" class="wplace-input" id="tile-y-input">
-          </div>
-          
-          <div class="wplace-row">
-            <span class="wplace-label">${t('farm.customPalette')}:</span>
-          </div>
-          <div class="wplace-row">
-            <input type="text" class="wplace-input wide" id="custom-palette-input" 
-                   placeholder="${t('farm.paletteExample')}">
-          </div>
-          
-          <div class="wplace-buttons">
-            <button class="wplace-button small" id="save-btn">💾 ${t('common.save')}</button>
-            <button class="wplace-button small" id="load-btn">📁 ${t('common.load')}</button>
-            <button class="wplace-button small" id="reset-btn">🔄 ${t('common.reset')}</button>
-            <button class="wplace-button small" id="capture-btn">📸 ${t('farm.capture')}</button>
-          </div>
-        </div>
+
+      <div class="row">
+  <button class="btn ghost" id="capture-btn">${t('farm.capture','Capturar zona')}</button>
+  <button class="btn ghost" id="once-btn">${t('farm.once','Una vez')}</button>
+        <button class="btn ghost" id="select-position-btn" style="display:none">Select</button>
       </div>
-    </div>
+  <div class="row" id="posInfoRow" style="display:none"></div>
+
+  <div class="card" id="purchaseCard">
+        <div class="row" style="align-items:center; justify-content:space-between;">
+          <span class="label" style="flex:1;">${t('farm.autobuy.title','Auto-compra (+5 cargas)')}</span>
+          <label class="toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 26px; margin-left: 10px;">
+            <input type="checkbox" id="autoBuyCheckbox" style="opacity: 0; width: 0; height: 0;">
+            <span class="toggle-slider" style="
+              position: absolute;
+              cursor: pointer;
+              top: 0;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              background-color: #ef4444;
+              transition: all 0.3s ease;
+              border-radius: 13px;
+              border: 1px solid #dc2626;
+            "></span>
+            <span class="toggle-knob" style="
+              position: absolute;
+              height: 20px;
+              width: 20px;
+              left: 3px;
+              top: 3px;
+              background-color: white;
+              transition: all 0.3s ease;
+              border-radius: 50%;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            "></span>
+          </label>
+        </div>
+        <div class="row" id="manualBuyRow" style="display:none; gap:8px; align-items:center;">
+          <button class="btn primary" id="manualBuyBtn">${t('farm.buyCharges','Comprar +5 cargas')}</button>
+        </div>
+        <div class="row" style="font-size:12px; color:#9ca3af">${t('farm.autobuy.hint','Se activará automáticamente cuando tengas ≥ 500 gotas')}</div>
+      </div>
+
+  </div>
+  <div class="status" id="status">${t('farm.ready','Listo')}</div>
   `;
-  
-  shadow.appendChild(container);
-  document.body.appendChild(shadowHost);
-  
-  // Hacer el panel arrastrable
-  const header = shadow.querySelector('.wplace-header');
-  dragHeader(header, shadowHost);
-  
-  // Referencias a elementos
-  const elements = {
-    minimizeBtn: shadow.querySelector('.wplace-minimize'),
-    content: shadow.querySelector('.wplace-content'),
-    status: shadow.getElementById('status'),
-    paintedCount: shadow.getElementById('painted-count'),
-    chargesCount: shadow.getElementById('charges-count'),
-    retryCount: shadow.getElementById('retry-count'),
-    tilePos: shadow.getElementById('tile-pos'),
-    startBtn: shadow.getElementById('start-btn'),
-    stopBtn: shadow.getElementById('stop-btn'),
-    selectPositionBtn: shadow.getElementById('select-position-btn'),
-    onceBtn: shadow.getElementById('once-btn'),
-    logWindowBtn: shadow.getElementById('log-window-btn'),
-    zoneInfo: shadow.getElementById('zone-info'),
-    zoneDisplay: shadow.getElementById('zone-display'),
-    healthStatus: shadow.getElementById('health-status'),
-    delayInput: shadow.getElementById('delay-input'),
-    pixelsInput: shadow.getElementById('pixels-input'),
-    minChargesInput: shadow.getElementById('min-charges-input'),
-    colorModeSelect: shadow.getElementById('color-mode-select'),
-    colorRangeRow: shadow.getElementById('color-range-row'),
-    colorFixedRow: shadow.getElementById('color-fixed-row'),
-    colorMinInput: shadow.getElementById('color-min-input'),
-    colorMaxInput: shadow.getElementById('color-max-input'),
-    colorFixedInput: shadow.getElementById('color-fixed-input'),
-    advancedToggle: shadow.getElementById('advanced-toggle'),
-    advancedSection: shadow.getElementById('advanced-section'),
-    advancedArrow: shadow.getElementById('advanced-arrow'),
-    tileXInput: shadow.getElementById('tile-x-input'),
-    tileYInput: shadow.getElementById('tile-y-input'),
-    customPaletteInput: shadow.getElementById('custom-palette-input'),
-    saveBtn: shadow.getElementById('save-btn'),
-    loadBtn: shadow.getElementById('load-btn'),
-    resetBtn: shadow.getElementById('reset-btn'),
-    captureBtn: shadow.getElementById('capture-btn')
+  root.appendChild(panel);
+
+  // Mapear elementos
+  const els = {
+    start: panel.querySelector('#startBtn'),
+    stop: panel.querySelector('#stopBtn'),
+    logsBtn: panel.querySelector('#logsBtn'),
+    status: panel.querySelector('#status'),
+    painted: panel.querySelector('#painted'),
+  charges: panel.querySelector('#charges'),
+  droplets: panel.querySelector('#droplets'),
+  username: panel.querySelector('#username'),
+  retries: panel.querySelector('#retries'),
+    colorMode: panel.querySelector('#colorMode'),
+    colorGrid: panel.querySelector('#colorGrid'),
+    colorMin: panel.querySelector('#colorMin'),
+    colorMax: panel.querySelector('#colorMax'),
+    fixedPicker: panel.querySelector('#fixedPicker'),
+    rangePicker: panel.querySelector('#rangePicker'),
+    selectPositionBtn: panel.querySelector('#select-position-btn'),
+    captureBtn: panel.querySelector('#capture-btn'),
+  onceBtn: panel.querySelector('#once-btn'),
+  posInfoValue: panel.querySelector('#posInfoValue'),
+  minCharges: panel.querySelector('#minCharges'),
+  delaySeconds: panel.querySelector('#delaySeconds'),
+  pixelsPerBatch: panel.querySelector('#pixelsPerBatch'),
+  selectedColorLabel: panel.querySelector('#selectedColorLabel'),
+  autoBuyCheckbox: panel.querySelector('#autoBuyCheckbox'),
+  manualBuyRow: panel.querySelector('#manualBuyRow'),
+  manualBuyBtn: panel.querySelector('#manualBuyBtn')
   };
-  
-  // Función para actualizar los valores de los inputs desde la configuración
-  function updateInputsFromConfig() {
-    elements.delayInput.value = config.DELAY_MS;
-    elements.pixelsInput.value = config.PIXELS_PER_BATCH;
-    elements.minChargesInput.value = config.MIN_CHARGES;
-    elements.colorModeSelect.value = config.COLOR_MODE;
-    elements.colorMinInput.value = config.COLOR_MIN;
-    elements.colorMaxInput.value = config.COLOR_MAX;
-    elements.colorFixedInput.value = config.COLOR_FIXED;
-    elements.tileXInput.value = config.TILE_X || '';
-    elements.tileYInput.value = config.TILE_Y || '';
-    elements.customPaletteInput.value = (config.CUSTOM_PALETTE || []).join(',');
-    
-    // Actualizar visibilidad de controles de color
-    updateColorModeVisibility();
-    updateTileDisplay();
-    updateZoneDisplay();
-    updateButtonStates(farmState?.running || false);
-  }
-  
-  // Función para actualizar la configuración desde los inputs
-  function updateConfigFromInputs() {
-    config.DELAY_MS = parseInt(elements.delayInput.value) || FARM_DEFAULTS.DELAY_MS;
-    config.PIXELS_PER_BATCH = clamp(parseInt(elements.pixelsInput.value) || FARM_DEFAULTS.PIXELS_PER_BATCH, 1, 50);
-    config.MIN_CHARGES = parseFloat(elements.minChargesInput.value) || FARM_DEFAULTS.MIN_CHARGES;
-    config.COLOR_MODE = elements.colorModeSelect.value;
-    config.COLOR_MIN = clamp(parseInt(elements.colorMinInput.value) || FARM_DEFAULTS.COLOR_MIN, 1, 32);
-    config.COLOR_MAX = clamp(parseInt(elements.colorMaxInput.value) || FARM_DEFAULTS.COLOR_MAX, 1, 32);
-    config.COLOR_FIXED = clamp(parseInt(elements.colorFixedInput.value) || FARM_DEFAULTS.COLOR_FIXED, 1, 32);
-    
-    // Asegurar que MIN <= MAX
-    if (config.COLOR_MIN > config.COLOR_MAX) {
-      config.COLOR_MAX = config.COLOR_MIN;
-      elements.colorMaxInput.value = config.COLOR_MAX;
-    }
-    
-    const tileX = parseInt(elements.tileXInput.value);
-    const tileY = parseInt(elements.tileYInput.value);
-    if (Number.isFinite(tileX)) config.TILE_X = tileX;
-    if (Number.isFinite(tileY)) config.TILE_Y = tileY;
-    
-    updateTileDisplay();
-    updateZoneDisplay();
-  }
-  
-  // Función para actualizar visibilidad de controles de modo de color
-  function updateColorModeVisibility() {
-    const mode = elements.colorModeSelect.value;
-    elements.colorRangeRow.style.display = mode === 'random' ? 'flex' : 'none';
-    elements.colorFixedRow.style.display = mode === 'fixed' ? 'flex' : 'none';
-  }
-  
-  // Función para actualizar display del tile
-  function updateTileDisplay() {
-    if (elements.tilePos) {
-      elements.tilePos.textContent = `${config.TILE_X || 0},${config.TILE_Y || 0}`;
-    }
-  }
-  
-  // Función para actualizar el display de la zona seleccionada
-  function updateZoneDisplay() {
-    if (elements.zoneDisplay) {
-      if (config.POSITION_SELECTED && config.BASE_X !== null && config.BASE_Y !== null) {
-        elements.zoneDisplay.textContent = t('farm.currentZone', { x: config.BASE_X, y: config.BASE_Y });
-        elements.zoneDisplay.style.color = '#48bb78'; // Verde para indicar activa
-      } else {
-        elements.zoneDisplay.textContent = t('farm.noPosition');
-        elements.zoneDisplay.style.color = '#f56565'; // Rojo para indicar no seleccionada
-      }
-    }
-    
-    // Actualizar estado de botones cuando cambie la zona
-    updateButtonStates(farmState?.running || false);
-  }
-  
-  // Event listeners
-  elements.minimizeBtn?.addEventListener('click', () => {
-    uiState.minimized = !uiState.minimized;
-    elements.content.classList.toggle('minimized', uiState.minimized);
-    elements.minimizeBtn.textContent = uiState.minimized ? '+' : '−';
+
+  // El botón select-position redirige al de captura para mantener compatibilidad
+  els.selectPositionBtn.addEventListener('click', () => {
+    els.captureBtn?.click();
   });
-  
-  elements.startBtn?.addEventListener('click', () => {
-    updateConfigFromInputs();
-    onStart();
-    updateButtonStates(true);
-  });
-  
-  elements.stopBtn?.addEventListener('click', () => {
-    onStop();
-    updateButtonStates(false);
-  });
-  
-  elements.onceBtn?.addEventListener('click', () => {
-    // Asegurar que inputs reflejan la última captura/calibración
-    updateInputsFromConfig();
-    updateConfigFromInputs();
-    // Llamar a la función de pintar una vez si existe
-    if (window.WPAUI && window.WPAUI.once) {
-      window.WPAUI.once();
-    }
-  });
-  
-  elements.selectPositionBtn?.addEventListener('click', () => {
-    selectFarmPosition(config, setStatus, updateZoneDisplay);
-  });
-  
-  // Event listener para el botón de logs
-  let logWindow = null;
-  elements.logWindowBtn?.addEventListener('click', () => {
-    if (!logWindow) {
-      logWindow = createLogWindow('farm');
-      logWindow.show();
-    } else {
-      logWindow.toggle();
-    }
-  });
-  
-  elements.colorModeSelect?.addEventListener('change', () => {
-    updateColorModeVisibility();
-    updateConfigFromInputs();
-  });
-  
-  elements.customPaletteInput?.addEventListener('input', () => {
-    updateConfigFromInputs();
-  });
-  
-  elements.advancedToggle?.addEventListener('click', () => {
-    uiState.showAdvanced = !uiState.showAdvanced;
-    elements.advancedSection.style.display = uiState.showAdvanced ? 'block' : 'none';
-    elements.advancedArrow.textContent = uiState.showAdvanced ? '▼' : '▶';
-  });
-  
-  // Listeners para inputs (actualización automática)
-  ['delayInput', 'pixelsInput', 'minChargesInput', 'colorMinInput', 'colorMaxInput', 'colorFixedInput', 'tileXInput', 'tileYInput'].forEach(inputName => {
-    elements[inputName]?.addEventListener('change', updateConfigFromInputs);
-  });
-  
-  elements.saveBtn?.addEventListener('click', () => {
-    updateConfigFromInputs();
-    saveFarmCfg(config);
-    setStatus(`💾 ${t('farm.configSaved')}`, 'success');
-  });
-  
-  elements.loadBtn?.addEventListener('click', () => {
-    const loaded = loadFarmCfg(FARM_DEFAULTS);
-    Object.assign(config, loaded);
-    updateInputsFromConfig();
-    setStatus(`📁 ${t('farm.configLoaded')}`, 'success');
-  });
-  
-  elements.resetBtn?.addEventListener('click', () => {
-    resetFarmCfg();
-    Object.assign(config, FARM_DEFAULTS);
-    updateInputsFromConfig();
-    setStatus(`🔄 ${t('farm.configReset')}`, 'success');
-  });
-  
-  elements.captureBtn?.addEventListener('click', () => {
-    // Función de captura - será implementada
-    setStatus(`📸 ${t('farm.captureInstructions')}`, 'status');
-    // Aquí iría la lógica de captura
-  });
-  
-  // Función para actualizar estado de botones
-  function updateButtonStates(running) {
-    if (elements.startBtn) {
-      // El botón de inicio está deshabilitado si:
-      // 1. El bot está corriendo, O
-      // 2. No se ha seleccionado una zona
-      const noZoneSelected = !config.POSITION_SELECTED || config.BASE_X === null || config.BASE_Y === null;
-      elements.startBtn.disabled = running || noZoneSelected;
-      
-      // Cambiar texto del botón según el estado
-      if (noZoneSelected) {
-        elements.startBtn.textContent = `🚫 ${t('farm.selectPosition')} ⚠️`;
-        elements.startBtn.title = t('farm.missingPosition');
-      } else {
-        elements.startBtn.textContent = `▶️ ${t('farm.start')}`;
-        elements.startBtn.title = '';
-      }
-    }
-    if (elements.stopBtn) elements.stopBtn.disabled = !running;
-  }
-  
-  // Función para actualizar el estado visual
-  function setStatus(message, type = 'status') {
-    if (elements.status) {
-      elements.status.textContent = message;
-      elements.status.className = `wplace-status ${type}`;
-      log(`Status: ${message}`);
-    }
-  }
-  
-  // Función para actualizar estadísticas
-  function updateStats(painted, charges, retries = 0, health = null) {
-    if (elements.paintedCount) {
-      elements.paintedCount.textContent = painted || 0;
-    }
-    if (elements.chargesCount) {
-      elements.chargesCount.textContent = typeof charges === 'number' ? charges.toFixed(1) : '0';
-    }
-    if (elements.retryCount) {
-      elements.retryCount.textContent = retries || 0;
-    }
-    if (elements.healthStatus && health) {
-      elements.healthStatus.textContent = health.up ? `🟢 ${t('farm.backendOnline')}` : `🔴 ${t('farm.backendOffline')}`;
-      elements.healthStatus.className = `wplace-health ${health.up ? 'online' : 'offline'}`;
-    }
-  }
-  
-  // Función para efecto visual de flash
-  function flashEffect() {
-    container.style.boxShadow = '0 0 20px #48bb78';
-    setTimeout(() => {
-      container.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
-    }, 200);
-  }
-  
-  // Inicializar valores
-  updateInputsFromConfig();
-  
-  // Función para actualizar textos cuando cambie el idioma
-  function updateTexts() {
-    // Actualizar título
-    const title = shadow.querySelector('.wplace-title');
-    if (title) {
-      title.innerHTML = `🤖 ${t('farm.title')}`;
-    }
-    
-    // Actualizar botones
-    if (elements.startBtn) elements.startBtn.innerHTML = `▶️ ${t('farm.start')}`;
-    if (elements.stopBtn) elements.stopBtn.innerHTML = `⏹️ ${t('farm.stop')}`;
-    if (elements.selectPositionBtn) elements.selectPositionBtn.innerHTML = `🌍 ${t('farm.selectPosition')}`;
-    if (elements.onceBtn) elements.onceBtn.innerHTML = `🎨 ${t('farm.paintOnce')}`;
-    
-    // Actualizar etiquetas de estadísticas
-    const paintedLabel = shadow.querySelector('#painted-count').parentElement.querySelector('.wplace-stat-label');
-    const chargesLabel = shadow.querySelector('#charges-count').parentElement.querySelector('.wplace-stat-label');
-    const retryLabel = shadow.querySelector('#retry-count').parentElement.querySelector('.wplace-stat-label');
-    const tileLabel = shadow.querySelector('#tile-pos').parentElement.querySelector('.wplace-stat-label');
-    
-    if (paintedLabel) paintedLabel.textContent = t('farm.painted');
-    if (chargesLabel) chargesLabel.textContent = t('farm.charges');
-    if (retryLabel) retryLabel.textContent = t('farm.retries');
-    if (tileLabel) tileLabel.textContent = t('farm.tile');
-    
-    // Actualizar secciones
-    const configTitle = shadow.querySelector('.wplace-section-title');
-    if (configTitle) configTitle.innerHTML = `⚙️ ${t('farm.configuration')}`;
-    
-    const advancedTitle = shadow.getElementById('advanced-toggle');
-    if (advancedTitle) {
-      const arrow = advancedTitle.querySelector('#advanced-arrow');
-      const arrowText = arrow ? arrow.textContent : '▶';
-      advancedTitle.innerHTML = `🔧 ${t('farm.advanced')} <span id="advanced-arrow">${arrowText}</span>`;
-    }
-    
-    // Actualizar etiquetas de configuración
-    // Las etiquetas se actualizan automáticamente desde el innerHTML inicial
-    
-    // Actualizar opciones del selector de modo de color
-    const colorModeSelect = elements.colorModeSelect;
-    if (colorModeSelect) {
-      const randomOption = colorModeSelect.querySelector('option[value="random"]');
-      const fixedOption = colorModeSelect.querySelector('option[value="fixed"]');
-      if (randomOption) randomOption.textContent = t('farm.random');
-      if (fixedOption) fixedOption.textContent = t('farm.fixed');
-    }
-    
-    // Actualizar placeholder
-    if (elements.customPaletteInput) {
-      elements.customPaletteInput.placeholder = t('farm.paletteExample');
-    }
-    
-    // Actualizar botones de configuración
-    if (elements.saveBtn) elements.saveBtn.innerHTML = `💾 ${t('common.save')}`;
-    if (elements.loadBtn) elements.loadBtn.innerHTML = `📁 ${t('common.load')}`;
-    if (elements.resetBtn) elements.resetBtn.innerHTML = `🔄 ${t('common.reset')}`;
-    if (elements.captureBtn) elements.captureBtn.innerHTML = `📸 ${t('farm.capture')}`;
-    
-    // Actualizar información de zona
-    updateZoneDisplay();
-    
-    // Actualizar estado de botones (para actualizar textos)
-    updateButtonStates(farmState?.running || false);
-    
-    // Actualizar estado de salud si existe
-    const healthStatus = elements.healthStatus;
-    if (healthStatus && healthStatus.textContent.includes('🔍')) {
-      healthStatus.textContent = `🔍 ${t('farm.checkingStatus')}`;
-    }
-    
-    // Actualizar estado si está detenido
-    const status = elements.status;
-    if (status && status.textContent.includes('💤')) {
-      status.textContent = `💤 ${t('farm.stopped')}`;
-    }
-  }
-  
-  // Función para seleccionar posición de farming
-  async function selectFarmPosition(config, setStatus, updateZoneDisplay) {
-    return new Promise((resolve) => {
-      setStatus(t('farm.selectPositionAlert'), 'info');
-      
-      // Activar modo de selección de posición
-      config.selectingPosition = true;
-      
-      // Interceptar requests para capturar posición
-      const originalFetch = window.fetch;
-      window.fetch = async (url, options) => {
-        if (config.selectingPosition && url.includes('/s0/pixel/')) {
-          try {
-            const response = await originalFetch(url, options);
-            
-            if (response.ok && options && options.body) {
-              const bodyData = JSON.parse(options.body);
-              if (bodyData.coords && bodyData.coords.length >= 2) {
-                const localX = bodyData.coords[0];
-                const localY = bodyData.coords[1];
-                
-                // Extraer tile de la URL
-                const tileMatch = url.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);
-                if (tileMatch) {
-                  config.TILE_X = parseInt(tileMatch[1]);
-                  config.TILE_Y = parseInt(tileMatch[2]);
-                }
-                
-                // Establecer posición base y activar sistema de radio
-                config.BASE_X = localX;
-                config.BASE_Y = localY;
-                config.POSITION_SELECTED = true;
-                
-                config.selectingPosition = false;
-                window.fetch = originalFetch;
-                
-                // Actualizar displays y sincronizar inputs con la nueva config
-                updateZoneDisplay();
-                updateTileDisplay();
-                // MUY IMPORTANTE: sincronizar los inputs para que 'updateConfigFromInputs()'
-                // no sobreescriba el TILE_X/TILE_Y con valores antiguos al pulsar "Una vez"/"Iniciar"
-                updateInputsFromConfig();
-                
-                setStatus(t('farm.positionSet'), 'success');
-                log(`✅ Zona de farming establecida: tile(${config.TILE_X},${config.TILE_Y}) base(${localX},${localY}) radio(${config.FARM_RADIUS}px)`);
-                
-                // Guardar configuración
-                saveFarmCfg(config);
-                
-                resolve(true);
-              }
-            }
-            
-            return response;
-          } catch (error) {
-            log('Error interceptando pixel:', error);
-            return originalFetch(url, options);
-          }
-        }
-        return originalFetch(url, options);
-      };
-      
-      // Timeout para selección de posición
-      setTimeout(() => {
-        if (config.selectingPosition) {
-          window.fetch = originalFetch;
-          config.selectingPosition = false;
-          setStatus(t('farm.positionTimeout'), 'error');
-          resolve(false);
-        }
-      }, 120000); // 2 minutos
+
+  // Rellenar selects de color
+  function fillColorOptions(select) {
+    select.innerHTML = '';
+    Object.values(COLOR_MAP).forEach(entry => {
+      // En selects de rango, omitimos Transparent (rgb null)
+      if (!entry.rgb) return;
+      const opt = document.createElement('option');
+      opt.value = String(entry.id);
+      opt.textContent = `${entry.id} - ${entry.name}`;
+      select.appendChild(opt);
     });
   }
-  
-  // Escuchar cambios de idioma
-  window.addEventListener('languageChanged', updateTexts);
-  
-  // API pública de la UI
-  return {
-    setStatus,
-    updateStats,
-    flashEffect,
-    updateButtonStates,
-    updateTexts,
-    destroy: () => {
-      window.removeEventListener('languageChanged', updateTexts);
-      document.body.removeChild(shadowHost);
-    },
-    updateConfig: updateInputsFromConfig,
-    getElement: () => shadowHost
-  };
-}
+  fillColorOptions(els.colorMin);
+  fillColorOptions(els.colorMax);
 
-// Función para auto-calibrar las coordenadas del tile basándose en la posición del viewport
-export async function autoCalibrateTile(config) {
-  try {
-    log('🎯 Iniciando auto-calibración del tile...');
-    // Si ya hay una zona seleccionada y un tile definido, no forzar nueva calibración
-    if (config.POSITION_SELECTED && config.BASE_X != null && config.BASE_Y != null && Number.isFinite(config.TILE_X) && Number.isFinite(config.TILE_Y)) {
-      log(`ℹ️ Ya existe zona seleccionada. Se mantiene tile actual: (${config.TILE_X}, ${config.TILE_Y})`);
-      saveFarmCfg(config);
-      return { tileX: config.TILE_X, tileY: config.TILE_Y, success: true };
-    }
-    
-    // Buscar elementos que indiquen la posición actual
-    const urlParams = new window.URLSearchParams(window.location.search);
-    const hashParams = window.location.hash;
-    
-    // Intentar extraer coordenadas de la URL
-    let tileX, tileY;
-    
-    // Buscar en query params
-    if (urlParams.has('x') && urlParams.has('y')) {
-      tileX = parseInt(urlParams.get('x'));
-      tileY = parseInt(urlParams.get('y'));
-    }
-    
-    // Buscar en hash (formato #x,y o similar)
-    if (!tileX && !tileY && hashParams) {
-      const hashMatch = hashParams.match(/#(-?\d+),(-?\d+)/);
-      if (hashMatch) {
-        tileX = parseInt(hashMatch[1]);
-        tileY = parseInt(hashMatch[2]);
+  function renderColorGrid(activeId) {
+    els.colorGrid.innerHTML = '';
+    Object.values(COLOR_MAP).forEach(entry => {
+      const d = document.createElement('div');
+      d.className = 'swatch' + (entry.id === activeId ? ' active' : '');
+      if (entry.rgb) {
+        d.style.background = `rgb(${entry.rgb.r},${entry.rgb.g},${entry.rgb.b})`;
+      } else {
+        // Mostrar patrón de ajedrez para Transparent
+        d.style.backgroundImage = `linear-gradient(45deg, #bbb 25%, transparent 25%),
+                                   linear-gradient(-45deg, #bbb 25%, transparent 25%),
+                                   linear-gradient(45deg, transparent 75%, #bbb 75%),
+                                   linear-gradient(-45deg, transparent 75%, #bbb 75%)`;
+        d.style.backgroundSize = '8px 8px';
+        d.style.backgroundPosition = '0 0, 0 4px, 4px -4px, -4px 0px';
       }
-    }
-    
-    // Buscar elementos DOM que indiquen posición
-    if (!tileX && !tileY) {
-      const positionElements = document.querySelectorAll('[data-x], [data-y], .coordinates, .position');
-      for (const el of positionElements) {
-        const x = el.getAttribute('data-x') || el.getAttribute('x');
-        const y = el.getAttribute('data-y') || el.getAttribute('y');
-        if (x && y) {
-          tileX = parseInt(x);
-          tileY = parseInt(y);
-          break;
+      d.title = `${entry.id} - ${entry.name}`;
+      d.addEventListener('click', () => {
+        config.COLOR_FIXED = entry.id;
+        renderColorGrid(config.COLOR_FIXED);
+        saveConfig();
+        updateConfig();
+        if (els.selectedColorLabel) {
+          els.selectedColorLabel.textContent = `${t('farm.color.selected','Color seleccionado')}: ${getColorName(config.COLOR_FIXED)}`;
+        }
+      });
+      els.colorGrid.appendChild(d);
+    });
+  }
+
+  // Estado inicial
+  els.colorMode.value = config.COLOR_MODE || 'random';
+  els.colorMin.value = String(config.COLOR_MIN ?? 1);
+  els.colorMax.value = String(config.COLOR_MAX ?? 32);
+  renderColorGrid(config.COLOR_FIXED ?? 1);
+  if (els.selectedColorLabel) {
+    els.selectedColorLabel.textContent = `${t('farm.color.selected','Color seleccionado')}: ${getColorName(config.COLOR_FIXED ?? 1)}`;
+  }
+  togglePickers();
+  // Aplicar estado inicial (botones y parpadeo de Capturar)
+  try { updateConfig(); } catch {}
+
+  els.colorMode.addEventListener('change', () => {
+    config.COLOR_MODE = els.colorMode.value;
+    togglePickers();
+    saveConfig();
+    updateConfig();
+  });
+  els.colorMin.addEventListener('change', () => {
+    const v = clamp(parseInt(els.colorMin.value, 10), 1, 63);
+    config.COLOR_MIN = v;
+    if (config.COLOR_MAX < v) config.COLOR_MAX = v;
+    els.colorMax.value = String(config.COLOR_MAX);
+    saveConfig();
+    updateConfig();
+  });
+  els.colorMax.addEventListener('change', () => {
+    const v = clamp(parseInt(els.colorMax.value, 10), 1, 63);
+    config.COLOR_MAX = v;
+    if (config.COLOR_MIN > v) config.COLOR_MIN = v;
+    els.colorMin.value = String(config.COLOR_MIN);
+    saveConfig();
+    updateConfig();
+  });
+
+  // Persistencia de configuración básica
+  if (els.minCharges) {
+    els.minCharges.addEventListener('change', () => {
+      const v = clamp(parseInt(els.minCharges.value, 10) || 0, 0, 1000);
+      config.MIN_CHARGES = v;
+      saveConfig();
+      updateConfig();
+    });
+  }
+  if (els.delaySeconds) {
+    els.delaySeconds.addEventListener('change', () => {
+      const v = clamp(parseInt(els.delaySeconds.value, 10) || 1, 1, 3600);
+      config.DELAY_MS = v * 1000;
+      saveConfig();
+      updateConfig();
+    });
+  }
+  if (els.pixelsPerBatch) {
+    els.pixelsPerBatch.addEventListener('change', () => {
+      const v = clamp(parseInt(els.pixelsPerBatch.value, 10) || 1, 1, 50);
+      config.PIXELS_PER_BATCH = v;
+      saveConfig();
+      updateConfig();
+    });
+  }
+
+  function togglePickers() {
+    const mode = els.colorMode.value;
+    els.fixedPicker.style.display = mode === 'fixed' ? '' : 'none';
+    els.rangePicker.style.display = mode === 'range' ? '' : 'none';
+  }
+
+  // Botones básicos
+  els.start.addEventListener('click', async () => {
+    // Aplicar estado de ejecución inmediatamente
+    updateButtonStates(true);
+    els.stop.classList.add('danger');
+    try { if (onStart) await onStart(); } catch (e) { /* ignore */ }
+  });
+  els.stop.addEventListener('click', async () => {
+    updateButtonStates(false);
+    els.stop.classList.remove('danger');
+    try { if (onStop) await onStop(); } catch (e) { /* ignore */ }
+  });
+  // sin botón de cierre
+  if (els.autoBuyCheckbox) {
+    const slider = els.autoBuyCheckbox.parentElement.querySelector('.toggle-slider');
+    const knob = els.autoBuyCheckbox.parentElement.querySelector('.toggle-knob');
+    const applyVisual = (checked) => {
+      if (!slider || !knob) return;
+      slider.style.backgroundColor = checked ? '#22c55e' : '#ef4444';
+      slider.style.borderColor = checked ? '#16a34a' : '#dc2626';
+      knob.style.left = checked ? '27px' : '3px';
+    };
+    // Estado inicial
+    els.autoBuyCheckbox.checked = !!config.AUTO_BUY_ENABLED;
+    applyVisual(els.autoBuyCheckbox.checked);
+    els.autoBuyCheckbox.addEventListener('change', (e) => {
+      const checked = !!e.target.checked;
+      config.AUTO_BUY_ENABLED = checked;
+      saveConfig();
+      updateConfig();
+      applyVisual(checked);
+      if (els.manualBuyRow) els.manualBuyRow.style.display = checked ? 'none' : 'flex';
+    });
+    if (els.manualBuyRow) els.manualBuyRow.style.display = els.autoBuyCheckbox.checked ? 'none' : 'flex';
+  }
+
+  // Compra manual si autobuy está desactivado
+  if (els.manualBuyBtn) {
+    els.manualBuyBtn.addEventListener('click', async () => {
+      try {
+        els.manualBuyBtn.disabled = true;
+        setStatus(t('farm.buying','Comprando...'), 'status');
+        const { purchaseProduct } = await import('../core/wplace-api.js');
+        const res = await purchaseProduct(70, 1);
+        if (res.success) {
+          // Notificación visual + instrucción de refrescar
+          if (api.notify) api.notify(t('farm.buyOk','Compra realizada. Actualiza sesión.'), 'success');
+          setStatus(t('farm.buyOk','Compra realizada. Actualiza sesión.'), 'success');
+          // Restar 500 droplets inmediatamente en UI, hasta que refresque sesión
+          try {
+            if (Number.isFinite(farmState.droplets)) {
+              farmState.droplets = Math.max(0, (farmState.droplets || 0) - 500);
+              updateStats(farmState.painted, farmState.charges.count, farmState.retryCount);
+            }
+          } catch {}
+        } else {
+          if (api.notify) api.notify(t('farm.buyFail','No se pudo comprar'), 'error');
+          setStatus(t('farm.buyFail','No se pudo comprar'), 'error');
+        }
+      } catch (err) {
+        if (api.notify) api.notify(t('farm.buyFail','No se pudo comprar'), 'error');
+        setStatus(t('farm.buyFail','No se pudo comprar'), 'error');
+      } finally {
+        els.manualBuyBtn.disabled = false;
+      }
+    });
+  }
+
+  document.body.appendChild(host);
+
+  // Registrar ventana para gestión de z-index/bring-to-front
+  try { registerWindow(host); } catch {}
+
+  // Hacer draggable la ventana usando el header
+  const headerEl = panel.querySelector('.header');
+  const bodyEl = panel.querySelector('.body');
+  let dragging = false; let offX = 0; let offY = 0;
+  headerEl.addEventListener('mousedown', (e) => {
+    // Evitar arrastre al clicar el botón minimizar
+    const target = e.target;
+    if (target && (target.id === 'minBtn' || target.closest('#minBtn'))) return;
+    dragging = true;
+    const rect = host.getBoundingClientRect();
+    offX = e.clientX - rect.left;
+    offY = e.clientY - rect.top;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const nx = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, e.clientX - offX));
+    const ny = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - offY));
+    host.style.left = nx + 'px';
+    host.style.top = ny + 'px';
+    host.style.right = 'auto'; // al mover, desanclar de derecha
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+
+  // Minimizar con animación suave
+  const minBtn = panel.querySelector('#minBtn');
+  let collapsed = false;
+  if (minBtn && bodyEl) {
+    // Gestionar display al final de la animación para cerrar completamente
+    bodyEl.addEventListener('transitionend', (e) => {
+      if (e.propertyName === 'max-height') {
+        if (collapsed) {
+          bodyEl.style.display = 'none';
         }
       }
+    });
+    minBtn.addEventListener('click', () => {
+      collapsed = !collapsed;
+      if (!collapsed) {
+        bodyEl.style.display = 'block';
+  // Forzar reflow para que la transición se aplique al remover la clase
+  void bodyEl.offsetHeight;
+      }
+      bodyEl.classList.toggle('collapsed', collapsed);
+      minBtn.textContent = collapsed ? '+' : '–';
+    });
+  }
+
+  // Botón de logs
+  if (els.logsBtn) {
+    let logWindowInstance = null;
+    els.logsBtn.addEventListener('click', async () => {
+      try {
+        const { createLogWindow } = await import('../log_window/index.js');
+        logWindowInstance = logWindowInstance || createLogWindow('Auto-Farm');
+        logWindowInstance.toggle();
+      } catch (e) {
+        log('No se pudo abrir la ventana de logs:', e);
+        notify('No se pudo abrir Logs', 'error');
+      }
+    });
+  }
+
+  // API
+  function setStatus(text, kind = 'status') {
+    els.status.textContent = text;
+    els.status.style.background = kind === 'error' ? 'rgba(245, 101, 101, 0.2)'
+      : kind === 'success' ? 'rgba(72, 187, 120, 0.2)'
+      : 'rgba(66, 153, 225, 0.2)';
+  }
+
+  function updateStats(painted, charges, retries) {
+    els.painted.textContent = String(painted ?? 0);
+    const cc = Math.floor(charges ?? 0);
+    const mx = farmState.charges?.max ?? 0;
+    els.charges.textContent = `${cc}/${mx}`;
+    els.retries.textContent = String(retries ?? 0);
+    // Mostrar droplets y usuario
+    const droplets = farmState?.droplets ?? farmState?.user?.droplets ?? null;
+    if (droplets != null && els.droplets) {
+      els.droplets.textContent = String(droplets);
     }
-    
-    // Buscar en el texto visible de la página
-    if (!tileX && !tileY) {
-      const textContent = document.body.textContent || '';
-      const coordMatch = textContent.match(/(?:tile|pos|position)?\s*[([]?\s*(-?\d+)\s*[,;]\s*(-?\d+)\s*[)\]]?/i);
-      if (coordMatch) {
-        tileX = parseInt(coordMatch[1]);
-        tileY = parseInt(coordMatch[2]);
+    if (farmState?.user && els.username) {
+      els.username.textContent = farmState.user.name || farmState.user.username || '-';
+    }
+  }
+
+  function isPositionSelected() {
+    return !!config.POSITION_SELECTED && Number.isFinite(config.BASE_X) && Number.isFinite(config.BASE_Y) && Number.isFinite(config.TILE_X) && Number.isFinite(config.TILE_Y);
+  }
+
+  function updateButtonStates(running) {
+    const needCapture = !isPositionSelected();
+    els.start.disabled = !!running || needCapture;
+    els.stop.disabled = !running;
+    if (els.onceBtn) {
+      els.onceBtn.disabled = !!running || needCapture;
+    }
+    // Visual del botón detener en rojo cuando está corriendo
+    if (running) {
+      els.stop.classList.add('danger');
+    } else {
+      els.stop.classList.remove('danger');
+    }
+  }
+
+  function flashEffect(ms = 150) {
+    panel.style.outline = '2px solid #93c5fd';
+    setTimeout(() => panel.style.outline = '', ms);
+  }
+
+  // Notificaciones estilo Material (top-center)
+  function notify(message, type = 'info', timeout = 3000) {
+    // Contenedor global
+    let c = document.getElementById('wplace-toast-container');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'wplace-toast-container';
+      c.style.cssText = `
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2147483647;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+      `;
+      document.body.appendChild(c);
+    }
+
+    const bg = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6';
+    const el = document.createElement('div');
+    el.className = 'wplace-toast';
+    el.textContent = message;
+    el.style.cssText = `
+      min-width: 240px;
+      max-width: 80vw;
+      margin: 0 auto;
+      background: ${bg};
+      color: white;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      padding: 10px 14px;
+      font-weight: 600;
+      letter-spacing: .2px;
+      transform: translateY(-10px) scale(0.98);
+      opacity: 0;
+      transition: transform .25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity .25s ease;
+      pointer-events: auto;
+    `;
+    c.appendChild(el);
+
+    // Animar entrada
+  const raf = (cb) => (typeof window !== 'undefined' && window.requestAnimationFrame ? window.requestAnimationFrame(cb) : setTimeout(cb, 16));
+  raf(() => {
+      el.style.transform = 'translateY(0) scale(1)';
+      el.style.opacity = '1';
+  });
+
+    const remove = () => {
+      el.style.transform = 'translateY(-10px) scale(0.98)';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 250);
+    };
+
+    // Cierre automático
+    if (timeout > 0) setTimeout(remove, timeout);
+
+    // Clic para cerrar
+    el.addEventListener('click', remove);
+    return { close: remove };
+  }
+
+  function saveConfig() { try { localStorage.setItem('wplace_farm_cfg', JSON.stringify(config)); } catch {} }
+  function updateConfig() {
+    // Refrescar estado de posición seleccionada en la UI
+    const selected = isPositionSelected();
+    if (selected && els.posInfoValue) {
+      els.posInfoValue.textContent = `tile(${config.TILE_X},${config.TILE_Y}) base(${config.BASE_X},${config.BASE_Y})`;
+      if (els.captureBtn) {
+        els.captureBtn.textContent = t('farm.recapture');
+      }
+    } else {
+      if (els.posInfoValue) els.posInfoValue.textContent = '-';
+  if (els.captureBtn) els.captureBtn.textContent = t('farm.capture','Capturar zona');
+    }
+    // Start deshabilitado hasta capturar; Capturar parpadea si falta selección
+    updateButtonStates(false);
+    if (els.captureBtn) {
+      if (!selected) {
+        els.captureBtn.classList.add('blink-orange');
+      } else {
+        els.captureBtn.classList.remove('blink-orange');
       }
     }
-    
-    // Valores por defecto si no se encuentra nada
-    if (!Number.isFinite(tileX) || !Number.isFinite(tileY)) {
-      tileX = 0;
-      tileY = 0;
-      log('⚠️ No se pudieron detectar coordenadas automáticamente, usando (0,0)');
-    }
-    
-    // Validar que las coordenadas sean razonables
-    if (Math.abs(tileX) > 1000000 || Math.abs(tileY) > 1000000) {
-      log('⚠️ Coordenadas detectadas parecen incorrectas, limitando a rango válido');
-      tileX = Math.max(-1000000, Math.min(1000000, tileX));
-      tileY = Math.max(-1000000, Math.min(1000000, tileY));
-    }
-    
-    // Actualizar configuración
-    config.TILE_X = tileX;
-    config.TILE_Y = tileY;
-    
-    log(`✅ Tile calibrado automáticamente: (${tileX}, ${tileY})`);
-    
-    // Guardar la configuración calibrada
-    saveFarmCfg(config);
-    
-    return { tileX, tileY, success: true };
-    
-  } catch (error) {
-    log('❌ Error en auto-calibración:', error);
-    return { tileX: 0, tileY: 0, success: false, error: error.message };
   }
+  function getElement() { return host; }
+  function destroy() { host.remove(); }
+
+  function updateTexts() {
+    // Actualización mínima de textos
+    panel.querySelector('#startBtn').textContent = t('farm.start','Iniciar');
+    panel.querySelector('#stopBtn').textContent = t('farm.stop','Detener');
+    panel.querySelector('#capture-btn').textContent = t('farm.capture','Capturar zona');
+    panel.querySelector('#once-btn').textContent = t('farm.once','Una vez');
+  const lb = panel.querySelector('#logsBtn'); if (lb) lb.textContent = t('farm.logWindow','Logs');
+  // Visual del toggle se actualiza por applyVisual al cambiar
+  if (els.selectedColorLabel) els.selectedColorLabel.textContent = `${t('farm.color.selected','Color seleccionado')}: ${getColorName(config.COLOR_FIXED ?? 1)}`;
+  }
+
+  const api = { setStatus, updateStats, updateButtonStates, flashEffect, getElement, destroy, updateConfig, updateTexts, notify };
+  window.__wplaceBot = window.__wplaceBot || {};
+  window.__wplaceBot.ui = api;
+  return api;
 }
 
-export function mountFarmUI() {
-  // Esta función será llamada desde farm/index.js
-  log('📱 Montando UI del farm...');
-  
-  // Crear una UI básica para el farm
-  const ui = createFarmUI(
-    FARM_DEFAULTS,
-    () => log(t('farm.startingBot')),
-    () => log(t('farm.stoppingBot')),
-    () => log(t('farm.calibrating'))
-  );
-  
-  return {
-    setStatus: (msg) => {
-      log(msg);
-      ui.setStatus(msg);
-    },
-    updateStats: ui.updateStats,
-    flashEffect: ui.flashEffect,
-    updateTexts: ui.updateTexts,
-    destroy: ui.destroy
-  };
-}
+// Compatibilidad
+export async function autoCalibrateTile() { return { success: false, error: 'not-implemented' }; }
+export function mountFarmUI() { log('Farm UI mount placeholder'); }

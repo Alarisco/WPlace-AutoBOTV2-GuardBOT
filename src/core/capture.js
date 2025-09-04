@@ -63,28 +63,47 @@ export class CoordinateCapture {
     try {
       let coords = null;
       let tileX = null, tileY = null;
-
-      // Intentar extraer coordenadas del cuerpo de la petición
-      if (options.body) {
-        let body;
-        
-        if (typeof options.body === 'string') {
-          try {
-            body = JSON.parse(options.body);
-          } catch {
-            body = options.body;
-          }
-        } else {
-          body = options.body;
+      const detectTileSize = (lx, ly) => {
+        // Preferir 1000 si los locales parecen de 0..999; si no, 3000 si 0..2999
+        if (Number.isFinite(lx) && Number.isFinite(ly)) {
+          if (lx >= 0 && lx < 1000 && ly >= 0 && ly < 1000) return 1000;
+          if (lx >= 0 && lx < 3000 && ly >= 0 && ly < 3000) return 3000;
         }
+        return 1000; // valor seguro por defecto (coincide con Guard)
+      };
 
-        // Buscar coordenadas en diferentes formatos
-        if (body.coords && Array.isArray(body.coords)) {
-          coords = body.coords;
-        } else if (body.x !== undefined && body.y !== undefined) {
-          coords = [body.x, body.y];
-        } else if (body.coordinates) {
-          coords = body.coordinates;
+      // Intentar extraer coordenadas del cuerpo de la petición (múltiples formatos)
+      if (options.body) {
+        let bodyRaw = options.body;
+        let body = null;
+        try {
+          if (typeof bodyRaw === 'string') {
+            body = JSON.parse(bodyRaw);
+          } else if (bodyRaw && typeof bodyRaw.text === 'function') {
+            // Podría ser un Blob/Request body - intentar leer texto si existe
+            const txt = await bodyRaw.text();
+            try { body = JSON.parse(txt); } catch { body = null; }
+          } else {
+            body = bodyRaw;
+          }
+        } catch { body = null; }
+
+        if (body) {
+          const bCoords = body.coords;
+          if (Array.isArray(bCoords)) {
+            // Formatos aceptados: [x,y] | [[x,y]] | [{x,y}]
+            if (bCoords.length >= 2 && typeof bCoords[0] === 'number' && typeof bCoords[1] === 'number') {
+              coords = [bCoords[0], bCoords[1]];
+            } else if (Array.isArray(bCoords[0]) && bCoords[0].length >= 2) {
+              coords = [bCoords[0][0], bCoords[0][1]];
+            } else if (typeof bCoords[0] === 'object' && bCoords[0] && Number.isFinite(bCoords[0].x) && Number.isFinite(bCoords[0].y)) {
+              coords = [bCoords[0].x, bCoords[0].y];
+            }
+          } else if (Number.isFinite(body.x) && Number.isFinite(body.y)) {
+            coords = [body.x, body.y];
+          } else if (Array.isArray(body.coordinates) && body.coordinates.length >= 2) {
+            coords = [body.coordinates[0], body.coordinates[1]];
+          }
         }
       }
 
@@ -120,35 +139,47 @@ export class CoordinateCapture {
           // Tratamos coords como locales al tile extraído de la URL
           localX = coords[0];
           localY = coords[1];
-          globalX = tileX * 3000 + localX;
-          globalY = tileY * 3000 + localY;
+          const TILE = detectTileSize(localX, localY);
+          globalX = tileX * TILE + localX;
+          globalY = tileY * TILE + localY;
           log(`🎯 Coordenadas capturadas (locales): tile(${tileX},${tileY}) local(${localX},${localY}) -> global(${globalX},${globalY})`);
         } else {
           // Sin tile en URL, interpretamos coords como globales y derivamos tile
           globalX = coords[0];
           globalY = coords[1];
-          tileX = Math.floor(globalX / 3000);
-          tileY = Math.floor(globalY / 3000);
-          localX = globalX % 3000;
-          localY = globalY % 3000;
+          const TILE = 1000; // fallback coherente con Guard
+          tileX = Math.floor(globalX / TILE);
+          tileY = Math.floor(globalY / TILE);
+          localX = ((globalX % TILE) + TILE) % TILE;
+          localY = ((globalY % TILE) + TILE) % TILE;
           log(`🎯 Coordenadas capturadas (globales): global(${globalX},${globalY}) -> tile(${tileX},${tileY}) local(${localX},${localY})`);
         }
 
         // Verificar que la respuesta sea exitosa
         if (response.ok) {
           this.disable();
-          
-          if (this.callback) {
-            this.callback({
-              success: true,
-              tileX,
-              tileY,
-              globalX,
-              globalY,
-              localX,
-              localY
-            });
-          }
+
+          const payload = {
+            success: true,
+            tileX,
+            tileY,
+            globalX,
+            globalY,
+            localX,
+            localY
+          };
+          // Callback local
+          try { if (this.callback) this.callback(payload); } catch (e) { log('Error en callback de captura:', e); }
+          // Fallback: evento global + variable global para listeners externos
+          try {
+            window.__wplaceLastCapture = payload;
+            try {
+              const ev = document.createEvent('Event');
+              ev.initEvent('wplace-capture', true, true);
+              ev.detail = payload;
+              window.dispatchEvent(ev);
+            } catch {}
+          } catch {}
         } else {
           log('⚠️ Captura realizada pero la respuesta no fue exitosa');
         }
