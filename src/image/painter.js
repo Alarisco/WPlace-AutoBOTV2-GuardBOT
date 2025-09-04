@@ -349,13 +349,9 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
         
 
         
-        // Actualizar cargas consumidas
-        imageState.currentCharges = Math.max(0, imageState.currentCharges - result.painted);
-        log(`Cargas después del lote: ${imageState.currentCharges.toFixed(1)} (consumidas: ${result.painted})`);
-        
-        // Actualizar cargas consumidas
-        imageState.currentCharges = Math.max(0, imageState.currentCharges - result.painted);
-        log(`Cargas después del lote: ${imageState.currentCharges.toFixed(1)} (consumidas: ${result.painted})`);
+  // Actualizar cargas consumidas (una sola vez)
+  imageState.currentCharges = Math.max(0, imageState.currentCharges - result.painted);
+  log(`Cargas después del lote: ${imageState.currentCharges.toFixed(1)} (consumidas: ${result.painted})`);
         
         // Actualizar posición para continuar desde aquí si se interrumpe
         if (batch.length > 0) {

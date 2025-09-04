@@ -27,6 +27,15 @@ async function send(body, overrides) {
   if (!cfg.ENABLED) return { ok: false, skipped: true };
   const url = `${cfg.BASE_URL}/v1/events`;
 
+  // Log de depuración: registrar deltas de píxeles enviados
+  try {
+    const t = body?.event_type;
+    const v = body?.bot_variant;
+    if ((t === 'pixel_painted' || t === 'pixel_repaired') && typeof body?.pixel_delta !== 'undefined') {
+      log(`[METRICS] ${t} → Δ ${body.pixel_delta} (${v})`);
+    }
+  } catch {}
+
   let attempt = 0;
   let lastErr = null;
   while (attempt <= cfg.RETRIES) {

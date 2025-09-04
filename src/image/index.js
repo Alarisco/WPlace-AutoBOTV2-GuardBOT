@@ -539,6 +539,12 @@ export async function runImage() {
         // Siempre resetear flag de primera pasada cuando se inicia pintado
         // independientemente de si es nuevo o reanudación
         imageState.isFirstBatch = imageState.useAllChargesFirst; 
+
+        // Alinear métricas: no recontar progreso previo cargado
+        try {
+          __lastPaintedReported = Math.trunc(imageState.paintedPixels || 0);
+        } catch {}
+            // log(`[METRICS] init align lastReported=${__lastPaintedReported}`);
         
         log(`🚀 Iniciando pintado - isFirstBatch: ${imageState.isFirstBatch}, useAllChargesFirst: ${imageState.useAllChargesFirst}`);
         
@@ -567,6 +573,8 @@ export async function runImage() {
                   __lastPaintedReported = Math.trunc(painted);
                 }
               } catch {}
+                    // pixelsPainted(delta, { botVariant: 'auto-image' });
+                    // __lastPaintedReported = Math.trunc(painted);
               
               // Actualizar display de cooldown si hay cooldown activo
               if (imageState.inCooldown && imageState.nextBatchCooldown > 0) {
