@@ -34,22 +34,15 @@ async function send(body, overrides) {
       const res = await postJson(url, body, { timeout: cfg.TIMEOUT_MS, apiKey: cfg.API_KEY });
       if (!res.ok) {
         const data = await safeJson(res);
-        // No levantar excepción; log suave y salir
-        log(`[METRICS] HTTP ${res.status}: ${data?.message || data?.detail || 'error'}`);
         return { ok: false, status: res.status, data };
       }
       const data = await safeJson(res);
-      // Log de éxito minimal para confirmar envío
+      // Log único: solo session_start para confirmar inicio
       try {
         const t = body?.event_type;
-        const d = body?.pixel_delta;
         const v = body?.bot_variant;
-        if (t === 'session_start' || t === 'session_end' || t === 'session_ping') {
-          log(`[METRICS] sent ${t} (${v})`);
-        } else if (t === 'pixel_repaired') {
-          log(`[METRICS] repaired +${d ?? 0} (${v})`);
-        } else if (t) {
-          log(`[METRICS] sent ${t} (${v})`);
+        if (t === 'session_start') {
+          log(`[METRICS] session_start (${v})`);
         }
       } catch {}
       return { ok: true, data };
@@ -60,7 +53,6 @@ async function send(body, overrides) {
       await new Promise(r => setTimeout(r, 300 * attempt));
     }
   }
-  log(`[METRICS] error: ${lastErr?.message || lastErr}`);
   return { ok: false, error: lastErr?.message || String(lastErr) };
 }
 

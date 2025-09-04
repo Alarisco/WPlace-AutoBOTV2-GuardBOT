@@ -8,6 +8,8 @@ import { coordinateCapture } from "../core/capture.js";
 import { clamp } from "../core/utils.js";
 import { initializeLanguage, t } from "../locales/index.js";
 import { autoClickPaintButton } from "../core/dom.js";
+import { sessionStart, sessionPing, sessionEnd } from "../core/metrics/client.js";
+import { getMetricsConfig } from "../core/metrics/config.js";
 
 (async function() {
   'use strict';
@@ -42,6 +44,32 @@ import { autoClickPaintButton } from "../core/dom.js";
   
   // Marcar que el farm bot está ejecutándose
   window.__wplaceBot.farmRunning = true;
+
+  // ---------- Métricas: iniciar sesión y pings (igual a Auto-Guard) ----------
+  try {
+    const mcfg = getMetricsConfig({ VARIANT: 'auto-farm' });
+    if (mcfg.ENABLED) {
+      if (!window.__wplaceMetrics) window.__wplaceMetrics = {};
+      const pingEvery = Math.max(60_000, mcfg.PING_INTERVAL_MS || 300_000);
+      window.__wplaceMetrics.farmSessionActive = true;
+      sessionStart({ botVariant: 'auto-farm' });
+      // Ping rápido tras el inicio para reflejar presencia inmediata
+      setTimeout(() => {
+        try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'init' } }); } catch {}
+      }, 3000);
+      // Intervalo periódico
+  window.__wplaceMetrics.farmPingInterval = window.setInterval(() => {
+        try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'interval' } }); } catch {}
+      }, pingEvery);
+      // Pings por visibilidad/foco
+      const visibilityHandler = () => { if (!document.hidden) { try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'visibility' } }); } catch {} } };
+      const focusHandler = () => { try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'focus' } }); } catch {} };
+      document.addEventListener('visibilitychange', visibilityHandler);
+      window.addEventListener('focus', focusHandler);
+      window.__wplaceMetrics.farmVisibilityHandler = visibilityHandler;
+      window.__wplaceMetrics.farmFocusHandler = focusHandler;
+    }
+  } catch {}
 
   // Listen for language changes
   window.addEventListener('languageChanged', () => {
@@ -392,6 +420,28 @@ import { autoClickPaintButton } from "../core/dom.js";
     }
     coordinateCapture.disable();
     ui.destroy();
+    // Limpiar métricas
+    try {
+      const mcfg = getMetricsConfig();
+      if (mcfg.ENABLED) {
+        if (window.__wplaceMetrics?.farmPingInterval) {
+          window.clearInterval(window.__wplaceMetrics.farmPingInterval);
+          window.__wplaceMetrics.farmPingInterval = null;
+        }
+        if (window.__wplaceMetrics?.farmVisibilityHandler) {
+          document.removeEventListener('visibilitychange', window.__wplaceMetrics.farmVisibilityHandler);
+          delete window.__wplaceMetrics.farmVisibilityHandler;
+        }
+        if (window.__wplaceMetrics?.farmFocusHandler) {
+          window.removeEventListener('focus', window.__wplaceMetrics.farmFocusHandler);
+          delete window.__wplaceMetrics.farmFocusHandler;
+        }
+        if (window.__wplaceMetrics?.farmSessionActive) {
+          sessionEnd({ botVariant: 'auto-farm' });
+          window.__wplaceMetrics.farmSessionActive = false;
+        }
+      }
+    } catch {}
   });
 
   log('✅ Farm Bot inicializado correctamente');

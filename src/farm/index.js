@@ -25,7 +25,6 @@ export async function runFarm() {
       const mcfg = getMetricsConfig({ VARIANT: 'auto-farm' });
       if (mcfg.ENABLED) {
         if (!window.__wplaceMetrics) window.__wplaceMetrics = {};
-  log(`[METRICS] enabled → ${mcfg.BASE_URL}`);
         window.__wplaceMetrics.farmSessionActive = true;
         sessionStart({ botVariant: 'auto-farm' });
           // Ping rápido tras el inicio para reflejar presencia inmediata
@@ -33,7 +32,9 @@ export async function runFarm() {
             try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'init' } }); } catch {}
           }, 3000);
         const pingEvery = Math.max(60_000, mcfg.PING_INTERVAL_MS || 300_000);
-        window.__wplaceMetrics.farmPingInterval = window.setInterval(() => sessionPing({ botVariant: 'auto-farm' }), pingEvery);
+        window.__wplaceMetrics.farmPingInterval = window.setInterval(() => {
+          try { sessionPing({ botVariant: 'auto-farm', metadata: { reason: 'interval' } }); } catch {}
+        }, pingEvery);
       }
     } catch {}
     // Cargar configuración guardada o usar defaults
@@ -223,14 +224,14 @@ export async function runFarm() {
       if (window.__wplaceBot) {
         window.__wplaceBot.farmRunning = false;
       }
-      try {
+    try {
         const mcfg = getMetricsConfig();
         if (mcfg.ENABLED && window.__wplaceMetrics?.farmSessionActive) {
-          sessionEnd({ botVariant: 'auto-farm' });
+      sessionEnd({ botVariant: 'auto-farm' });
           window.__wplaceMetrics.farmSessionActive = false;
         }
         if (window.__wplaceMetrics?.farmPingInterval) {
-          window.clearInterval(window.__wplaceMetrics.farmPingInterval);
+      window.clearInterval(window.__wplaceMetrics.farmPingInterval);
           window.__wplaceMetrics.farmPingInterval = null;
         }
         if (window.__wplaceMetrics?.farmVisibilityHandler) {
