@@ -280,8 +280,12 @@ export function createLauncherUI({
     try {
       if (onLaunch) {
         await onLaunch(selectedBot);
-        // Si llegamos aquí, el bot se ejecutó correctamente
-        cleanup();
+        // Dar tiempo al bot para inicializarse antes de cerrar el launcher
+        log('⏳ Esperando inicialización del bot...');
+        elements.statusText.textContent = t('launcher.botStarting') || 'Bot iniciando...';
+        setTimeout(() => {
+          cleanup();
+        }, 3000); // Esperar 3 segundos antes de cerrar
       }
     } catch (error) {
       log('❌ Error en launch:', error);
