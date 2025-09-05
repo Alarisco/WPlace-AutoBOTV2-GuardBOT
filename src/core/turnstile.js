@@ -722,8 +722,25 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
     const response = await originalFetch.apply(this, args);
     const url = (args[0] instanceof Request) ? args[0].url : args[0];
 
+    // Helper to detect WPlace pixel endpoint: supports absolute and relative URLs and any season number
+    const isPixelEndpoint = (u) => {
+      if (typeof u !== 'string') return false;
+      try {
+        // Normalize to pathname for robust matching (use window.URL for ESLint/browser compat)
+        const URLCtor = (typeof window !== 'undefined' && window.URL) ? window.URL : null;
+        if (URLCtor) {
+          const loc = (u.startsWith('http://') || u.startsWith('https://')) ? new URLCtor(u) : new URLCtor(u, window.location.origin);
+          return /\/s\d+\/pixel\//.test(loc.pathname);
+        }
+        // Fallback to direct regex if URL ctor not available
+        return /\/s\d+\/pixel\//.test(u);
+      } catch {
+        return /\/s\d+\/pixel\//.test(u);
+      }
+    };
+
     if (typeof url === "string") {
-      if (url.includes("https://backend.wplace.live/s0/pixel/")) {
+      if (isPixelEndpoint(url)) {
         try {
           const init = args[1] || {};
           // Capture token and fingerprint from body
@@ -746,9 +763,12 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
             } catch { /* ignore */ }
           }
           // Capture custom header x-pawtect-token
-          const headers = init.headers;
+          let headers = init.headers;
+          // If a Request object is used, also try its headers
+          const req = (args[0] instanceof Request) ? args[0] : null;
+          if (!headers && req && req.headers) headers = req.headers;
           let capturedPawtect = null;
-      if (headers) {
+          if (headers) {
             try {
               const isHeadersLike = (obj) => !!obj && typeof obj.get === 'function' && typeof obj.append === 'function';
               if (isHeadersLike(headers)) {
