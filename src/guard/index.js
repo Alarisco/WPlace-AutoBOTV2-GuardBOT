@@ -7,6 +7,7 @@ import { createLogWindow } from "../log_window/index.js";
 import { saveProgress, loadProgress, hasProgress } from "./save-load.js";
 import { initializeLanguage, getSection, t } from "../locales/index.js";
 import { isPaletteOpen, findAndClickPaintButton } from "../core/dom.js";
+import { warmUpForTokens } from "../core/warmup.js";
 import { sleep } from "../core/timing.js";
 import { guardOverlay } from "./overlay.js";
 import { sessionStart, sessionEnd, sessionPing, trackEvent } from "../core/metrics/client.js";
@@ -21,6 +22,8 @@ export async function runGuard() {
   
   // Inicializar sistema de idiomas
   initializeLanguage();
+  // Lanzar warm-up suave para capturar tokens pronto
+  try { setTimeout(() => { try { warmUpForTokens('guard'); } catch {} }, 800); } catch {}
   
   // Cargar configuración previa desde localStorage (si existe)
   try {

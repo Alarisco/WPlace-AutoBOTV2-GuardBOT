@@ -8,6 +8,7 @@ import { showGuardDialog, saveGuardJSON, showConfirmDialog } from "./safe-guard-
 import { getSession } from "../core/wplace-api.js";
 import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
 import { isPaletteOpen, autoClickPaintButton } from "../core/dom.js";
+import { warmUpForTokens } from "../core/warmup.js";
 import "./plan-overlay-blue-marble.js";
 import { sessionStart, sessionPing, sessionEnd, reportError } from "../core/metrics/client.js";
 import { getMetricsConfig } from "../core/metrics/config.js";
@@ -24,6 +25,9 @@ export async function runImage() {
   // Asegurarse que el estado global existe
   window.__wplaceBot = { ...window.__wplaceBot, imageRunning: true };
   console.log('[WPA-Image] 🔧 Estado global actualizado');
+
+  // Warm-up no intrusivo para capturar tokens anti-bot temprano
+  try { setTimeout(() => { try { warmUpForTokens('image'); } catch {} }, 800); } catch {}
 
   let currentUserInfo = null; // Variable global para información del usuario
   let originalFetch = window.fetch; // Guardar fetch original globalmente
