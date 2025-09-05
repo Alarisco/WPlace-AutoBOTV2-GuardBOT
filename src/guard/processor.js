@@ -706,9 +706,10 @@ export async function repairChanges(changes) {
     }
     
     // Seleccionar píxeles usando el patrón configurado con preferencia y exclusión de color
-    const selectedKeys = getPixelsByPattern(
-      guardState.protectionPattern, 
-      changes, 
+    // Nueva lógica: intentar completar el lote al máximo revalidando hasta 3 veces
+    let selectedKeys = getPixelsByPattern(
+      guardState.protectionPattern,
+      changes,
       maxRepairs,
       guardState.preferColor,
       guardState.preferredColorId,
@@ -716,10 +717,100 @@ export async function repairChanges(changes) {
       guardState.excludeColor,
       guardState.excludedColorIds
     );
+
+    let attempts = 0;
+    while (selectedKeys.length < maxRepairs && attempts < 3) {
+      attempts++;
+      // Revalidar contra el mapa de cambios actual por si ha habido variaciones
+      // y volver a intentar completar el lote
+      selectedKeys = getPixelsByPattern(
+        guardState.protectionPattern,
+        changes,
+        maxRepairs,
+        guardState.preferColor,
+        guardState.preferredColorId,
+        guardState.preferredColorIds,
+        guardState.excludeColor,
+        guardState.excludedColorIds
+      );
+      if (selectedKeys.length < maxRepairs) {
+        log(`🔁 Reintentando completar lote (${selectedKeys.length}/${maxRepairs}) intento ${attempts}/3`);
+        await sleep(100); // breve espera para dar tiempo a cambios concurrentes
+      }
+    }
+
+    // Concentrar el batch en un único tile para minimizar llamadas a la API
+    if (selectedKeys.length > 0) {
+      // Agrupar claves seleccionadas por tile
+      const tileGroups = new Map(); // tileKey -> array de keys
+      for (const key of selectedKeys) {
+        const ch = changes.get(key);
+        const px = ch?.type === 'intrusion' ? ch?.current : ch?.original;
+        if (!px) continue;
+        const tkey = `${px.tileX},${px.tileY}`;
+        if (!tileGroups.has(tkey)) tileGroups.set(tkey, []);
+        tileGroups.get(tkey).push(key);
+      }
+
+      if (tileGroups.size > 1) {
+        // Elegir el tile con más candidatos
+        let bestTileKey = null;
+        let bestCount = -1;
+        for (const [tkey, keys] of tileGroups) {
+          if (keys.length > bestCount) {
+            bestCount = keys.length;
+            bestTileKey = tkey;
+          }
+        }
+
+        let finalKeys = tileGroups.get(bestTileKey) || [];
+
+        // Intentar rellenar hasta maxRepairs con más claves del mismo tile
+        if (finalKeys.length < maxRepairs) {
+          const [bestTileX, bestTileY] = bestTileKey.split(',').map(Number);
+          // Construir un mapa filtrado solo con cambios de ese tile
+          const filteredChanges = new Map();
+          for (const [k, ch] of changes) {
+            const pxAny = ch?.type === 'intrusion' ? ch?.current : ch?.original;
+            if (pxAny && pxAny.tileX === bestTileX && pxAny.tileY === bestTileY) {
+              filteredChanges.set(k, ch);
+            }
+          }
+
+          // Usar el mismo patrón y preferencias para obtener más candidatos del tile
+          if (filteredChanges.size > 0) {
+            const tileKeys = getPixelsByPattern(
+              guardState.protectionPattern,
+              filteredChanges,
+              maxRepairs,
+              guardState.preferColor,
+              guardState.preferredColorId,
+              guardState.preferredColorIds,
+              guardState.excludeColor,
+              guardState.excludedColorIds
+            );
+            // Añadir los que no estén ya
+            const existing = new Set(finalKeys);
+            for (const k of tileKeys) {
+              if (existing.has(k)) continue;
+              finalKeys.push(k);
+              existing.add(k);
+              if (finalKeys.length >= maxRepairs) break;
+            }
+          }
+
+          log(`📦 Concentrando lote en tile (${bestTileX},${bestTileY}): ${finalKeys.length}/${maxRepairs} píxeles`);
+        }
+
+        // Usar solo las claves del tile objetivo
+        selectedKeys = finalKeys;
+      }
+    }
+
     const pixelsToRepair = selectedKeys.map(key => changes.get(key));
     
-    // Agrupar cambios por tile para eficiencia
-    const changesByTile = new Map();
+  // Agrupar cambios por tile para eficiencia (tras posible concentración)
+  const changesByTile = new Map();
     
     for (const change of pixelsToRepair) {
       let targetPixel, targetColorId;
@@ -755,8 +846,15 @@ export async function repairChanges(changes) {
     
     let totalRepaired = 0;
     
-    // Reparar por lotes de tile
-    for (const [tileKey, tileChanges] of changesByTile) {
+    // Si hay múltiples tiles, optar por un único tile por batch (el más grande)
+    let entries = Array.from(changesByTile.entries());
+    if (entries.length > 1) {
+      entries.sort((a, b) => b[1].length - a[1].length);
+      entries = [entries[0]];
+    }
+
+    // Reparar por lote (un solo tile)
+    for (const [tileKey, tileChanges] of entries) {
       const [tileX, tileY] = tileKey.split(',').map(Number);
       
       try {

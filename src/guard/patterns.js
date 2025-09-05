@@ -899,7 +899,7 @@ export function getPixelsByPattern(pattern, changes, count, preferColor = false,
 function applyColorPreference(selectedCoords, changesMap, preferredColorIds, maxCount) {
   const preferredPixels = [];
   const otherPixels = [];
-  
+
   // Separar píxeles por color preferido
   for (const coord of selectedCoords) {
     const changeData = changesMap.get(coord);
@@ -911,20 +911,20 @@ function applyColorPreference(selectedCoords, changesMap, preferredColorIds, max
       otherPixels.push(coord);
     }
   }
-  
-  // CAMBIO CRÍTICO: Si hay píxeles del color preferido, SOLO usar esos
-  // No mezclar con otros colores hasta que se agoten los preferidos
-  let result;
+
+  // Nueva lógica: priorizar preferidos y RELLENAR con otros hasta completar maxCount
+  const result = [];
   if (preferredPixels.length > 0) {
-    // Solo usar píxeles del color preferido
-    result = preferredPixels.slice(0, maxCount);
-    log(`🎨 Priorización de color: usando SOLO ${result.length} píxeles del color preferido (${preferredPixels.length} disponibles)`);
-  } else {
-    // Si no hay píxeles del color preferido, usar otros
-    result = otherPixels.slice(0, maxCount);
-    log(`🎨 Priorización de color: no hay píxeles del color preferido, usando ${result.length} píxeles de otros colores`);
+    const takePreferred = preferredPixels.slice(0, Math.min(maxCount, preferredPixels.length));
+    result.push(...takePreferred);
   }
-  
+  if (result.length < maxCount && otherPixels.length > 0) {
+    const remaining = maxCount - result.length;
+    const takeOthers = otherPixels.slice(0, remaining);
+    result.push(...takeOthers);
+  }
+
+  log(`🎨 Priorización de color: ${preferredPixels.length} preferidos disponibles, rellenando hasta ${maxCount}. Seleccionados: ${result.length}`);
   return result;
 }
 

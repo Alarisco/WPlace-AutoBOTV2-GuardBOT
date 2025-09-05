@@ -130,13 +130,18 @@ export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body,
-      credentials: "include"
+      credentials: "include",
+      timeout: 20000 // Aumentar timeout a 20 segundos
     });
   let json = {};
   // If response is not JSON, ignore parse error
   try { json = await r.json(); } catch { /* ignore */ }
     return { status: r.status, json, success: r.ok };
   } catch (error) {
+    // Manejo específico para timeouts
+    if (error.name === 'TimeoutError') {
+      return { status: 408, json: { error: `Request timeout after ${error.timeout}ms` }, success: false };
+    }
     return { status: 0, json: { error: error.message }, success: false };
   }
 }
@@ -151,7 +156,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
     });
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // Timeout de 15 segundos
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // Aumentar timeout a 20 segundos
 
   const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: 'POST',
@@ -180,7 +185,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
         });
         
         const retryController = new AbortController();
-        const retryTimeoutId = setTimeout(() => retryController.abort(), 15000);
+        const retryTimeoutId = setTimeout(() => retryController.abort(), 20000); // Aumentar timeout a 20 segundos
 
         const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
           method: 'POST',
@@ -233,7 +238,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
         const newToken = await ensureToken(true);
         const retryBody = JSON.stringify({ colors, coords, t: newToken });
         const retryController = new AbortController();
-        const retryTimeoutId = setTimeout(() => retryController.abort(), 15000);
+        const retryTimeoutId = setTimeout(() => retryController.abort(), 20000); // Aumentar timeout a 20 segundos
         const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
           method: 'POST',
           credentials: 'include',
@@ -270,6 +275,14 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
       success: response.ok
     };
   } catch (error) {
+    // Manejo específico para timeouts y abort errors
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      return {
+        status: 408,
+        json: { error: 'Request timeout' },
+        success: false
+      };
+    }
     return {
       status: 0,
       json: { error: error.message },
@@ -432,6 +445,16 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
       painted: painted
     };
   } catch (error) {
+    // Manejo específico para timeouts y abort errors
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      log(`[API] Request timeout for tile ${tileX},${tileY}`);
+      return {
+        status: 408,
+        json: { error: 'Request timeout' },
+        success: false,
+        painted: 0
+      };
+    }
     log(`[API] Network error: ${error.message}`);
     return {
       status: 0,

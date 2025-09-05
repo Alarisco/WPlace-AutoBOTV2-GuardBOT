@@ -253,10 +253,10 @@ async function executeTurnstile(sitekey, action = 'paint') {
   log('👀 Falling back to interactive Turnstile (visible).');
   // Aviso inicial al usuario del primer intento interactivo
   try { showUserNotificationTopCenter('🔄 Resolviendo CAPTCHA...', 'info'); } catch {}
-  
-  // Sistema de reintentos indefinidos con timeout inicial de 30s
-  const INITIAL_TIMEOUT = 30000; // 30 segundos para el primer intento
-  const RETRY_INTERVAL = 30000;  // 30 segundos entre reintentos
+
+  // Sistema de reintentos indefinidos con timeout inicial de 15s
+  const INITIAL_TIMEOUT = 15000; // 15 segundos para el primer intento
+  const RETRY_INTERVAL = 5000;   // 5 segundos entre reintentos
   
   let attempt = 1;
   let hasShownFirstRetryNotification = false;
@@ -267,7 +267,7 @@ async function executeTurnstile(sitekey, action = 'paint') {
     
     // Mostrar notificación al usuario a partir del primer reintento
     if (attempt > 1 && !hasShownFirstRetryNotification) {
-      showUserNotification(`🔄 CAPTCHA: Reintentando automáticamente cada 30 segundos (intento ${attempt})`, 'info');
+      showUserNotification(`🔄 CAPTCHA: Reintentando automáticamente cada 5 segundos (intento ${attempt})`, 'info');
       hasShownFirstRetryNotification = true;
     } else if (attempt > 2) {
       showUserNotification(`🔄 CAPTCHA: Intento ${attempt} - Continuando automáticamente`, 'info');
@@ -293,18 +293,18 @@ async function executeTurnstile(sitekey, action = 'paint') {
         return token;
       }
       
-      log(`⚠️ Intento ${attempt} falló, reintentando en 30 segundos...`);
+      log(`⚠️ Intento ${attempt} falló, reintentando en 5 segundos...`);
       if (attempt > 1) {
-        showUserNotification(`⚠️ Intento ${attempt} falló, reintentando en 30 segundos...`, 'info');
+        showUserNotification(`⚠️ Intento ${attempt} falló, reintentando en 5 segundos...`, 'info');
       }
-      await sleep(30000); // Esperar 30 segundos antes del siguiente intento
+      await sleep(5000); // Esperar 5 segundos antes del siguiente intento
       
     } catch (error) {
       log(`❌ Error en intento ${attempt}:`, error.message);
       if (attempt > 1) {
-        showUserNotification(`❌ Error en intento ${attempt}, reintentando en 30 segundos`, 'error');
+        showUserNotification(`❌ Error en intento ${attempt}, reintentando en 5 segundos`, 'error');
       }
-      await sleep(30000);
+      await sleep(5000);
     }
     
     attempt++;
