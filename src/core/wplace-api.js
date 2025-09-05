@@ -99,7 +99,7 @@ export async function purchaseProduct(productId = 70, amount = 1) {
 // Unifica post de píxel por lotes (batch por tile).
 export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
   // pixels: [{x,y,color}, …] relativos al tile -> convertir a coords/colors
-  try { await waitForPawtect(3000); } catch {}
+  try { await waitForPawtect(5000); } catch {}
   let pawtect = getPawtectToken();
   let fp = getFingerprint();
   const coords = [];
@@ -113,6 +113,8 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
       colors.push(p.color?.id ?? p.color?.value ?? p.color ?? 1);
     }
   }
+  // Si aún no hay fp, esperar un poco más de forma proactiva
+  if (!fp) { try { await waitForPawtect(2000); } catch {} fp = getFingerprint(); pawtect = getPawtectToken(); }
   log(`[API] postPixelBatch include: pawtect=${!!pawtect} fp=${!!fp}`);
   const body = JSON.stringify({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
   const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
@@ -140,7 +142,7 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
 // Versión 'safe' que no arroja excepciones y retorna status/json
 export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
   try {
-  try { await waitForPawtect(3000); } catch {}
+  try { await waitForPawtect(5000); } catch {}
   let pawtect = getPawtectToken();
   let fp = getFingerprint();
     const coords = [];
@@ -153,6 +155,7 @@ export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
         colors.push(p.color?.id ?? p.color?.value ?? p.color ?? 1);
       }
     }
+  if (!fp) { try { await waitForPawtect(2000); } catch {} fp = getFingerprint(); pawtect = getPawtectToken(); }
   log(`[API] postPixelBatchSafe include: pawtect=${!!pawtect} fp=${!!fp}`);
   const body = JSON.stringify({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
     const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
@@ -179,9 +182,10 @@ export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
 export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   try {
     // Ensure pawtect tokens are present (best-effort wait)
-  try { await waitForPawtect(3000); } catch {}
+  try { await waitForPawtect(5000); } catch {}
   let pawtect = getPawtectToken();
   let fp = getFingerprint();
+  if (!fp) { try { await waitForPawtect(2000); } catch {} fp = getFingerprint(); pawtect = getPawtectToken(); }
     const body = JSON.stringify({ 
       colors: colors, 
       coords: coords, 
@@ -336,9 +340,10 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
 export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstileToken) {
   try {
     // Ensure pawtect tokens are present (best-effort wait)
-  try { await waitForPawtect(3000); } catch {}
+  try { await waitForPawtect(5000); } catch {}
   let pawtect = getPawtectToken();
   let fp = getFingerprint();
+  if (!fp) { try { await waitForPawtect(2000); } catch {} fp = getFingerprint(); pawtect = getPawtectToken(); }
     // Prepare exact body format as used in example
     const body = JSON.stringify({ 
       colors: colors, 
