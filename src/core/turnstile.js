@@ -9,6 +9,7 @@ let turnstileToken = null;
 // New protection tokens from site (captured):
 let _pawtectToken = null; // header: x-pawtect-token
 let _fp = null;           // body: fp
+let _fpCandidate = null;  // heuristic candidate from postMessage (pi), not used for sending
 let _pawtectResolve = null;
 let _pawtectPromise = new Promise((res) => { _pawtectResolve = res; });
 let tokenExpiryTime = 0;
@@ -776,14 +777,40 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
 
   // Listen for token capture messages
   window.addEventListener('message', (event) => {
-    const { source, token } = event.data;
+    const data = event?.data;
+    if (!data) return;
 
-    if (source === 'turnstile-capture' && token) {
-      // Only set if we don't have a valid token or if it's a different/newer token
-      if (!isTokenValid() || turnstileToken !== token) {
-        setTurnstileToken(token);
+    // 1) Token capture via synthetic message from our fetch hook
+    if (data.source === 'turnstile-capture' && data.token) {
+      if (!isTokenValid() || turnstileToken !== data.token) {
+        setTurnstileToken(data.token);
       }
+      return;
     }
+
+    // 2) Direct fp published by site (if any)
+    try {
+      const msgFp = (typeof data === 'object' && typeof data.fp === 'string' && data.fp.length > 10) ? data.fp : null;
+      if (msgFp && (!_fp || _fp !== msgFp)) {
+        _fp = msgFp;
+        log('🆔 Fingerprint (fp) captured via postMessage');
+        if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; }
+        return;
+      }
+    } catch { /* ignore */ }
+
+    // 3) Heuristic: observe fingerprint ingredients (pi) like xp/pfp/ffp
+    try {
+      const pi = (typeof data === 'object' && (data.pi || data.payload?.pi)) ? (data.pi || data.payload.pi) : null;
+      if (pi && typeof pi === 'object' && (pi.xp || pi.pfp || pi.ffp)) {
+        if (!_fpCandidate) {
+          // Store shallow snapshot; do not use for sending
+          try { _fpCandidate = JSON.parse(JSON.stringify({ xp: pi.xp, pfp: pi.pfp, ffp: pi.ffp })); }
+          catch { _fpCandidate = { xp: String(pi.xp || ''), pfp: String(pi.pfp || ''), ffp: String(pi.ffp || '') }; }
+          log('📦 Fingerprint candidate (pi) observed via postMessage');
+        }
+      }
+    } catch { /* ignore */ }
   });
 })();
 
@@ -799,6 +826,7 @@ export async function getTurnstileToken(_siteKey) {
 // New exports for pawtect/fingerprint
 export function getPawtectToken() { return _pawtectToken; }
 export function getFingerprint() { return _fp; }
+export function getFingerprintCandidate() { return _fpCandidate; }
 export async function waitForPawtect(timeout = 5000) {
   if (_pawtectToken && _fp) return { pawtect: _pawtectToken, fp: _fp };
   const timer = setTimeout(() => { if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; } }, timeout);
