@@ -1,5 +1,5 @@
 import { fetchWithTimeout } from "./http.js";
-import { ensureToken, invalidateToken } from "./turnstile.js";
+import { ensureToken, invalidateToken, getPawtectToken, getFingerprint, waitForPawtect } from "./turnstile.js";
 import { log } from "./logger.js";
 
 const BASE = "https://backend.wplace.live";
@@ -83,7 +83,7 @@ export async function purchaseProduct(productId = 70, amount = 1) {
     const body = JSON.stringify({ product: { id: productId, amount } });
     const r = await fetchWithTimeout(`${BASE}/purchase`, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body,
       credentials: 'include',
       timeout: 15000
@@ -98,11 +98,25 @@ export async function purchaseProduct(productId = 70, amount = 1) {
 
 // Unifica post de píxel por lotes (batch por tile).
 export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
-  // pixels: [{x,y,color}, …] relativos al tile
-  const body = JSON.stringify({ pixels, token: turnstileToken });
+  // pixels: [{x,y,color}, …] relativos al tile -> convertir a coords/colors
+  try { await waitForPawtect(1000); } catch {}
+  const pawtect = getPawtectToken();
+  const fp = getFingerprint();
+  const coords = [];
+  const colors = [];
+  for (const p of pixels || []) {
+    // Asegurar valores válidos 0..999
+    const x = ((Number(p.x) % 1000) + 1000) % 1000;
+    const y = ((Number(p.y) % 1000) + 1000) % 1000;
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      coords.push(x, y);
+      colors.push(p.color?.id ?? p.color?.value ?? p.color ?? 1);
+    }
+  }
+  const body = JSON.stringify({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
   const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=UTF-8" },
+  headers: { "Content-Type": "text/plain;charset=UTF-8", ...(pawtect ? { "x-pawtect-token": pawtect } : {}) },
     body,
     credentials: "include"
   });
@@ -125,10 +139,23 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
 // Versión 'safe' que no arroja excepciones y retorna status/json
 export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
   try {
-    const body = JSON.stringify({ pixels, token: turnstileToken });
+    try { await waitForPawtect(1000); } catch {}
+    const pawtect = getPawtectToken();
+    const fp = getFingerprint();
+    const coords = [];
+    const colors = [];
+    for (const p of (pixels || [])) {
+      const x = ((Number(p.x) % 1000) + 1000) % 1000;
+      const y = ((Number(p.y) % 1000) + 1000) % 1000;
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        coords.push(x, y);
+        colors.push(p.color?.id ?? p.color?.value ?? p.color ?? 1);
+      }
+    }
+    const body = JSON.stringify({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
     const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+  headers: { "Content-Type": "text/plain;charset=UTF-8", ...(pawtect ? { "x-pawtect-token": pawtect } : {}) },
       body,
       credentials: "include",
       timeout: 20000 // Aumentar timeout a 20 segundos
@@ -149,10 +176,15 @@ export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
 // Post píxel para farm (replicado del ejemplo con manejo de 403)
 export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   try {
+    // Ensure pawtect tokens are present (best-effort wait)
+    try { await waitForPawtect(1000); } catch {}
+    const pawtect = getPawtectToken();
+    const fp = getFingerprint();
     const body = JSON.stringify({ 
       colors: colors, 
       coords: coords, 
-      t: turnstileToken 
+      t: turnstileToken,
+      ...(fp ? { fp } : {})
     });
     
     const controller = new AbortController();
@@ -161,7 +193,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+  headers: { 'Content-Type': 'text/plain;charset=UTF-8', ...(pawtect ? { 'x-pawtect-token': pawtect } : {}) },
       body: body,
       signal: controller.signal
     });
@@ -181,7 +213,8 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
         const retryBody = JSON.stringify({ 
           colors: colors, 
           coords: coords, 
-          t: newToken 
+          t: newToken,
+          ...(fp ? { fp } : {})
         });
         
         const retryController = new AbortController();
@@ -190,7 +223,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
         const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8', ...(pawtect ? { 'x-pawtect-token': pawtect } : {}) },
           body: retryBody,
           signal: retryController.signal
         });
@@ -236,13 +269,13 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
     if (response.status >= 500 && response.status <= 504) {
       try {
         const newToken = await ensureToken(true);
-        const retryBody = JSON.stringify({ colors, coords, t: newToken });
+  const retryBody = JSON.stringify({ colors, coords, t: newToken, ...(fp ? { fp } : {}) });
         const retryController = new AbortController();
         const retryTimeoutId = setTimeout(() => retryController.abort(), 20000); // Aumentar timeout a 20 segundos
         const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8', ...(pawtect ? { 'x-pawtect-token': pawtect } : {}) },
           body: retryBody,
           signal: retryController.signal
         });
@@ -294,11 +327,16 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
 // Post píxel para Auto-Image (replicado del ejemplo con manejo de 403)
 export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstileToken) {
   try {
+    // Ensure pawtect tokens are present (best-effort wait)
+    try { await waitForPawtect(1000); } catch {}
+    const pawtect = getPawtectToken();
+    const fp = getFingerprint();
     // Prepare exact body format as used in example
     const body = JSON.stringify({ 
       colors: colors, 
       coords: coords, 
-      t: turnstileToken 
+      t: turnstileToken,
+      ...(fp ? { fp } : {})
     });
     
     log(`[API] Sending batch to tile ${tileX},${tileY} with ${colors.length} pixels, token: ${turnstileToken ? turnstileToken.substring(0, 50) + '...' : 'null'}`);
@@ -306,7 +344,7 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
     const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+  headers: { 'Content-Type': 'text/plain;charset=UTF-8', ...(pawtect ? { 'x-pawtect-token': pawtect } : {}) },
       body: body
     });
 
@@ -336,7 +374,8 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
         const retryBody = JSON.stringify({ 
           colors: colors, 
           coords: coords, 
-          t: newToken 
+          t: newToken,
+          ...(fp ? { fp } : {})
         });
         
         log(`[API] Retrying with fresh token: ${newToken.substring(0, 50)}...`);
@@ -344,7 +383,7 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
         const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8', ...(pawtect ? { 'x-pawtect-token': pawtect } : {}) },
           body: retryBody
         });
         
@@ -399,12 +438,12 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
     if (response.status >= 500 && response.status <= 504) {
       try {
         const newToken = await ensureToken(true);
-        const retryBody = JSON.stringify({ colors, coords, t: newToken });
+  const retryBody = JSON.stringify({ colors, coords, t: newToken, ...(fp ? { fp } : {}) });
         log(`[API] Retrying after ${response.status} with fresh token: ${newToken.substring(0, 50)}...`);
         const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8', ...(pawtect ? { 'x-pawtect-token': pawtect } : {}) },
           body: retryBody
         });
         let retryData = null;

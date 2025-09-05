@@ -6,6 +6,11 @@ import { log } from "./logger.js";
 
 // Optimized Turnstile token handling with caching and retry logic
 let turnstileToken = null;
+// New protection tokens from site (captured):
+let _pawtectToken = null; // header: x-pawtect-token
+let _fp = null;           // body: fp
+let _pawtectResolve = null;
+let _pawtectPromise = new Promise((res) => { _pawtectResolve = res; });
 let tokenExpiryTime = 0;
 let tokenGenerationInProgress = false;
 let currentGenerationPromise = null; // comparte la promesa entre llamadas concurrentes
@@ -717,16 +722,50 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
     const url = (args[0] instanceof Request) ? args[0].url : args[0];
 
     if (typeof url === "string") {
-    if (url.includes("https://backend.wplace.live/s0/pixel/")) {
+      if (url.includes("https://backend.wplace.live/s0/pixel/")) {
         try {
-          const payload = JSON.parse(args[1].body);
-      const capturedToken = payload.t || payload.token || null;
-      if (capturedToken) {
-            // Only capture token if we don't have a valid one or if it's different
-            if (!isTokenValid() || turnstileToken !== capturedToken) {
-              log("✅ Turnstile Token Captured:", capturedToken);
-              window.postMessage({ source: 'turnstile-capture', token: capturedToken }, '*');
-            }
+          const init = args[1] || {};
+          // Capture token and fingerprint from body
+          if (init.body && typeof init.body === 'string') {
+            try {
+              const payload = JSON.parse(init.body);
+              const capturedToken = payload.t || payload.token || null;
+              const capturedFp = payload.fp || null;
+              if (capturedToken) {
+                if (!isTokenValid() || turnstileToken !== capturedToken) {
+                  log("✅ Turnstile Token Captured:", capturedToken);
+                  window.postMessage({ source: 'turnstile-capture', token: capturedToken }, '*');
+                }
+              }
+              if (capturedFp && (!_fp || _fp !== capturedFp)) {
+                _fp = capturedFp;
+                log("🆔 Fingerprint (fp) captured");
+                if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; }
+              }
+            } catch { /* ignore */ }
+          }
+          // Capture custom header x-pawtect-token
+          const headers = init.headers;
+          let capturedPawtect = null;
+      if (headers) {
+            try {
+              const isHeadersLike = (obj) => !!obj && typeof obj.get === 'function' && typeof obj.append === 'function';
+              if (isHeadersLike(headers)) {
+                capturedPawtect = headers.get('x-pawtect-token');
+              } else if (Array.isArray(headers)) {
+                const found = headers.find(([k]) => String(k).toLowerCase() === 'x-pawtect-token');
+                capturedPawtect = found ? found[1] : null;
+              } else if (typeof headers === 'object') {
+                for (const k of Object.keys(headers)) {
+                  if (k.toLowerCase() === 'x-pawtect-token') { capturedPawtect = headers[k]; break; }
+                }
+              }
+            } catch { /* ignore */ }
+          }
+          if (capturedPawtect && (!_pawtectToken || _pawtectToken !== capturedPawtect)) {
+            _pawtectToken = capturedPawtect;
+            log('🛡️ x-pawtect-token captured');
+            if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; }
           }
         } catch { /* ignore */ }
       }
@@ -755,4 +794,17 @@ export { handleCaptcha, loadTurnstile, executeTurnstile, detectSitekey, invalida
 export async function getTurnstileToken(_siteKey) {
   log("⚠️ Using legacy getTurnstileToken function, consider migrating to ensureToken()");
   return await ensureToken();
+}
+
+// New exports for pawtect/fingerprint
+export function getPawtectToken() { return _pawtectToken; }
+export function getFingerprint() { return _fp; }
+export async function waitForPawtect(timeout = 5000) {
+  if (_pawtectToken && _fp) return { pawtect: _pawtectToken, fp: _fp };
+  const timer = setTimeout(() => { if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; } }, timeout);
+  const result = await _pawtectPromise.catch(() => ({ pawtect: _pawtectToken, fp: _fp }));
+  clearTimeout(timer);
+  // Prepare a new promise for future waits
+  if (!_pawtectResolve) { _pawtectPromise = new Promise((res) => { _pawtectResolve = res; }); }
+  return result;
 }
