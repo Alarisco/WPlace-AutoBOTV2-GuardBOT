@@ -547,35 +547,13 @@ export async function downloadAndExecuteBot(botType, rawBase) {
     log(`✅ Bot descargado (${code.length} chars), inyectando...`);
 
     const sourceURL = `\n//# sourceURL=${url}`;
-    const BlobCtor = (typeof globalThis !== 'undefined' && globalThis.Blob) ? globalThis.Blob : null;
-    const URLObj = (typeof globalThis !== 'undefined' && globalThis.URL) ? globalThis.URL : null;
-
-    if (!BlobCtor || !URLObj) {
-      // Entorno sin APIs del navegador: usar eval como último recurso
-      (0, eval)(code + sourceURL);
-      log('🚀 Bot ejecutado con eval (sin Blob/URL)');
-      return true;
-    }
-
-    const blob = new BlobCtor([code + sourceURL], { type: 'text/javascript' });
-    const blobUrl = URLObj.createObjectURL(blob);
-
-    // Intentar inyección mediante etiqueta <script>
-    try {
-      await new Promise((resolve, reject) => {
-  const s = document.createElement('script');
-        s.src = blobUrl;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.documentElement.appendChild(s);
-      });
-      log('🚀 Bot inyectado y ejecutado (script)');
-    } catch (e) {
-      // Fallback: import dinámico (puede requerir que el código sea ESM)
-      log('ℹ️ Fallback a import(blobUrl)');
-      await import(blobUrl);
-      log('🚀 Bot ejecutado (import)');
-    }
+    
+    // Para que el launcher pueda capturar tokens de turnstile.js,
+    // ejecutamos SIEMPRE con eval() en el contexto global actual
+    // evitando crear contextos aislados con <script> tags o import()
+    log('🚀 Ejecutando bot en contexto global (para acceso a turnstile.js)...');
+    (0, eval)(code + sourceURL);
+    log('✅ Bot ejecutado con acceso completo a turnstile.js');
     return true;
   } catch (error) {
     log('❌ Error descargando/ejecutando bot:', error.message);
