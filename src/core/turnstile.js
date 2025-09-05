@@ -8,6 +8,7 @@ import { log } from "./logger.js";
 let turnstileToken = null;
 let tokenExpiryTime = 0;
 let tokenGenerationInProgress = false;
+let currentGenerationPromise = null; // comparte la promesa entre llamadas concurrentes
 let _resolveToken = null;
 let tokenPromise = new Promise((resolve) => { _resolveToken = resolve });
 const TOKEN_LIFETIME = 240000; // 4 minutes (tokens typically last 5 min, use 4 for safety)
@@ -52,40 +53,48 @@ export async function ensureToken(forceNew = false) {
     invalidateToken();
   }
 
-  // Avoid multiple simultaneous token generations
-  if (tokenGenerationInProgress) {
-    log("🔄 Token generation already in progress, waiting...");
-    await sleep(2000);
-    return isTokenValid() ? turnstileToken : null;
+  // Avoid multiple simultaneous token generations: esperar la promesa en curso
+  if (tokenGenerationInProgress && currentGenerationPromise) {
+    log("🔄 Token generation already in progress, waiting for existing promise...");
+    try {
+      const t = await currentGenerationPromise;
+      return t && t.length > 20 ? t : (isTokenValid() ? turnstileToken : null);
+    } catch {
+      // Si falla, continuar con un nuevo intento abajo
+    }
   }
 
   tokenGenerationInProgress = true;
-  
-  try {
-    log("🔄 Token expired or missing, generating new one...");
-    
-    // First try invisible Turnstile
-    const token = await handleCaptcha();
-    if (token && token.length > 20) {
-      setTurnstileToken(token);
-      log("✅ Token captured and cached successfully");
-      return token;
+  currentGenerationPromise = (async () => {
+    try {
+      log("🔄 Token expired or missing, generating new one...");
+
+      // First try invisible Turnstile
+      const token = await handleCaptcha();
+      if (token && token.length > 20) {
+        setTurnstileToken(token);
+        log("✅ Token captured and cached successfully");
+        return token;
+      }
+
+      // If invisible fails, force browser automation
+      log("⚠️ Invisible Turnstile failed, forcing browser automation...");
+      const fallbackToken = await handleCaptchaFallback();
+      if (fallbackToken && fallbackToken.length > 20) {
+        setTurnstileToken(fallbackToken);
+        log("✅ Fallback token captured successfully");
+        return fallbackToken;
+      }
+
+      log("❌ All token generation methods failed");
+      return null;
+    } finally {
+      tokenGenerationInProgress = false;
+      currentGenerationPromise = null;
     }
-    
-    // If invisible fails, force browser automation
-    log("⚠️ Invisible Turnstile failed, forcing browser automation...");
-    const fallbackToken = await handleCaptchaFallback();
-    if (fallbackToken && fallbackToken.length > 20) {
-      setTurnstileToken(fallbackToken);
-      log("✅ Fallback token captured successfully");
-      return fallbackToken;
-    }
-    
-    log("❌ All token generation methods failed");
-    return null;
-  } finally {
-    tokenGenerationInProgress = false;
-  }
+  })();
+
+  return currentGenerationPromise;
 }
 
 // Main captcha handler - replicated from example
@@ -708,12 +717,12 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
     const url = (args[0] instanceof Request) ? args[0].url : args[0];
 
     if (typeof url === "string") {
-      if (url.includes("https://backend.wplace.live/s0/pixel/")) {
+    if (url.includes("https://backend.wplace.live/s0/pixel/")) {
         try {
           const payload = JSON.parse(args[1].body);
-          if (payload.t) {
+      const capturedToken = payload.t || payload.token || null;
+      if (capturedToken) {
             // Only capture token if we don't have a valid one or if it's different
-            const capturedToken = payload.t;
             if (!isTokenValid() || turnstileToken !== capturedToken) {
               log("✅ Turnstile Token Captured:", capturedToken);
               window.postMessage({ source: 'turnstile-capture', token: capturedToken }, '*');

@@ -210,9 +210,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
           retryData = {}; // Ignorar errores de JSON parse
         }
         
-        if (retryResponse.ok) {
-          try { invalidateToken(); } catch {}
-        }
+  // No invalidar el token en éxito: permite reutilización dentro del TTL.
         return {
           status: retryResponse.status,
           json: retryData,
@@ -265,9 +263,7 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
       responseData = {}; // Ignorar errores de JSON parse
     }
 
-    if (response.ok) {
-      try { invalidateToken(); } catch {}
-    }
+  // No invalidar el token en éxito: permite reutilización dentro del TTL.
     return {
       status: response.status,
       json: responseData,
@@ -366,9 +362,7 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
         const painted = retryData?.painted || 0;
         log(`[API] Retry result: ${painted} pixels painted`);
 
-        if (retryResponse.ok) {
-          try { invalidateToken(); } catch {}
-        }
+  // No invalidar el token en éxito: permite reutilización dentro del TTL.
 
         return {
           status: retryResponse.status,
@@ -407,9 +401,7 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
         } catch { retryData = {}; }
         const painted = retryData?.painted || 0;
         log(`[API] Retry after ${response.status}: ${painted} pixels painted`);
-        if (retryResponse.ok) {
-          try { invalidateToken(); } catch {}
-        }
+  // No invalidar el token en éxito: permite reutilización dentro del TTL.
         return { status: retryResponse.status, json: retryData, success: retryResponse.ok, painted };
       } catch (e) {
         // Seguir al manejo estándar abajo
@@ -432,9 +424,7 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
     const painted = responseData?.painted || 0;
     log(`[API] Success: ${painted} pixels painted`);
 
-    if (response.ok) {
-      try { invalidateToken(); } catch {}
-    }
+  // No invalidar el token en éxito: permite reutilización dentro del TTL.
     return {
       status: response.status,
       json: responseData,
