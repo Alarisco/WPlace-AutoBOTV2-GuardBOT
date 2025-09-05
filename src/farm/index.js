@@ -7,7 +7,7 @@ import { initializeLanguage, t } from "../locales/index.js";
 import { loadFarmCfg } from "../core/storage.js";
 import { sessionStart, sessionPing, sessionEnd } from "../core/metrics/client.js";
 import { getMetricsConfig } from "../core/metrics/config.js";
-import { warmUpForTokens } from "../core/warmup.js";
+import { warmUpForTokens, ensureFingerprintReady } from "../core/warmup.js";
 
 export async function runFarm() {
   log('🚀 Iniciando WPlace Auto-Farm (versión con selección de zona)');
@@ -16,6 +16,11 @@ export async function runFarm() {
   initializeLanguage();
   // Warm-up ligero para capturar tokens pronto
   try { setTimeout(() => { try { warmUpForTokens('farm'); } catch {} }, 800); } catch {}
+  // Gateo: esperar a fp antes de seguir
+  try {
+    const ok = await ensureFingerprintReady('farm', { timeoutMs: 20000, maxAttempts: 6 });
+    if (!ok) log('⚠️ [farm] fp no capturado aún; el primer pintado lo forzará');
+  } catch {}
   
   // Asegurarse que el estado global existe
   window.__wplaceBot = { ...window.__wplaceBot, farmRunning: true };
@@ -81,6 +86,9 @@ export async function runFarm() {
           ui.setStatus(t('farm.alreadyRunning'), 'warning');
           return false;
         }
+
+  // Asegurar fp justo antes de iniciar el loop
+  try { await ensureFingerprintReady('farm:start', { timeoutMs: 15000, maxAttempts: 5 }); } catch {}
 
         // Si no se ha seleccionado una zona, activar automáticamente la selección
         if (!config.POSITION_SELECTED || config.BASE_X === null || config.BASE_Y === null) {
@@ -189,6 +197,8 @@ export async function runFarm() {
           ui.setStatus('❌ Detén el bot primero antes de pintar manualmente', 'error');
           return;
         }
+
+  try { await ensureFingerprintReady('farm:once', { timeoutMs: 15000, maxAttempts: 5 }); } catch {}
 
         const success = await paintOnce(
           config,

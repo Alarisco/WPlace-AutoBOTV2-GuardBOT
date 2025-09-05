@@ -8,7 +8,7 @@ import { showGuardDialog, saveGuardJSON, showConfirmDialog } from "./safe-guard-
 import { getSession } from "../core/wplace-api.js";
 import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
 import { isPaletteOpen, autoClickPaintButton } from "../core/dom.js";
-import { warmUpForTokens } from "../core/warmup.js";
+import { warmUpForTokens, ensureFingerprintReady } from "../core/warmup.js";
 import "./plan-overlay-blue-marble.js";
 import { sessionStart, sessionPing, sessionEnd, reportError } from "../core/metrics/client.js";
 import { getMetricsConfig } from "../core/metrics/config.js";
@@ -28,6 +28,14 @@ export async function runImage() {
 
   // Warm-up no intrusivo para capturar tokens anti-bot temprano
   try { setTimeout(() => { try { warmUpForTokens('image'); } catch {} }, 800); } catch {}
+
+  // Gateo: esperar a fp antes de continuar con el auto-init
+  try {
+    const ok = await ensureFingerprintReady('image', { timeoutMs: 20000, maxAttempts: 6 });
+    if (!ok) {
+      log('⚠️ [image] fp no capturado aún; continuaremos pero el primer pintado puede forzar captura');
+    }
+  } catch {}
 
   let currentUserInfo = null; // Variable global para información del usuario
   let originalFetch = window.fetch; // Guardar fetch original globalmente
@@ -534,6 +542,8 @@ export async function runImage() {
       },
       
       onStartPainting: async () => {
+  // Asegurar fp justo antes de iniciar el pintado manual/usuario
+  try { await ensureFingerprintReady('image:start', { timeoutMs: 15000, maxAttempts: 5 }); } catch {}
         // Debug: verificar estado antes de validar
         log(`🔍 Estado para iniciar pintura:`, {
           imageLoaded: imageState.imageLoaded,
