@@ -82,6 +82,7 @@ export async function warmUpForTokens(context = "bot") {
     } catch {}
 
     // 5) Esperar brevemente y verificar si ya capturamos pawtect/fp
+    await sleep(5000);
     try { await waitForPawtect(1500); } catch {}
     log(`✅ [warm-up:${context}] Finalizado (best-effort)`);
     st.done = true;
