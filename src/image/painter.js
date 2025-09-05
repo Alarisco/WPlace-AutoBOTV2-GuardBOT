@@ -4,6 +4,7 @@ import { postPixelBatchImage, getSession } from "../core/wplace-api.js";
 import { ensureToken } from "../core/turnstile.js";
 import { imageState, IMAGE_DEFAULTS } from "./config.js";
 import { t } from "../locales/index.js";
+import { pixelsPainted } from "../core/metrics/client.js";
 
 import { applyPaintPattern } from "./patterns.js";
 
@@ -347,6 +348,12 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
         // Sumar píxeles realmente pintados + píxeles omitidos por verificación inteligente
         imageState.paintedPixels += result.painted + skippedCount;
         
+        // Reportar métricas del lote actual
+        try {
+          pixelsPainted(result.painted + skippedCount);
+        } catch (e) {
+          log('⚠️ Error reportando métricas:', e);
+        }
 
         
   // Actualizar cargas consumidas (una sola vez)

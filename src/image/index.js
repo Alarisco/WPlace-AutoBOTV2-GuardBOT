@@ -9,7 +9,7 @@ import { getSession } from "../core/wplace-api.js";
 import { initializeLanguage, getSection, t, getCurrentLanguage } from "../locales/index.js";
 import { isPaletteOpen, autoClickPaintButton } from "../core/dom.js";
 import "./plan-overlay-blue-marble.js";
-import { sessionStart, sessionPing, sessionEnd, pixelsPainted, reportError } from "../core/metrics/client.js";
+import { sessionStart, sessionPing, sessionEnd, reportError } from "../core/metrics/client.js";
 import { getMetricsConfig } from "../core/metrics/config.js";
 
 export async function runImage() {
@@ -121,6 +121,10 @@ export async function runImage() {
         return false;
       }
       
+      // Almacenar colores detectados en el estado global
+      imageState.availableColors = colors;
+      log(`✅ ${colors.length} colores almacenados en estado global`);
+      
       // Obtener información del usuario
       const sessionInfo = await getSession();
       let userInfo = null;
@@ -167,9 +171,7 @@ export async function runImage() {
     }
 
   // Crear interfaz de usuario
-  // Estado interno para métricas: enviar SIEMPRE delta y no el acumulado
-  let __lastPaintedReported = 0;
-    const ui = await createImageUI({
+  const ui = await createImageUI({
       texts,
       
       onConfigChange: (config) => {
@@ -540,12 +542,6 @@ export async function runImage() {
         // independientemente de si es nuevo o reanudación
         imageState.isFirstBatch = imageState.useAllChargesFirst; 
 
-        // Alinear métricas: no recontar progreso previo cargado
-        try {
-          __lastPaintedReported = Math.trunc(imageState.paintedPixels || 0);
-        } catch {}
-            // log(`[METRICS] init align lastReported=${__lastPaintedReported}`);
-        
         log(`🚀 Iniciando pintado - isFirstBatch: ${imageState.isFirstBatch}, useAllChargesFirst: ${imageState.useAllChargesFirst}`);
         
         ui.setStatus(t('image.startPaintingMsg'), 'success');
@@ -565,16 +561,6 @@ export async function runImage() {
               }
               
               ui.updateProgress(painted, total, currentUserInfo);
-              // IMPORTANTE: 'painted' aquí es acumulado; reportar sólo el delta desde la última notificación
-              try {
-                const delta = Math.max(0, Math.trunc(painted) - Math.trunc(__lastPaintedReported));
-                if (delta > 0) {
-                  pixelsPainted(delta, { botVariant: 'auto-image' });
-                  __lastPaintedReported = Math.trunc(painted);
-                }
-              } catch {}
-                    // pixelsPainted(delta, { botVariant: 'auto-image' });
-                    // __lastPaintedReported = Math.trunc(painted);
               
               // Actualizar display de cooldown si hay cooldown activo
               if (imageState.inCooldown && imageState.nextBatchCooldown > 0) {
@@ -603,8 +589,6 @@ export async function runImage() {
                 ui.setStatus(t('image.paintingStopped'), 'warning');
               }
               imageState.running = false;
-              // Reset del contador interno de métricas para siguientes sesiones
-              __lastPaintedReported = 0;
             },
             // onError
             (error) => {
@@ -784,6 +768,23 @@ export async function runImage() {
         } catch (error) {
           log(`❌ Error redimensionando imagen: ${error.message}`);
           ui.setStatus(t('image.imageError'), 'error');
+        }
+      },
+      
+      // Función para obtener colores disponibles
+      getAvailableColors: () => {
+        if (imageState.availableColors && imageState.availableColors.length > 0) {
+          return imageState.availableColors;
+        }
+        
+        // Fallback: intentar detectar colores en tiempo real
+        try {
+          const colors = detectAvailableColors();
+          imageState.availableColors = colors;
+          return colors;
+        } catch (error) {
+          log('⚠️ Error obteniendo colores disponibles:', error);
+          return [];
         }
       },
       

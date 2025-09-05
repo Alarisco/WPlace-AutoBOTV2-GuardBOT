@@ -1,4 +1,5 @@
 import { log } from "../core/logger.js";
+import { imageState } from "./config.js";
 import { createColorPaletteSelector } from "./color-palette-selector.js";
 import { registerWindow, unregisterWindow, bringWindowToFront } from '../core/window-manager.js';
 
@@ -194,7 +195,9 @@ export function createResizeWindow() {
     // Configurar el selector de paleta de colores
     if (!resizeElements.colorPaletteSelector) {
       const colorPaletteContainer = resizeElements.container.querySelector('.resize-content') || resizeElements.container;
-      resizeElements.colorPaletteSelector = createColorPaletteSelector(colorPaletteContainer);
+      // Usar colores cacheados en el estado para inicializar el selector, evitando depender del DOM de la paleta del sitio
+      const initialColors = Array.isArray(imageState?.availableColors) ? imageState.availableColors : [];
+      resizeElements.colorPaletteSelector = createColorPaletteSelector(colorPaletteContainer, initialColors);
     }
 
     // Event listeners para los sliders
@@ -288,8 +291,13 @@ export function createResizeWindow() {
     
     // Configurar selector de colores
      if (handlers.getAvailableColors) {
+       // Intentar obtener colores desde el handler; si no hay, mantener los cacheados
        const colors = handlers.getAvailableColors();
-       setupColorPalette(colors);
+       if (Array.isArray(colors) && colors.length > 0) {
+         setupColorPalette(colors);
+       } else if (Array.isArray(imageState?.availableColors) && imageState.availableColors.length > 0) {
+         setupColorPalette(imageState.availableColors);
+       }
      }
      
      // Configurar callback de selección de color
