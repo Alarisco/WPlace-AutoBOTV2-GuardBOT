@@ -75,7 +75,9 @@ export async function warmUpForTokens(context = "bot") {
       } catch {}
     }
 
-    // 4) Intentar presionar nuevamente el botón principal para forzar confirmación, si aplica
+  // 4) Intentar presionar nuevamente el botón principal para forzar confirmación, si aplica
+  //    Esperar 5 segundos entre abrir paleta y pulsar "Pintar" para estabilidad
+  await sleep(5000);
     try {
       // Un solo intento suave, sin doble clic
       findAndClickPaintButton(false, false);
