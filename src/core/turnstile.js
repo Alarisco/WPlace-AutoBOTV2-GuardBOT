@@ -7,9 +7,10 @@ import { log } from "./logger.js";
 // Optimized Turnstile token handling with caching and retry logic
 let turnstileToken = null;
 // New protection tokens from site (captured):
-let _pawtectToken = null; // header: x-pawtect-token
-let _fp = null;           // body: fp
-let _fpCandidate = null;  // heuristic candidate from postMessage (pi), not used for sending
+// Usar variables globales para compartir estado entre launcher y bots
+let _pawtectToken = window.__WPA_PAWTECT_TOKEN__ || null; // header: x-pawtect-token
+let _fp = window.__WPA_FINGERPRINT__ || null;           // body: fp
+let _fpCandidate = window.__WPA_FP_CANDIDATE__ || null;  // heuristic candidate from postMessage (pi), not used for sending
 let _pawtectResolve = null;
 let _pawtectPromise = new Promise((res) => { _pawtectResolve = res; });
 let tokenExpiryTime = 0;
@@ -757,6 +758,7 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
               }
               if (capturedFp && (!_fp || _fp !== capturedFp)) {
                 _fp = capturedFp;
+                window.__WPA_FINGERPRINT__ = _fp; // Compartir globalmente
                 log("🆔 Fingerprint (fp) captured");
                 if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; }
               }
@@ -785,6 +787,7 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
           }
           if (capturedPawtect && (!_pawtectToken || _pawtectToken !== capturedPawtect)) {
             _pawtectToken = capturedPawtect;
+            window.__WPA_PAWTECT_TOKEN__ = _pawtectToken; // Compartir globalmente
             log('🛡️ x-pawtect-token captured');
             if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; }
           }
@@ -813,6 +816,7 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
       const msgFp = (typeof data === 'object' && typeof data.fp === 'string' && data.fp.length > 10) ? data.fp : null;
       if (msgFp && (!_fp || _fp !== msgFp)) {
         _fp = msgFp;
+        window.__WPA_FINGERPRINT__ = _fp; // Compartir globalmente
         log('🆔 Fingerprint (fp) captured via postMessage');
         if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; }
         return;
@@ -827,6 +831,7 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
           // Store shallow snapshot; do not use for sending
           try { _fpCandidate = JSON.parse(JSON.stringify({ xp: pi.xp, pfp: pi.pfp, ffp: pi.ffp })); }
           catch { _fpCandidate = { xp: String(pi.xp || ''), pfp: String(pi.pfp || ''), ffp: String(pi.ffp || '') }; }
+          window.__WPA_FP_CANDIDATE__ = _fpCandidate; // Compartir globalmente
           log('📦 Fingerprint candidate (pi) observed via postMessage');
         }
       }
@@ -843,10 +848,19 @@ export async function getTurnstileToken(_siteKey) {
   return await ensureToken();
 }
 
-// New exports for pawtect/fingerprint
-export function getPawtectToken() { return _pawtectToken; }
-export function getFingerprint() { return _fp; }
-export function getFingerprintCandidate() { return _fpCandidate; }
+// New exports for pawtect/fingerprint - siempre usar valores globales más actualizados
+export function getPawtectToken() { 
+  _pawtectToken = window.__WPA_PAWTECT_TOKEN__ || _pawtectToken;
+  return _pawtectToken; 
+}
+export function getFingerprint() { 
+  _fp = window.__WPA_FINGERPRINT__ || _fp;
+  return _fp; 
+}
+export function getFingerprintCandidate() { 
+  _fpCandidate = window.__WPA_FP_CANDIDATE__ || _fpCandidate;
+  return _fpCandidate; 
+}
 export async function waitForPawtect(timeout = 5000) {
   if (_pawtectToken && _fp) return { pawtect: _pawtectToken, fp: _fp };
   const timer = setTimeout(() => { if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; } }, timeout);
