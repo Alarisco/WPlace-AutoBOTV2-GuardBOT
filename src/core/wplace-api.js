@@ -99,9 +99,9 @@ export async function purchaseProduct(productId = 70, amount = 1) {
 // Unifica post de píxel por lotes (batch por tile).
 export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
   // pixels: [{x,y,color}, …] relativos al tile -> convertir a coords/colors
-  try { await waitForPawtect(1000); } catch {}
-  const pawtect = getPawtectToken();
-  const fp = getFingerprint();
+  try { await waitForPawtect(3000); } catch {}
+  let pawtect = getPawtectToken();
+  let fp = getFingerprint();
   const coords = [];
   const colors = [];
   for (const p of pixels || []) {
@@ -113,6 +113,7 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
       colors.push(p.color?.id ?? p.color?.value ?? p.color ?? 1);
     }
   }
+  log(`[API] postPixelBatch include: pawtect=${!!pawtect} fp=${!!fp}`);
   const body = JSON.stringify({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
   const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
     method: "POST",
@@ -139,9 +140,9 @@ export async function postPixelBatch({ tileX, tileY, pixels, turnstileToken }) {
 // Versión 'safe' que no arroja excepciones y retorna status/json
 export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
   try {
-    try { await waitForPawtect(1000); } catch {}
-    const pawtect = getPawtectToken();
-    const fp = getFingerprint();
+  try { await waitForPawtect(3000); } catch {}
+  let pawtect = getPawtectToken();
+  let fp = getFingerprint();
     const coords = [];
     const colors = [];
     for (const p of (pixels || [])) {
@@ -152,7 +153,8 @@ export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
         colors.push(p.color?.id ?? p.color?.value ?? p.color ?? 1);
       }
     }
-    const body = JSON.stringify({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
+  log(`[API] postPixelBatchSafe include: pawtect=${!!pawtect} fp=${!!fp}`);
+  const body = JSON.stringify({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
     const r = await fetchWithTimeout(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: "POST",
   headers: { "Content-Type": "text/plain;charset=UTF-8", ...(pawtect ? { "x-pawtect-token": pawtect } : {}) },
@@ -177,9 +179,9 @@ export async function postPixelBatchSafe(tileX, tileY, pixels, turnstileToken) {
 export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   try {
     // Ensure pawtect tokens are present (best-effort wait)
-    try { await waitForPawtect(1000); } catch {}
-    const pawtect = getPawtectToken();
-    const fp = getFingerprint();
+  try { await waitForPawtect(3000); } catch {}
+  let pawtect = getPawtectToken();
+  let fp = getFingerprint();
     const body = JSON.stringify({ 
       colors: colors, 
       coords: coords, 
@@ -208,6 +210,9 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
       try {
         console.log("🔄 Regenerating Turnstile token after 403...");
         const newToken = await ensureToken(true); // Force new token generation
+        // re-check fp/pawtect in case they were captured after the first try
+        pawtect = getPawtectToken();
+        fp = getFingerprint();
         
         // Retry the request with new token
         const retryBody = JSON.stringify({ 
@@ -268,7 +273,10 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
     // Si el servidor devuelve 5xx, intentar una vez con token nuevo
     if (response.status >= 500 && response.status <= 504) {
       try {
-        const newToken = await ensureToken(true);
+  const newToken = await ensureToken(true);
+  // re-check fp/pawtect as well
+  pawtect = getPawtectToken();
+  fp = getFingerprint();
   const retryBody = JSON.stringify({ colors, coords, t: newToken, ...(fp ? { fp } : {}) });
         const retryController = new AbortController();
         const retryTimeoutId = setTimeout(() => retryController.abort(), 20000); // Aumentar timeout a 20 segundos
@@ -328,9 +336,9 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
 export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstileToken) {
   try {
     // Ensure pawtect tokens are present (best-effort wait)
-    try { await waitForPawtect(1000); } catch {}
-    const pawtect = getPawtectToken();
-    const fp = getFingerprint();
+  try { await waitForPawtect(3000); } catch {}
+  let pawtect = getPawtectToken();
+  let fp = getFingerprint();
     // Prepare exact body format as used in example
     const body = JSON.stringify({ 
       colors: colors, 
@@ -341,7 +349,8 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
     
     log(`[API] Sending batch to tile ${tileX},${tileY} with ${colors.length} pixels, token: ${turnstileToken ? turnstileToken.substring(0, 50) + '...' : 'null'}`);
     
-    const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
+  log(`[API] postPixelBatchImage include: pawtect=${!!pawtect} fp=${!!fp}`);
+  const response = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
       method: 'POST',
       credentials: 'include',
   headers: { 'Content-Type': 'text/plain;charset=UTF-8', ...(pawtect ? { 'x-pawtect-token': pawtect } : {}) },
@@ -359,7 +368,10 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
         console.log("🔄 Regenerating Turnstile token after 403...");
         
         // Force invalidation of current token and get completely fresh one
-        const newToken = await ensureToken(true); // Force new token generation
+  const newToken = await ensureToken(true); // Force new token generation
+  // re-check fp/pawtect as they may be available now
+  pawtect = getPawtectToken();
+  fp = getFingerprint();
         
         if (!newToken) {
           return {
@@ -437,7 +449,10 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
     // Intentar una vez con token nuevo si es 5xx
     if (response.status >= 500 && response.status <= 504) {
       try {
-        const newToken = await ensureToken(true);
+  const newToken = await ensureToken(true);
+  // re-check fp/pawtect for retry
+  pawtect = getPawtectToken();
+  fp = getFingerprint();
   const retryBody = JSON.stringify({ colors, coords, t: newToken, ...(fp ? { fp } : {}) });
         log(`[API] Retrying after ${response.status} with fresh token: ${newToken.substring(0, 50)}...`);
         const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
