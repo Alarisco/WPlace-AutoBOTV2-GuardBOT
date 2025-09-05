@@ -37,6 +37,9 @@ export class BlueMarblelImageProcessor {
     this.initialAllowedColorsSet = null;
     // Paleta de colores disponibles para matching de cercanía
     this.allowedColors = [];
+  // Nuevo: tolerancia LAB y backups
+  this.labTolerance = 100; // tolerancia LAB por defecto (intenta siempre el más próximo)
+  this.originalBitmap = null; // copia sin procesar
   }
 
   async load() {
@@ -44,6 +47,7 @@ export class BlueMarblelImageProcessor {
       this.img.onload = async () => {
         try {
           this.bitmap = await createImageBitmap(this.img);
+          this.originalBitmap = this.bitmap; // mantener referencia original
           this.imageWidth = this.bitmap.width;
           this.imageHeight = this.bitmap.height;
           this.totalPixels = this.imageWidth * this.imageHeight;
@@ -57,6 +61,26 @@ export class BlueMarblelImageProcessor {
       this.img.onerror = reject;
       this.img.src = this.imageSrc;
     });
+  }
+
+  setLabTolerance(distance) {
+    this.labTolerance = Number.isFinite(distance) ? Math.max(0, distance) : Infinity;
+  }
+
+  generateOriginalPreview(maxWidth = 200, maxHeight = 200) {
+    // Preview de la imagen original sin remapear
+    if (!this.originalBitmap) return this.generatePreview(maxWidth, maxHeight);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const { width: origWidth, height: origHeight } = this.originalBitmap;
+    const aspectRatio = origWidth / origHeight;
+    let newWidth, newHeight;
+    if (maxWidth / maxHeight > aspectRatio) {
+      newHeight = maxHeight; newWidth = maxHeight * aspectRatio;
+    } else { newWidth = maxWidth; newHeight = maxWidth / aspectRatio; }
+    canvas.width = newWidth; canvas.height = newHeight; ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.originalBitmap, 0, 0, newWidth, newHeight);
+    return canvas.toDataURL();
   }
 
   /**
@@ -217,9 +241,10 @@ export class BlueMarblelImageProcessor {
           // Si no es exacto, usar algoritmo LAB para encontrar el color más cercano
           if (!isValidPixel && this.allowedColors && this.allowedColors.length > 0) {
             const closestColor = ColorUtils.findClosestPaletteColor(r, g, b, this.allowedColors, {
-              useLegacyRgb: false, // Usar algoritmo LAB avanzado
-              whiteThreshold: 240
-            });
+                useLegacyRgb: false, // Usar algoritmo LAB avanzado
+                whiteThreshold: 240,
+                maxDistance: this.labTolerance
+              });
             
             if (closestColor) {
               matchedKey = `${closestColor.r},${closestColor.g},${closestColor.b}`;
@@ -471,7 +496,8 @@ export class BlueMarblelImageProcessor {
             if (this.allowedColors && this.allowedColors.length > 0) {
               const closestColor = ColorUtils.findClosestPaletteColor(r, g, b, this.allowedColors, {
                 useLegacyRgb: false, // Usar algoritmo LAB avanzado
-                whiteThreshold: 240
+                whiteThreshold: 240,
+                maxDistance: this.labTolerance
               });
               
               if (closestColor) {
@@ -652,25 +678,161 @@ export class BlueMarblelImageProcessor {
    * Establecer colores seleccionados por el usuario
    */
   setSelectedColors(selectedColors) {
-    this.selectedColors = selectedColors;
-    
-    if (selectedColors && selectedColors.length > 0) {
-      // Actualizar el set de colores permitidos
-      this.allowedColorsSet = new Set(selectedColors.map(c => c.id));
-      
-      // Actualizar el mapa de paleta de colores
+    // Normalizar selección
+    this.selectedColors = Array.isArray(selectedColors) ? selectedColors : [];
+
+    if (this.selectedColors.length > 0) {
+      // allowedColorsSet debe usar claves RGB exactas "r,g,b"
+      this.allowedColorsSet = new Set(
+        this.selectedColors.map(c => {
+          const r = c.r ?? c.rgb?.r; const g = c.g ?? c.rgb?.g; const b = c.b ?? c.rgb?.b;
+          return `${r},${g},${b}`;
+        })
+      );
+
+      // Lista de colores permitidos para matching LAB
+      this.allowedColors = this.selectedColors.map(c => ({
+        id: c.id,
+        name: c.name,
+        premium: !!c.premium,
+        r: c.r ?? c.rgb?.r,
+        g: c.g ?? c.rgb?.g,
+        b: c.b ?? c.rgb?.b,
+        rgb: c.rgb || { r: c.r, g: c.g, b: c.b }
+      }));
+
+      // Actualizar mapa de paleta
       this.colorPalette = {};
-      selectedColors.forEach(color => {
-        this.colorPalette[color.id] = color.rgb;
+      this.selectedColors.forEach(color => {
+        const rgb = color.rgb || { r: color.r, g: color.g, b: color.b };
+        this.colorPalette[color.id] = rgb;
       });
-      
-      log(`🎨 [BLUE MARBLE] Paleta actualizada con ${selectedColors.length} colores seleccionados`);
-      
+
+      log(`🎨 [BLUE MARBLE] Paleta actualizada con ${this.selectedColors.length} colores seleccionados`);
+
       // Limpiar caché de imageData para forzar recálculo con nueva paleta
       this.imageDataCache = null;
     } else {
-      log(`🎨 [BLUE MARBLE] Usando todos los colores disponibles`);
+      // Sin selección explícita: no limitar por paleta en preview/cola
+      this.allowedColors = [...this.allSiteColors];
+      this.allowedColorsSet = new Set(this.allSiteColors.map(c => `${c.r},${c.g},${c.b}`));
+      log(`🎨 [BLUE MARBLE] Sin selección: usando todos los colores disponibles (${this.allowedColors.length})`);
     }
+  }
+
+  /**
+   * Genera una preview aplicando la paleta seleccionada con matching LAB.
+   * Devuelve también estadísticas de mapeo.
+   */
+  generatePreviewWithPalette(maxWidth = 200, maxHeight = 200) {
+  if (!this.img) return { dataUrl: null, stats: { total: 0, exact: 0, lab: 0, removed: 0 } };
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  // Usar siempre la fuente original para la previsualización con paleta,
+  // así la tolerancia LAB afecta correctamente aunque la imagen base esté remapeada
+  const source = this.originalBitmap || this.bitmap || this.img;
+  const { width: origWidth, height: origHeight } = source;
+    const aspectRatio = origWidth / origHeight;
+
+    let newWidth, newHeight;
+    if (maxWidth / maxHeight > aspectRatio) {
+      newHeight = Math.max(1, Math.round(maxHeight));
+      newWidth = Math.max(1, Math.round(maxHeight * aspectRatio));
+    } else {
+      newWidth = Math.max(1, Math.round(maxWidth));
+      newHeight = Math.max(1, Math.round(maxWidth / aspectRatio));
+    }
+
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(source, 0, 0, newWidth, newHeight);
+
+  const imgData = ctx.getImageData(0, 0, newWidth, newHeight);
+  const data = imgData.data;
+
+  const palette = Array.isArray(this.allowedColors) ? this.allowedColors : [];
+
+  let exact = 0; let lab = 0; let removed = 0; const total = newWidth * newHeight;
+
+    for (let y = 0; y < newHeight; y++) {
+      for (let x = 0; x < newWidth; x++) {
+        const idx = (y * newWidth + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const a = data[idx + 3];
+
+        if (a === 0) continue;
+
+
+  // Exact match contra paleta activa
+  const key = `${r},${g},${b}`;
+  let matched = this.allowedColorsSet && this.allowedColorsSet.has(key);
+  if (matched) { exact++; }
+
+        if (!matched) {
+          // LAB match al más cercano en la paleta activa
+          const closest = ColorUtils.findClosestPaletteColor(r, g, b, palette, { useLegacyRgb: false, whiteThreshold: 240, maxDistance: this.labTolerance });
+          if (closest) {
+            const cr = closest.r ?? closest.rgb?.r; const cg = closest.g ?? closest.rgb?.g; const cb = closest.b ?? closest.rgb?.b;
+            data[idx] = cr; data[idx + 1] = cg; data[idx + 2] = cb; data[idx + 3] = 255; lab++;
+          } else {
+            // No hay opción en selección, remover
+            data[idx + 3] = 0; removed++;
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    return { dataUrl: canvas.toDataURL(), stats: { total, exact, lab, removed } };
+  }
+
+  /**
+   * Remapea y sustituye la imagen base a la paleta activa (pixelart). Se usa justo tras cargar.
+   */
+  async remapImageToPalette() {
+    if (!this.bitmap) return;
+    // Asegurarse de tener paleta: si no hay selección, usar todos los colores del sitio
+    if (!this.allowedColors || this.allowedColors.length === 0) {
+      this.allowedColors = [...this.allSiteColors];
+      this.allowedColorsSet = new Set(this.allSiteColors.map(c => `${c.r},${c.g},${c.b}`));
+    }
+    const w = this.imageWidth, h = this.imageHeight;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.bitmap, 0, 0);
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+    const palette = this.allowedColors;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
+        if (a === 0) continue;
+        const key = `${r},${g},${b}`;
+        if (this.allowedColorsSet && this.allowedColorsSet.has(key)) continue;
+        const closest = ColorUtils.findClosestPaletteColor(r, g, b, palette, { useLegacyRgb: false, whiteThreshold: 240, maxDistance: this.labTolerance });
+        if (closest) {
+          const cr = closest.r ?? closest.rgb?.r; const cg = closest.g ?? closest.rgb?.g; const cb = closest.b ?? closest.rgb?.b;
+          data[idx] = cr; data[idx + 1] = cg; data[idx + 2] = cb; data[idx + 3] = 255;
+        } else {
+          data[idx + 3] = 0;
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    // Reemplazar bitmap e img con pixelart remapeado
+    const blob = await new Promise(res => canvas.toBlob(res));
+  const url = window.URL.createObjectURL(blob);
+    this.img.src = url; this.imageSrc = url;
+    await new Promise(resolve => { this.img.onload = async () => { this.bitmap = await createImageBitmap(this.img); resolve(); }; });
+    log('[BLUE MARBLE] Imagen base remapeada a paleta activa (pixelart)');
   }
 }
 

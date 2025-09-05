@@ -82,7 +82,8 @@ export class ColorUtils {
     const {
       useLegacyRgb = false,
       chromaPenalty = 0,
-      whiteThreshold = 240
+      whiteThreshold = 240,
+      maxDistance = Infinity
     } = options;
     
     // Manejo especial para colores muy blancos
@@ -97,8 +98,8 @@ export class ColorUtils {
       if (whiteColor) return whiteColor;
     }
     
-    let closestColor = null;
-    let minDistance = Infinity;
+  let closestColor = null;
+  let minDistance = Infinity;
     
     if (useLegacyRgb) {
       // Algoritmo RGB tradicional
@@ -113,7 +114,7 @@ export class ColorUtils {
           Math.pow(b - cb, 2)
         );
         
-        if (distance < minDistance) {
+  if (distance < minDistance) {
           minDistance = distance;
           closestColor = color;
         }
@@ -151,6 +152,10 @@ export class ColorUtils {
       }
     }
     
+    // Aplicar umbral de tolerancia: si el más cercano supera maxDistance, no hay alternativa válida
+    if (minDistance > maxDistance) {
+      return null;
+    }
     return closestColor;
   }
   

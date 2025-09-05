@@ -614,12 +614,25 @@ export async function createImageUI({ texts, ...handlers }) {
         <div class="config-item">
           <label>📐 Patrón de pintado:</label>
           <select class="config-input paint-pattern">
-            <option value="linear_start">Lineal (Inicio)</option>
-            <option value="linear_end">Lineal (Final)</option>
-            <option value="random">Aleatorio</option>
-            <option value="center_out">Centro hacia afuera</option>
-            <option value="corners_first">Esquinas primero</option>
-            <option value="spiral">Espiral</option>
+            <option value="linear_start">➡️ Lineal (Inicio)</option>
+            <option value="linear_end">⬅️ Lineal (Final)</option>
+            <option value="random">🎲 Aleatorio</option>
+            <option value="center_out">💥 Centro hacia afuera</option>
+            <option value="corners_first">🏁 Esquinas primero</option>
+            <option value="spiral">🌀 Espiral</option>
+            <option value="snake">🐍 Serpiente (Zigzag)</option>
+            <option value="diagonal_sweep">📐 Barrido diagonal</option>
+            <option value="borders">🖼️ Bordes primero</option>
+            <option value="center">🎯 Centro primero</option>
+            <option value="quadrants">🔲 Cuadrantes</option>
+            <option value="biased_random">🎯 Aleatorio sesgado (bordes)</option>
+            <option value="clusters">🎪 Clusters</option>
+            <option value="proximity">🤝 Proximidad</option>
+            <option value="sweep">🧹 Barrido por secciones</option>
+            <option value="priority">⭐ Prioridad (mixto)</option>
+            <option value="anchor_points">⚓ Puntos de anclaje</option>
+            <option value="spiral_cw">🔄 Espiral (horaria)</option>
+            <option value="spiral_ccw">🔃 Espiral (antihoraria)</option>
           </select>
         </div>
       </div>

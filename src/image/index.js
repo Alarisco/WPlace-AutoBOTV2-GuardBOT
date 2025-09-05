@@ -231,12 +231,22 @@ export async function runImage() {
           // Inicializar paleta de colores Blue Marble
           const availableColors = processor.initializeColorPalette();
           imageState.availableColors = availableColors;
+          // Tolerancia LAB por defecto ahora 100 (intentar siempre el más próximo)
+          processor.setLabTolerance(100);
           
           // Analizar píxeles de la imagen
           const analysisResult = await processor.analyzePixels();
           
           // Establecer coordenadas base (se actualizarán al seleccionar posición)
           processor.setCoords(0, 0, 0, 0);
+          
+          // Nuevo: remapear inmediatamente a pixelart y descartar original visual (mantener copia para 'Mostrar original')
+          try {
+            await processor.remapImageToPalette();
+            log('✅ Imagen remapeada a paleta automáticamente tras subir');
+          } catch (e) {
+            log('⚠️ Error remapeando imagen tras subir (continuando con original):', e);
+          }
           
           // Obtener datos de imagen procesados
           const processedData = processor.getImageData();
@@ -699,8 +709,16 @@ export async function runImage() {
             processor.setSelectedColors(selectedColorObjects);
             log(`🎨 Paleta actualizada con ${selectedColors.length} colores seleccionados`);
           }
+          // Importante: remapear la imagen al estado actual de paleta/tolerancia para que el overlay
+          // se base en el resultado final del procesador (no en la imagen original)
+          try {
+            await processor.remapImageToPalette();
+            log('✅ Imagen remapeada tras redimensionado/selección antes de generar overlay');
+          } catch (e) {
+            log('⚠️ Error remapeando imagen tras redimensionado:', e);
+          }
           
-          // Reanalizar imagen con nuevo tamaño usando Blue Marble
+          // Reanalizar imagen con nuevo tamaño usando Blue Marble (ya remapeada)
           const analysisResult = await processor.analyzePixels();
           
           // Actualizar imageState con resultados de Blue Marble

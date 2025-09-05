@@ -34,6 +34,8 @@ export function createResizeWindow() {
       flex-direction: column;
     `;
 
+  // (sin estilos extra: checkbox simple para 'Original')
+
     resizeWindow.innerHTML = `
       <div style="padding: 12px 15px; background: #2d3748; color: #60a5fa; font-size: 16px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; cursor: move; flex-shrink: 0;" class="resize-header">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -52,6 +54,17 @@ export function createResizeWindow() {
         <div class="resize-preview-info" style="font-size: 12px; color: #aaa; text-align: center; margin-bottom: 12px;"></div>
         
         <div class="resize-controls" style="display: flex; flex-direction: column; gap: 15px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label style="color: #ffffff; font-size: 14px; display: flex; align-items: center; gap: 8px; margin: 0;">
+              <input type="checkbox" class="toggle-original">
+              Original
+            </label>
+            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+              <label style="color: #ffffff; font-size: 14px; white-space: nowrap;">Tolerancia LAB</label>
+              <input type="range" class="lab-tolerance" min="0" max="100" step="1" value="100">
+              <span class="lab-tolerance-value" style="color:#aaa; font-size:12px;">100</span>
+            </div>
+          </div>
           <div style="display: flex; flex-direction: column; gap: 5px;">
             <label style="color: #ffffff; font-size: 14px;">Ancho: <span class="width-value"></span>px</label>
             <input type="range" class="resize-slider width-slider" min="50" max="2000" step="1" style="width: 100%;">
@@ -111,6 +124,10 @@ export function createResizeWindow() {
       closeBtn: resizeWindow.querySelector('#closeResizeBtn'),
       resizeContent: resizeWindow.querySelector('.resize-content'),
       previewInfo: resizeWindow.querySelector('.resize-preview-info')
+  ,
+  toggleOriginal: resizeWindow.querySelector('.toggle-original'),
+  labTolerance: resizeWindow.querySelector('.lab-tolerance'),
+  labToleranceValue: resizeWindow.querySelector('.lab-tolerance-value')
     };
 
     // Evitar arrastre nativo dentro de la ventana (especialmente imágenes)
@@ -166,20 +183,42 @@ export function createResizeWindow() {
     let currentHeight = originalHeight;
     let aspectRatio = originalWidth / originalHeight;
     
-    // Función helper para actualizar la vista previa de forma ligera
-    const updatePreview = () => {
+    // Función helper para actualizar la vista previa de forma ligera o con paleta
+    const updatePreview = (usePalette = false, selectedColorsForPreview = null) => {
       try {
         const imgW = currentWidth;
         const imgH = currentHeight;
 
-        // Generar una única previsualización al tamaño seleccionado
-        const dataUrl = processor.generatePreview(imgW, imgH);
-        resizeElements.preview.src = dataUrl;
+        let dataUrl = null;
+        let stats = null;
+
+        // Si el usuario quiere ver el original, usar preview original
+        if (resizeElements.toggleOriginal && resizeElements.toggleOriginal.checked && typeof processor.generateOriginalPreview === 'function') {
+          dataUrl = processor.generateOriginalPreview(imgW, imgH);
+        } else if (usePalette && typeof processor.generatePreviewWithPalette === 'function') {
+          // Si nos pasan selección, aplicarla
+          if (Array.isArray(selectedColorsForPreview)) {
+            processor.setSelectedColors(selectedColorsForPreview);
+          }
+          const result = processor.generatePreviewWithPalette(imgW, imgH);
+          dataUrl = result?.dataUrl || null;
+          stats = result?.stats || null;
+        } else {
+          // Preview normal sin restricciones
+          dataUrl = processor.generatePreview(imgW, imgH);
+        }
+        if (dataUrl) {
+          resizeElements.preview.src = dataUrl;
+        }
 
         // Actualizar info de previsualización
         if (resizeElements.previewInfo) {
           const total = imgW * imgH;
-          resizeElements.previewInfo.textContent = `${imgW}×${imgH} px | Total: ${total.toLocaleString()} píxeles`;
+          let extra = '';
+          if (stats) {
+            extra = ` | Exact: ${stats.exact.toLocaleString()} | LAB: ${stats.lab.toLocaleString()} | Removed: ${stats.removed.toLocaleString()}`;
+          }
+          resizeElements.previewInfo.textContent = `${imgW}×${imgH} px | Total: ${total.toLocaleString()} píxeles${extra}`;
         }
       } catch (e) {
         log('⚠️ Error generando vista previa:', e);
@@ -200,7 +239,7 @@ export function createResizeWindow() {
       resizeElements.colorPaletteSelector = createColorPaletteSelector(colorPaletteContainer, initialColors);
     }
 
-    // Event listeners para los sliders
+  // Event listeners para los sliders
     function updateWidth() {
       currentWidth = parseInt(resizeElements.widthSlider.value);
       resizeElements.widthValue.textContent = currentWidth;
@@ -210,7 +249,12 @@ export function createResizeWindow() {
         resizeElements.heightSlider.value = currentHeight;
         resizeElements.heightValue.textContent = currentHeight;
       }
-      updatePreview();
+      // Siempre usar preview con paleta activa
+      const selectedIds = resizeElements.colorPaletteSelector?.getSelectedColors?.() || [];
+      const sourceColors = imageState?.availableColors || [];
+      const byId = new Map(sourceColors.map(c => [c.id, c]));
+      const palette = selectedIds.map(id => byId.get(id)).filter(Boolean);
+      updatePreview(true, palette);
     }
     
     function updateHeight() {
@@ -222,7 +266,32 @@ export function createResizeWindow() {
         resizeElements.widthSlider.value = currentWidth;
         resizeElements.widthValue.textContent = currentWidth;
       }
-      updatePreview();
+      const selectedIds = resizeElements.colorPaletteSelector?.getSelectedColors?.() || [];
+      const sourceColors = imageState?.availableColors || [];
+      const byId = new Map(sourceColors.map(c => [c.id, c]));
+      const palette = selectedIds.map(id => byId.get(id)).filter(Boolean);
+      updatePreview(true, palette);
+    }
+
+    function handleToggleOriginal() {
+      // Cambiar preview entre original y paleta actual
+      const selectedIds = resizeElements.colorPaletteSelector?.getSelectedColors?.() || [];
+      const sourceColors = imageState?.availableColors || [];
+      const byId = new Map(sourceColors.map(c => [c.id, c]));
+      const palette = selectedIds.map(id => byId.get(id)).filter(Boolean);
+      updatePreview(true, palette);
+    }
+
+    function handleLabToleranceChange() {
+      const val = parseInt(resizeElements.labTolerance.value) || 0;
+      resizeElements.labToleranceValue.textContent = String(val);
+      try { processor.setLabTolerance(val); } catch {}
+      // Regenerar preview con nueva tolerancia
+      const selectedIds = resizeElements.colorPaletteSelector?.getSelectedColors?.() || [];
+      const sourceColors = imageState?.availableColors || [];
+      const byId = new Map(sourceColors.map(c => [c.id, c]));
+      const palette = selectedIds.map(id => byId.get(id)).filter(Boolean);
+      updatePreview(true, palette);
     }
 
     function handleMaintainAspectChange() {
@@ -246,6 +315,18 @@ export function createResizeWindow() {
     resizeElements.widthSlider.addEventListener('input', updateWidth);
     resizeElements.heightSlider.addEventListener('input', updateHeight);
     resizeElements.maintainAspect.addEventListener('change', handleMaintainAspectChange);
+    if (resizeElements.toggleOriginal) {
+      resizeElements.toggleOriginal.removeEventListener('change', handleToggleOriginal);
+      resizeElements.toggleOriginal.addEventListener('change', handleToggleOriginal);
+    }
+    if (resizeElements.labTolerance) {
+      resizeElements.labTolerance.removeEventListener('input', handleLabToleranceChange);
+      resizeElements.labTolerance.addEventListener('input', handleLabToleranceChange);
+      // Inicializar con tolerancia del processor si existe
+  const initialTol = Math.min(100, Math.max(0, Math.round(processor.labTolerance ?? 100)));
+      resizeElements.labTolerance.value = String(initialTol);
+      resizeElements.labToleranceValue.textContent = String(initialTol);
+    }
 
     // Función para obtener colores seleccionados
      function getSelectedColors() {
@@ -301,8 +382,33 @@ export function createResizeWindow() {
      }
      
      // Configurar callback de selección de color
-     if (handlers.onColorSelectionChange && resizeElements.colorPaletteSelector && resizeElements.colorPaletteSelector.onSelectionChange) {
-       resizeElements.colorPaletteSelector.onSelectionChange(handlers.onColorSelectionChange);
+     if (resizeElements.colorPaletteSelector && resizeElements.colorPaletteSelector.onSelectionChange) {
+       resizeElements.colorPaletteSelector.onSelectionChange((selectedColorIds) => {
+         // Mapear IDs seleccionados a objetos de color desde availableColors en estado/handler
+         let palette = [];
+         const sourceColors = (typeof handlers.getAvailableColors === 'function')
+           ? handlers.getAvailableColors()
+           : (Array.isArray(imageState?.availableColors) ? imageState.availableColors : []);
+         if (Array.isArray(sourceColors) && sourceColors.length > 0) {
+           const byId = new Map(sourceColors.map(c => [c.id, c]));
+           palette = selectedColorIds.map(id => byId.get(id)).filter(Boolean);
+         }
+
+         // Notificar a UI/handlers
+         if (typeof handlers.onColorSelectionChange === 'function') {
+           handlers.onColorSelectionChange(selectedColorIds);
+         }
+
+         // Actualizar preview aplicando paleta seleccionada con matching LAB
+         updatePreview(true, palette);
+
+         // Si no hay opciones disponibles, informar claramente en la UI
+         if (!palette || palette.length === 0) {
+           try {
+             resizeElements.previewInfo.textContent += ' | Sin colores seleccionados: se ocultarán los píxeles sin opción disponible';
+           } catch {}
+         }
+       });
      }
     
     // Mostrar diálogo
@@ -326,8 +432,13 @@ export function createResizeWindow() {
       window.addEventListener('resize', resizeElements.onWindowResize, { passive: true });
     }
 
-    // Generar vista previa inicial
-    updatePreview();
+  // Generar vista previa inicial (si hay selección previa respetarla)
+  // Preview inicial: usar paleta inicial (si no hay selección, se usa paleta activa por defecto)
+  const initialIds = resizeElements.colorPaletteSelector?.getSelectedColors?.() || [];
+  const sourceColors = imageState?.availableColors || [];
+  const byId = new Map(sourceColors.map(c => [c.id, c]));
+  const initialPalette = initialIds.map(id => byId.get(id)).filter(Boolean);
+  updatePreview(true, initialPalette);
     
     log('📏 Diálogo de redimensionamiento mostrado');
   }
