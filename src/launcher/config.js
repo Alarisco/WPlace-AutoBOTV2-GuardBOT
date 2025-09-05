@@ -1,7 +1,7 @@
 import { getSection } from '../locales/index.js';
 
 export const LAUNCHER_CONFIG = {
-  RAW_BASE: 'https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOTV2-GuardBOT/refs/heads/launcherfix',
+  RAW_BASE: 'https://raw.githubusercontent.com/Alarisco/WPlace-AutoBOT/refs/heads/main',
   REFRESH_INTERVAL: 60000, // 1 minuto
   THEME: {
     primary: '#000000',
