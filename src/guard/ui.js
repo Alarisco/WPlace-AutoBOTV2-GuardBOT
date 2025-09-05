@@ -26,6 +26,16 @@ export function createGuardUI(texts) {
     display: flex;
     flex-direction: column;
   `;
+  // Clase para estilos de minimizado
+  container.classList.add('guard-container');
+
+  // Preparar estilos para transición de minimizado (se insertarán después de innerHTML)
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    .guard-container.minimized { min-height: 0 !important; height: auto !important; }
+    .guard-content { max-height: 1000px; transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.25s ease; }
+    .guard-content.collapsed { max-height: 0; opacity: 0; overflow: hidden; padding: 0; flex: 0 0 auto !important; }
+  `;
 
   container.innerHTML = `
     <div style="padding: 12px 15px; background: #2d3748; color: #60a5fa; font-size: 16px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; cursor: move; flex-shrink: 0;" class="guard-header">
@@ -35,7 +45,7 @@ export function createGuardUI(texts) {
       <button id="minimizeBtn" style="background: none; border: none; color: #eee; cursor: pointer; opacity: 0.7; padding: 5px; transition: opacity 0.2s ease;">➖</button>
     </div>
     
-    <div style="padding: 15px; flex: 1; overflow-y: auto;">
+    <div class="guard-content" style="padding: 15px; flex: 1; overflow-y: auto;">
       <!-- Estado de inicialización -->
       <div id="initSection">
         <button id="initBtn" style="width: 100%; padding: 10px; background: #60a5fa; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-bottom: 10px;">
@@ -144,11 +154,10 @@ export function createGuardUI(texts) {
       
       </div>
       
-      <!-- Estado -->
+      <!-- Estado (siempre visible aunque se minimice) -->
       <div id="statusBar" style="background: #2d3748; padding: 8px; border-radius: 4px; text-align: center; font-size: 13px; margin-top: 10px;">
         ⏳ ${texts.waitingInit}
       </div>
-     </div>
      
      <!-- Indicador de redimensionamiento -->
      <div style="
@@ -164,6 +173,8 @@ export function createGuardUI(texts) {
    `;
 
   document.body.appendChild(container);
+  // Insertar estilos después de innerHTML para que no se pierdan
+  container.appendChild(styleEl);
 
   // Registrar ventana para manejo de z-index
   registerWindow(container);
@@ -215,6 +226,7 @@ export function createGuardUI(texts) {
 
   // API de la UI
   const ui = {
+    container,
     elements,
     
     updateStatus: (message, type = 'info') => {
@@ -455,42 +467,20 @@ export function createGuardUI(texts) {
     }
   };
 
-  // Event listener para botón de minimizar
+  // Event listener para botón de minimizar (transición suave dejando status visible)
   elements.minimizeBtn.addEventListener('click', () => {
-    const content = container.querySelector('div[style*="padding: 15px"]');
-    const statsSection = container.querySelector('#statsSection');
-    const statusBar = container.querySelector('#statusBar');
-    
-    if (content.style.display === 'none') {
-      // Restaurar ventana sin transición
-      content.style.display = 'block';
-      
-      if (statsSection) {
-        statsSection.style.display = 'block';
-      }
-      
-      if (statusBar) {
-        statusBar.style.display = 'block';
-      }
-      
+    const content = container.querySelector('.guard-content');
+    if (!content) return;
+    if (content.classList.contains('collapsed')) {
+      // Restaurar
+      content.classList.remove('collapsed');
+      container.classList.remove('minimized');
       elements.minimizeBtn.textContent = '➖';
-      container.style.height = 'auto';
-      container.style.minHeight = '200px';
     } else {
-      // Minimizar ventana sin transición
-      content.style.display = 'none';
-      
-      if (statsSection) {
-        statsSection.style.display = 'none';
-      }
-      
-      if (statusBar) {
-        statusBar.style.display = 'none';
-      }
-      
+      // Minimizar suave
+      content.classList.add('collapsed');
+      container.classList.add('minimized');
       elements.minimizeBtn.textContent = '🔼';
-      container.style.height = 'auto';
-      container.style.minHeight = 'auto';
     }
   });
 

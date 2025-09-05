@@ -236,20 +236,7 @@ function checkExistingBots() {
 
 function setupEventListeners() {
   const { elements } = guardState.ui;
-  
-  elements.minimizeBtn.addEventListener('click', () => {
-    // Minimizar la ventana en lugar de cerrarla
-    const container = guardState.ui.container;
-    if (container.style.display === 'none') {
-      container.style.display = 'block';
-      elements.minimizeBtn.textContent = '➖';
-      elements.minimizeBtn.title = 'Minimizar';
-    } else {
-      container.style.display = 'none';
-      elements.minimizeBtn.textContent = '🔲';
-      elements.minimizeBtn.title = 'Restaurar';
-    }
-  });
+
 
   elements.initBtn.addEventListener('click', () => initializeGuard());
   elements.selectAreaBtn.addEventListener('click', selectAreaStepByStep);
