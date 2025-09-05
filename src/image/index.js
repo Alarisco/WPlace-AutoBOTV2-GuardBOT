@@ -1045,3 +1045,7 @@ export async function runImage() {
     throw error;
   }
 }
+
+if (typeof window !== 'undefined' && !window.runImage) {
+  window.runImage = runImage;
+}

@@ -989,3 +989,8 @@ function cleanupRepositioning(statusDiv) {
   // Remover elementos UI
   statusDiv.remove();
 }
+
+// Exponer global para launcher (idempotente)
+if (typeof window !== 'undefined' && !window.runGuard) {
+  window.runGuard = runGuard;
+}

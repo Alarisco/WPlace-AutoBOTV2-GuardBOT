@@ -300,3 +300,7 @@ export async function runFarm() {
     throw error;
   }
 }
+
+if (typeof window !== 'undefined' && !window.runFarm) {
+  window.runFarm = runFarm;
+}

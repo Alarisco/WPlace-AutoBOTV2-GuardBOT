@@ -554,6 +554,23 @@ export async function downloadAndExecuteBot(botType, rawBase) {
     log('🚀 Ejecutando bot en contexto global (para acceso a turnstile.js)...');
     (0, eval)(code + sourceURL);
     log('✅ Bot ejecutado con acceso completo a turnstile.js');
+    try {
+      // Auto-invocación segura según tipo
+      if (botType === 'guard' && typeof window.runGuard === 'function' && !window.__wplaceBot?.guardRunning) {
+        log('▶️ Invocando runGuard() automáticamente');
+        window.runGuard();
+      } else if (botType === 'farm' && typeof window.runFarm === 'function' && !window.__wplaceBot?.farmRunning) {
+        log('▶️ Invocando runFarm() automáticamente');
+        window.runFarm();
+      } else if (botType === 'image' && typeof window.runImage === 'function' && !window.__wplaceBot?.imageRunning) {
+        log('▶️ Invocando runImage() automáticamente');
+        window.runImage();
+      } else {
+        log('ℹ️ No se auto-invocó (ya running o función no expuesta)');
+      }
+    } catch (e) {
+      log('⚠️ Error auto-invocando runner:', e?.message || e);
+    }
     return true;
   } catch (error) {
     log('❌ Error descargando/ejecutando bot:', error.message);
