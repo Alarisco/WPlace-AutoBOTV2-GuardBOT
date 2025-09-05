@@ -6,6 +6,10 @@ import { initializeLanguage } from "../locales/index.js";
 import { createLanguageSelector } from "../core/language-selector.js";
 import { sessionStart, sessionPing, sessionEnd, trackEvent } from "../core/metrics/client.js";
 import { getMetricsConfig } from "../core/metrics/config.js";
+// Cargar módulo de turnstile para instalar el hook de fetch lo antes posible (side-effect import)
+import "../core/turnstile.js";
+// Warm-up/gating previo al lanzamiento para estabilizar captura de tokens al iniciar desde el launcher
+import { warmUpForTokens, ensureFingerprintReady } from "../core/warmup.js";
 
 export async function runLauncher() {
   log('🚀 Iniciando WPlace Auto-Launcher (versión modular)');
@@ -61,6 +65,14 @@ export async function runLauncher() {
       onLaunch: async (botType) => {
         log(`🚀 Lanzando bot: ${botType}`);
   try { trackEvent('launcher_start_bot', { botVariant: 'launcher', metadata: { botType } }); } catch {}
+        // Pre-warmup y gating antes de inyectar el bot para asegurar hook y credenciales activos
+        try {
+          log(`🧪 [launcher] Pre-warmup tokens (hook=${!!window.__WPA_FETCH_HOOKED__})`);
+          await warmUpForTokens('launcher');
+          await ensureFingerprintReady('launcher', { timeoutMs: 12000, maxAttempts: 5 });
+        } catch (e) {
+          log(`⚠️ [launcher] Pre-warmup/gating falló: ${e?.message || e}`);
+        }
         await downloadAndExecuteBot(botType, LAUNCHER_CONFIG.RAW_BASE);
       },
       
