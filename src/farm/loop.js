@@ -1,4 +1,4 @@
-import { ensureToken } from "../core/turnstile.js";
+import { ensureToken, getCachedToken } from "../core/turnstile.js";
 import { postPixelBatchImage } from "../core/wplace-api.js";
 import { generateStraightLine, generateMultipleColors } from "./coords.js";
 import { sleep, sleepWithCountdown } from "../core/timing.js";
@@ -110,7 +110,11 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
   // Mensaje neutro (pintado lineal); no mencionar radio
   setStatus(`🌾 Pintando ${pixelCount} píxeles desde base (${cfg.BASE_X},${cfg.BASE_Y}) tile(${cfg.TILE_X},${cfg.TILE_Y})...`, 'status');
   
-  const t = await ensureToken();
+  // Reutilizar token en memoria si aún es válido para evitar generación redundante
+  let t = getCachedToken();
+  if (!t) {
+    t = await ensureToken();
+  }
   // Usar el mismo formato que Auto-Image: text/plain con { colors, coords, t }
   const r = await postPixelBatchImage(cfg.TILE_X, cfg.TILE_Y, coords, colors, t);
 

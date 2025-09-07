@@ -438,7 +438,7 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
   }
 }
 
-export async function paintPixelBatch(batch) {
+export async function paintPixelBatch(batch, providedToken = null) {
   try {
     if (!batch || batch.length === 0) {
       return { success: false, painted: 0, error: 'Lote vacío' };
@@ -454,8 +454,8 @@ export async function paintPixelBatch(batch) {
       bucket.colors.push(p.color.id || p.color.value || 1);
     }
 
-    // Obtener un único token de Turnstile para el conjunto
-    const token = await ensureToken();
+  // Obtener un único token (reutilizar si se pasa desde nivel superior)
+  const token = providedToken || await ensureToken();
 
     let totalPainted = 0;
     for (const { coords, colors, tx, ty } of byTile.values()) {
@@ -531,37 +531,62 @@ const NETWORK_ERROR_LOG_THROTTLE = 60000; // 1 minuto entre logs de errores de r
 export async function paintPixelBatchWithRetry(batch, onProgress) {
   const maxAttempts = 5; // 5 intentos como en el Farm
   const baseDelay = 3000; // Delay base de 3 segundos
-  
+  let token = null;
+
+  // Obtener un token una sola vez antes de los reintentos
+  try {
+    token = await ensureToken();
+  } catch (e) {
+    log('⚠️ No se pudo obtener token inicial, se intentará en el primer intento:', e.message);
+  }
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const result = await paintPixelBatch(batch);
-      
+      // Si no tenemos token todavía (fallo al inicio) intentar generarlo ahora
+      if (!token) {
+        token = await ensureToken();
+      }
+
+      const result = await paintPixelBatch(batch, token);
+
       if (result.success) {
         imageState.retryCount = 0; // Reset en éxito
         _consecutiveNetworkErrors = 0; // Reset contador de errores
         return result;
       }
-      
+
+      // Token inválido / expirado -> regenerar inmediatamente y repetir intento sin penalizar backoff completo
+      if (result.status === 403) {
+        log('🔐 403 recibido: invalidando y regenerando token para reintento inmediato');
+        try {
+          token = await ensureToken(true); // forzar nuevo token
+          // Reintentar el mismo intento (no incrementar backoff extra)
+          continue;
+        } catch (regenErr) {
+          log('❌ Falló regeneración de token tras 403:', regenErr.message);
+        }
+      }
+
       imageState.retryCount = attempt;
-      
+
       if (attempt < maxAttempts) {
         const delay = baseDelay * Math.pow(2, attempt - 1); // Backoff exponencial
         const delaySeconds = Math.round(delay / 1000);
-        
+
         // Determinar tipo de error para mensaje específico
         let errorMessage;
         const isNetworkError = result.status === 0 || result.status === 'NetworkError';
-        
+
         if (isNetworkError) {
           _consecutiveNetworkErrors++;
           const now = Date.now();
-          
+
           // Solo loggear errores de red cada minuto o en el primer error
           if (now - _lastNetworkErrorLog > NETWORK_ERROR_LOG_THROTTLE || _consecutiveNetworkErrors === 1) {
             log(`🌐 Error de red (${_consecutiveNetworkErrors} consecutivos). Reintento ${attempt}/${maxAttempts} en ${delaySeconds}s`);
             _lastNetworkErrorLog = now;
           }
-          
+
           errorMessage = t('image.networkError');
         } else if (result.status >= 500) {
           errorMessage = t('image.serverError');
@@ -570,57 +595,66 @@ export async function paintPixelBatchWithRetry(batch, onProgress) {
           errorMessage = t('image.timeoutError');
           log(`⏱️ Timeout. Reintento ${attempt}/${maxAttempts} en ${delaySeconds}s`);
         } else {
-          errorMessage = t('image.retryAttempt', { 
-            attempt, 
-            maxAttempts, 
-            delay: delaySeconds 
+          errorMessage = t('image.retryAttempt', {
+            attempt,
+            maxAttempts,
+            delay: delaySeconds
           });
           log(`🔄 Reintento ${attempt}/${maxAttempts} después de ${delaySeconds}s. Error: ${result.error}`);
         }
-        
+
         if (onProgress) {
           onProgress(imageState.paintedPixels, imageState.totalPixels, errorMessage);
         }
-        
+
         await sleep(delay);
       }
-      
     } catch (error) {
       imageState.retryCount = attempt;
-      
+
       if (attempt < maxAttempts) {
         const delay = baseDelay * Math.pow(2, attempt - 1);
         const delaySeconds = Math.round(delay / 1000);
-        
-        // Solo loggear errores de excepción en el primer intento o cada 3 intentos
+
+        // Si la excepción pudiera ser por token inválido, intentamos regenerar inmediatamente
+        if (/403/.test(error?.message || '')) {
+          try {
+            log('🔐 Excepción potencial de token, regenerando...');
+            token = await ensureToken(true);
+            continue; // Reintentar mismo intento
+          } catch (regenErr) {
+            log('❌ Falló regeneración tras excepción 403:', regenErr.message);
+          }
+        }
+
         if (attempt === 1 || attempt % 3 === 0) {
           log(`❌ Excepción en intento ${attempt}:`, error.message);
         }
-        
-        const errorMessage = t('image.retryError', { 
-          attempt, 
-          maxAttempts, 
-          delay: delaySeconds 
+
+        const errorMessage = t('image.retryError', {
+          attempt,
+          maxAttempts,
+          delay: delaySeconds
         });
-        
+
         if (onProgress) {
           onProgress(imageState.paintedPixels, imageState.totalPixels, errorMessage);
         }
-        
+
         await sleep(delay);
       }
     }
   }
-  
+
   imageState.retryCount = maxAttempts;
   const failMessage = t('image.retryFailed', { maxAttempts });
-  
+
   if (onProgress) {
     onProgress(imageState.paintedPixels, imageState.totalPixels, failMessage);
   }
-  
+
   log(`💥 Falló después de ${maxAttempts} intentos, continuando con siguiente lote`);
-  
+
   // Retornar un resultado de fallo que permita continuar
   return {
     success: false,

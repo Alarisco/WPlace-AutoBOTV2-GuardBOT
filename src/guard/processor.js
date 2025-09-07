@@ -1,6 +1,6 @@
 import { log } from "../core/logger.js";
 import { postPixelBatchImage, getSession } from "../core/wplace-api.js";
-import { ensureToken } from "../core/turnstile.js";
+import { ensureToken, getCachedToken } from "../core/turnstile.js";
 import { guardState, GUARD_DEFAULTS } from "./config.js";
 import { sleep } from "../core/timing.js";
 import { getPixelsByPattern } from "./patterns.js";
@@ -993,7 +993,11 @@ function debouncedAnalysisSummary({ total, incorrect, missing }) {
 // Pintar múltiples píxeles en un solo tile
 async function paintPixelBatch(tileX, tileY, coords, colors) {
   try {
-    const token = await ensureToken();
+    // Reutilizar token si está aún válido
+    let token = getCachedToken();
+    if (!token) {
+      token = await ensureToken();
+    }
 
     // Sanitizar coordenadas a rango 0..999
     const sanitizedCoords = [];
