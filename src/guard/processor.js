@@ -1,5 +1,7 @@
 import { log } from "../core/logger.js";
-import { postPixelBatchImage, getSession } from "../core/wplace-api.js";
+import { getSession } from "../core/wplace-api.js";
+// Usamos el mismo flujo de pintado que el bot de imagen para evitar 403
+import { postPixelBatchImage } from '../core/wplace-api.js';
 import { ensureToken, getCachedToken } from "../core/turnstile.js";
 import { guardState, GUARD_DEFAULTS } from "./config.js";
 import { sleep } from "../core/timing.js";
@@ -861,10 +863,12 @@ export async function repairChanges(changes) {
         const coords = [];
         const colors = [];
         
-        for (const change of tileChanges) {
-          coords.push(change.localX, change.localY);
-          colors.push(change.colorId);
-        }
+          // Orden determinista: primero por Y luego X (igual que orden top-to-bottom / left-to-right)
+          const ordered = [...tileChanges].sort((a,b)=> (a.localY - b.localY) || (a.localX - b.localX));
+          for (const change of ordered) {
+            coords.push(change.localX, change.localY);
+            colors.push(change.colorId);
+          }
         
         const result = await paintPixelBatch(tileX, tileY, coords, colors);
         
@@ -993,47 +997,31 @@ function debouncedAnalysisSummary({ total, incorrect, missing }) {
 // Pintar múltiples píxeles en un solo tile
 async function paintPixelBatch(tileX, tileY, coords, colors) {
   try {
-    // Reutilizar token si está aún válido
+    // Reutilizar token de turnstile si está cacheado (no forzar nuevo)
     let token = getCachedToken();
-    if (!token) {
-      token = await ensureToken();
-    }
+    if (!token) token = await ensureToken();
 
-    // Sanitizar coordenadas a rango 0..999
-    const sanitizedCoords = [];
+    // Sanitizar coordenadas (igual que image/painter.js)
+    const sanitized = [];
     for (let i = 0; i < coords.length; i += 2) {
       const x = ((Number(coords[i]) % 1000) + 1000) % 1000;
       const y = ((Number(coords[i + 1]) % 1000) + 1000) % 1000;
-      sanitizedCoords.push(x, y);
+      if (Number.isFinite(x) && Number.isFinite(y)) sanitized.push(x, y);
     }
 
-    // Log de diagnóstico (muestra hasta 3 pares)
-    const previewPairs = sanitizedCoords.slice(0, 6).join(',');
+    const previewPairs = sanitized.slice(0, 6).join(',');
     log(`[API] Enviando lote a tile ${tileX},${tileY} con ${colors.length} píxeles. Ejemplo coords: ${previewPairs}`);
 
-    const response = await postPixelBatchImage(
-      tileX,
-      tileY,
-      sanitizedCoords,
-      colors,
-      token
-    );
-
-    const painted = (typeof response.painted === 'number')
-      ? response.painted
-      : (typeof response.json?.painted === 'number' ? response.json.painted : 0);
+    // Llamar a la misma API que usa el bot de imagen (garantiza mismo body y cabeceras)
+    const resp = await postPixelBatchImage(tileX, tileY, sanitized, colors, token);
 
     return {
-      success: response.success,
-      painted: painted,
-      status: response.status,
-      error: response.success ? null : (response.json?.message || response.json?.error || 'Error desconocido')
+      success: resp.success,
+      painted: resp.painted || 0,
+      status: resp.status,
+      error: resp.success ? null : (resp.json?.error || resp.json?.message || `HTTP ${resp.status}`)
     };
   } catch (error) {
-    return {
-      success: false,
-      painted: 0,
-      error: error.message
-    };
+    return { success: false, painted: 0, error: error.message };
   }
 }

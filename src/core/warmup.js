@@ -1,7 +1,8 @@
 import { log } from "./logger.js";
-import { requireTokenCapture } from "./token-capture-window.js";
 import { getFingerprint, getPawtectToken } from "./turnstile.js";
-import { initializeTokenInterceptor, getInterceptorStatus } from "./token-interceptor.js";
+// Eliminado token-capture-window y token-interceptor (flujo ahora totalmente pasivo/dinámico)
+import { seedPawtect } from './pawtect.js';
+import { ensureFingerprint } from './fingerprint.js';
 
 /**
  * Función principal para preparar tokens antes de iniciar un bot
@@ -10,41 +11,12 @@ import { initializeTokenInterceptor, getInterceptorStatus } from "./token-interc
  * @returns {Promise<Object>} - Resultado de la captura
  */
 export async function prepareTokensForBot(botName = "Bot") {
-  log(`🚀 [${botName}] Preparando tokens antes de iniciar`);
-  
-  try {
-    // Asegurar que el interceptor esté inicializado
-    const status = getInterceptorStatus();
-    if (!status.initialized) {
-      initializeTokenInterceptor({ enabled: true });
-      log('🔧 Token interceptor inicializado');
-    }
-    
-    // Usar la nueva ventana de captura
-    const result = await requireTokenCapture(botName);
-    
-    if (result.captured) {
-      log(`✅ [${botName}] Tokens preparados exitosamente`);
-      return {
-        success: true,
-        fingerprint: result.fingerprint,
-        pawtectToken: result.pawtectToken,
-        coordinates: result.coordinates
-      };
-    } else if (result.skipped) {
-      log(`⏭️ [${botName}] Usuario omitió la captura, interceptor activo para capturas futuras`);
-      return {
-        success: true,
-        skipped: true,
-        interceptorActive: true
-      };
-    }
-    
-    return { success: false };
-  } catch (error) {
-    log(`❌ [${botName}] Error preparando tokens:`, error);
-    return { success: false, error };
-  }
+  log(`🚀 [${botName}] Preparando tokens (modo simplificado)`);
+  // Precarga no bloqueante
+  try { ensureFingerprint({}); } catch {}
+  try { seedPawtect(); } catch {}
+  // No hay UI: devolvemos estado actual
+  return { success: true, fingerprint: getFingerprint(), pawtectToken: getPawtectToken(), skipped: true };
 }
 
 /**
@@ -83,12 +55,10 @@ export async function ensureFingerprintReady(context = "bot", options = {}) {
 export function checkTokensAvailable() {
   const fingerprint = getFingerprint();
   const pawtectToken = getPawtectToken();
-  const interceptorStatus = getInterceptorStatus();
-  
   return {
     hasFingerprint: !!fingerprint,
     hasPawtectToken: !!pawtectToken,
-    interceptorReady: interceptorStatus.initialized && interceptorStatus.enabled,
-    allReady: !!fingerprint && !!pawtectToken
+  interceptorReady: true,
+  allReady: !!fingerprint && !!pawtectToken
   };
 }

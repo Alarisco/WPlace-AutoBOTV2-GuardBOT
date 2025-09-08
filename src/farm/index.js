@@ -13,11 +13,7 @@ export async function runFarm() {
   
   // Inicializar sistema de idiomas
   initializeLanguage();
-  // Farm bot usa su propio botón de captura en la UI, no necesita ventana modal automática
-  // Inicializar interceptor de tokens para capturas futuras
-  const { initializeTokenInterceptor } = await import('../core/token-interceptor.js');
-  initializeTokenInterceptor({ enabled: true });
-  log('🔧 Token interceptor inicializado para farm bot');
+  // Interceptor eliminado: ya no es necesario inicializar token-interceptor
   
   // Asegurarse que el estado global existe
   window.__wplaceBot = { ...window.__wplaceBot, farmRunning: true };

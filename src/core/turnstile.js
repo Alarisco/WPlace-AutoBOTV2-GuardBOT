@@ -1,5 +1,5 @@
 import { log } from "./logger.js";
-import { initializeTokenInterceptor, setInterceptorEnabled as _setInterceptorEnabled } from "./token-interceptor.js";
+// Eliminado token-interceptor: interceptación ya no necesaria
 
 // ========================================
 // TURNSTILE TOKEN MANAGEMENT
@@ -819,16 +819,4 @@ export async function waitForPawtect(timeout = 5000) {
   return result;
 }
 
-// Initialize enhanced token interceptor
-try {
-  initializeTokenInterceptor({
-    enabled: true,
-    blockOriginalRequests: false // Keep original requests for compatibility
-  });
-  log('🚀 Enhanced token interceptor initialized');
-} catch (error) {
-  log('❌ Failed to initialize enhanced token interceptor:', error);
-}
-
-// Export interceptor control functions
-export { setInterceptorEnabled } from './token-interceptor.js';
+// Interceptor eliminado: flujo pasivo/dinámico sin hooking explícito

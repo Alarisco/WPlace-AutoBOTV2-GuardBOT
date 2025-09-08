@@ -1,5 +1,6 @@
-import { ensureToken, getCachedToken } from "../core/turnstile.js";
-import { postPixelBatchImage } from "../core/wplace-api.js";
+import { getCachedToken, ensureToken } from "../core/turnstile.js";
+// Unificamos con el flujo de Image usando postPixelBatchImage
+import { postPixelBatchImage } from '../core/wplace-api.js';
 import { generateStraightLine, generateMultipleColors } from "./coords.js";
 import { sleep, sleepWithCountdown } from "../core/timing.js";
 import { log } from "../core/logger.js";
@@ -115,7 +116,7 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
   if (!t) {
     t = await ensureToken();
   }
-  // Usar el mismo formato que Auto-Image: text/plain con { colors, coords, t }
+  // Usar misma API que Image para consistencia (incluye fp/pawtect internos)
   const r = await postPixelBatchImage(cfg.TILE_X, cfg.TILE_Y, coords, colors, t);
 
   state.last = { 
@@ -128,8 +129,8 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
     json: r.json 
   };
   
-  if (r.status === 200 && r.json && (r.json.painted > 0 || r.json.painted === pixelCount || r.json.ok)) {
-    const actualPainted = r.json.painted || pixelCount;
+  if (r.success && r.painted > 0) {
+    const actualPainted = r.painted || pixelCount;
     state.painted += actualPainted;
     state.retryCount = 0; // Resetear contador de reintentos al éxito
     
@@ -218,7 +219,7 @@ export async function paintOnce(cfg, state, setStatus, flashEffect, getSession, 
   }
   
   // Log detallado para debugging
-  log(`Fallo en pintado: status=${r.status}, json=`, r.json, 'coords=', coords, 'colors=', colors);
+  log(`Fallo en pintado: status=${r.status}, error=${r.error}, coords=`, coords, 'colors=', colors);
   
   return false;
 }
