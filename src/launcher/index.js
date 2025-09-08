@@ -130,6 +130,30 @@ export async function runLauncher() {
           languageSelector = null;
         }
         window.__wplaceBot.launcherRunning = false;
+
+        // --- Limpieza de métricas del launcher para evitar pings residuales ---
+        try {
+          const mcfg = getMetricsConfig({ VARIANT: 'launcher' });
+          if (window.__wplaceMetrics) {
+            if (window.__wplaceMetrics.launcherPingInterval) {
+              window.clearInterval(window.__wplaceMetrics.launcherPingInterval);
+              window.__wplaceMetrics.launcherPingInterval = null;
+            }
+            if (window.__wplaceMetrics.launcherVisibilityHandler) {
+              document.removeEventListener('visibilitychange', window.__wplaceMetrics.launcherVisibilityHandler);
+              delete window.__wplaceMetrics.launcherVisibilityHandler;
+            }
+            if (window.__wplaceMetrics.launcherFocusHandler) {
+              window.removeEventListener('focus', window.__wplaceMetrics.launcherFocusHandler);
+              delete window.__wplaceMetrics.launcherFocusHandler;
+            }
+            if (mcfg.ENABLED && window.__wplaceMetrics.launcherSessionActive) {
+              sessionEnd({ botVariant: 'launcher' });
+              window.__wplaceMetrics.launcherSessionActive = false;
+            }
+          }
+        } catch {}
+        // ---------------------------------------------------------------------
         
         // Limpiar timer de refresco
         if (launcherState.refreshTimer) {
