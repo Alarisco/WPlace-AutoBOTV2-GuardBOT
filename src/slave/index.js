@@ -997,12 +997,6 @@ export async function runSlave() {
   // Inicializar sistema de idiomas
   initializeLanguage();
   
-  // Verificar si ya está ejecutándose
-  if (window.__wplaceBot?.slaveRunning) {
-    alert("Slave ya está ejecutándose.");
-    return;
-  }
-  
   // Inicializar o preservar el estado global
   window.__wplaceBot = { ...window.__wplaceBot, slaveRunning: true };
   

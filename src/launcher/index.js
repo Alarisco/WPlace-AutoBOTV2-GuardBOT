@@ -20,7 +20,7 @@ async function executeLocalBot(botType) {
   
   try {
     // Verificar que no haya otros bots ejecutándose
-    if (window.__wplaceBot?.farmRunning || window.__wplaceBot?.imageRunning || window.__wplaceBot?.guardRunning) {
+    if (window.__wplaceBot?.farmRunning || window.__wplaceBot?.imageRunning || window.__wplaceBot?.guardRunning || window.__wplaceBot?.slaveRunning) {
       throw new Error("Ya hay un bot ejecutándose. Ciérralo antes de lanzar otro.");
     }
     
@@ -41,22 +41,18 @@ async function executeLocalBot(botType) {
     switch (botType) {
       case 'farm':
         log('🌾 Iniciando Auto-Farm...');
-        window.__wplaceBot.farmRunning = true;
         await runFarm();
         break;
       case 'image':
         log('🎨 Iniciando Auto-Image...');
-        window.__wplaceBot.imageRunning = true;
         await runImage();
         break;
       case 'guard':
         log('🛡️ Iniciando Auto-Guard...');
-        window.__wplaceBot.guardRunning = true;
         await runGuard();
         break;
       case 'slave':
         log('🔗 Iniciando Auto-Slave...');
-        window.__wplaceBot.slaveRunning = true;
         await runSlave();
         break;
       default:
