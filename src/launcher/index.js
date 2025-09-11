@@ -10,6 +10,7 @@ import { getMetricsConfig } from "../core/metrics/config.js";
 import { runFarm } from "../farm/index.js";
 import { runImage } from "../image/index.js";
 import { runGuard } from "../guard/index.js";
+import { runSlave } from "../slave/index.js";
 // Importar el sistema de turnstile para compartir tokens
 import { ensureToken, invalidateToken, getPawtectToken, getFingerprint } from "../core/turnstile.js";
 
@@ -52,6 +53,11 @@ async function executeLocalBot(botType) {
         log('🛡️ Iniciando Auto-Guard...');
         window.__wplaceBot.guardRunning = true;
         await runGuard();
+        break;
+      case 'slave':
+        log('🔗 Iniciando Auto-Slave...');
+        window.__wplaceBot.slaveRunning = true;
+        await runSlave();
         break;
       default:
         throw new Error(`Tipo de bot desconocido: ${botType}`);

@@ -15,6 +15,7 @@ Opciones:
   --image        Compilar solo Auto-Image.js  
   --launcher     Compilar solo Auto-Launcher.js
   --guard        Compilar solo Auto-Guard.js
+  --slave        Compilar solo Auto-Slave.js
   --help         Mostrar esta ayuda
 
 Ejemplos:
@@ -22,6 +23,7 @@ Ejemplos:
   node build.mjs --dev              # Compilar todos en modo desarrollo
   node build.mjs --farm --dev       # Compilar solo farm en modo desarrollo
   node build.mjs --image --guard    # Compilar solo image y guard
+  node build.mjs --slave            # Compilar solo slave
   node build.mjs --watch            # Modo watch para todos los bots
 `);
 }
@@ -42,9 +44,10 @@ const buildFarm = args.has("--farm");
 const buildImage = args.has("--image");
 const buildLauncher = args.has("--launcher");
 const buildGuard = args.has("--guard");
+const buildSlave = args.has("--slave");
 
 // Si no se especifica ningún bot, compilar todos
-const buildAll = !buildFarm && !buildImage && !buildLauncher && !buildGuard;
+const buildAll = !buildFarm && !buildImage && !buildLauncher && !buildGuard && !buildSlave;
 
 // Por ahora, usar archivos originales hasta completar la migración
 const useOriginals = false; // ✅ Migración del farm completada
@@ -76,7 +79,9 @@ const common = {
   banner: {
     js:
       "/* WPlace AutoBOT — uso bajo tu responsabilidad. " +
-      "Compilado " + new Date().toISOString() + " */"
+      "Compilado " + new Date().toISOString() + " */" +
+      "\n/* eslint-env browser */" + // Define entorno navegador para ESLint (WebSocket, Blob, URL, etc.)
+      "\n/* eslint-disable no-empty */" // Bloques vacíos pueden generarse tras minificación
   },
   define: {
     "process.env.NODE_ENV": JSON.stringify(dev ? "development" : "production")
@@ -89,7 +94,8 @@ const common = {
     { in: "src/entries/farm.js",     out: "Auto-Farm.js",     flag: buildFarm },
     { in: "src/entries/image.js",    out: "Auto-Image.js",    flag: buildImage },
     { in: "src/entries/launcher.js", out: "Auto-Launcher.js", flag: buildLauncher },
-    { in: "src/entries/guard.js",    out: "Auto-Guard.js",    flag: buildGuard }
+    { in: "src/entries/guard.js",    out: "Auto-Guard.js",    flag: buildGuard },
+    { in: "src/entries/slave.js",    out: "Auto-Slave.js",    flag: buildSlave }
   ];
 
   // Filtrar qué bots compilar
@@ -97,7 +103,7 @@ const common = {
   
   if (botsToCompile.length === 0) {
     console.log("❌ No se especificó ningún bot válido para compilar.");
-    console.log("💡 Usa: --farm, --image, --launcher, --guard o ninguna opción para compilar todos");
+    console.log("💡 Usa: --farm, --image, --launcher, --guard, --slave o ninguna opción para compilar todos");
     process.exit(1);
   }
 

@@ -72,6 +72,9 @@ export async function runGuard() {
     guardRunning: true 
   };
   
+  // Exponer guardState al objeto window para que el slave pueda acceder a él
+  window.guardState = guardState;
+  
   try {
     // Obtener textos en el idioma actual
     const texts = getSection('guard');

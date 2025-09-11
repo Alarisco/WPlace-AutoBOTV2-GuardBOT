@@ -30,8 +30,15 @@ export default [
         createImageBitmap: 'readonly',
         OffscreenCanvas: 'readonly',
         Request: 'readonly',
-        Response: 'readonly',
-        process: 'readonly'
+  Response: 'readonly',
+  process: 'readonly',
+  // Añadidos para bundle generado
+  MutationObserver: 'readonly',
+  Node: 'readonly',
+  Blob: 'readonly',
+  URL: 'readonly',
+  Event: 'readonly',
+  WebSocket: 'readonly'
       }
     },
     rules: {

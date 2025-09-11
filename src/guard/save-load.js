@@ -224,6 +224,34 @@ export async function loadProgress(file) {
     
     log(`✅ Progreso cargado: ${guardState.originalPixels.size} píxeles protegidos`);
     
+    // Si este slave está conectado al servidor y es favorito, enviar datos de preview
+    if (window.wplaceSlave && window.wplaceSlave.isFavorite) {
+      try {
+        // Enviar datos de preview al servidor
+        const previewData = {
+          protectedArea: {
+            x: guardState.protectionArea.x1,
+            y: guardState.protectionArea.y1,
+            width: guardState.protectionArea.x2 - guardState.protectionArea.x1,
+            height: guardState.protectionArea.y2 - guardState.protectionArea.y1
+          },
+          totalPixels: guardState.originalPixels.size,
+          changes: Array.from(guardState.changes.values()),
+          lastCheck: guardState.lastCheck,
+          isVirtualArea: guardState.isVirtualArea || false
+        };
+        
+        window.wplaceSlave.sendToMaster({
+          type: 'preview_data',
+          data: previewData
+        });
+        
+        log('📡 Datos de preview enviados al servidor');
+      } catch (error) {
+        log('❌ Error enviando datos de preview:', error);
+      }
+    }
+    
     return { 
       success: true, 
       data: progressData,

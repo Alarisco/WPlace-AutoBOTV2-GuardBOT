@@ -360,5 +360,43 @@ export const es = {
     useRandomTimes: "Usar tiempos aleatorios entre lotes",
     minTime: "Tiempo mínimo (s)",
     maxTime: "Tiempo máximo (s)"
+  },
+
+  // Slave Module
+  slave: {
+    title: "WPlace Slave",
+    masterServer: "Servidor Maestro",
+    ipAddress: "Dirección IP",
+    connect: "Conectar",
+    disconnect: "Desconectar",
+    status: "Estado",
+    slaveId: "ID Slave",
+    mode: "Modo",
+    running: "Ejecutando",
+    idle: "Inactivo",
+    connected: "Conectado",
+    connecting: "Conectando...",
+    disconnected: "Desconectado",
+    error: "Error",
+    close: "Cerrar",
+    telemetry: "Telemetría",
+    repairedPixels: "Píxeles Reparados",
+    missingPixels: "Píxeles Faltantes",
+    absentPixels: "Píxeles Ausentes",
+    remainingCharges: "Cargas Restantes",
+    connectionError: "Error de conexión. Verifica la URL y que el servidor esté ejecutándose.",
+    invalidUrl: "Por favor ingresa una URL válida",
+    slaveRunning: "Slave ya está ejecutándose.",
+    slaveInitialized: "Slave inicializado correctamente",
+    slaveError: "Error inicializando Slave",
+    masterConnected: "Conectado al servidor maestro",
+    masterDisconnected: "Desconectado del servidor maestro",
+    reconnecting: "Reintentando conexión",
+    maxReconnectAttempts: "Máximo de intentos de reconexión alcanzado",
+    modeSet: "Modo configurado",
+    projectLoaded: "Configuración del proyecto cargada",
+    botStarted: "Bot iniciado",
+    botStopped: "Bot detenido",
+    botPaused: "Bot pausado"
   }
 };

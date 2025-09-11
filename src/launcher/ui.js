@@ -151,6 +151,9 @@ export function createLauncherUI({
       </div>
       <div class="row">
         <button class="btn ghost guard-btn">${texts.autoGuard}</button>
+        <button class="btn ghost slave-btn">🔗 Slave</button>
+      </div>
+      <div class="row">
         <button class="btn ghost log-window-btn">${texts.logWindow}</button>
       </div>
       <div class="card">
@@ -202,6 +205,7 @@ export function createLauncherUI({
     farmBtn: panel.querySelector('.farm-btn'),
     imageBtn: panel.querySelector('.image-btn'),
     guardBtn: panel.querySelector('.guard-btn'),
+    slaveBtn: panel.querySelector('.slave-btn'),
     logWindowBtn: panel.querySelector('.log-window-btn'),
     launchBtn: panel.querySelector('.launch-btn'),
     cancelBtn: panel.querySelector('.cancel-btn'),
@@ -228,7 +232,8 @@ export function createLauncherUI({
     
     elements.choice.textContent = botType === 'farm' ? t('launcher.autoFarm') : 
                                   botType === 'image' ? t('launcher.autoImage') : 
-                                  t('launcher.autoGuard');
+                                  botType === 'guard' ? t('launcher.autoGuard') :
+                                  botType === 'slave' ? '🔗 Slave' : botType;
     elements.launchBtn.disabled = false;
     
     // Actualizar estilos de botones
@@ -238,6 +243,8 @@ export function createLauncherUI({
     elements.imageBtn.classList.add('ghost');
     elements.guardBtn.classList.remove('primary');
     elements.guardBtn.classList.add('ghost');
+    elements.slaveBtn.classList.remove('primary');
+    elements.slaveBtn.classList.add('ghost');
     
     if (botType === 'farm') {
       elements.farmBtn.classList.add('primary');
@@ -248,6 +255,9 @@ export function createLauncherUI({
     } else if (botType === 'guard') {
       elements.guardBtn.classList.add('primary');
       elements.guardBtn.classList.remove('ghost');
+    } else if (botType === 'slave') {
+      elements.slaveBtn.classList.add('primary');
+      elements.slaveBtn.classList.remove('ghost');
     }
     
     elements.statusText.textContent = t('launcher.readyToLaunch');
@@ -261,6 +271,7 @@ export function createLauncherUI({
   elements.farmBtn.addEventListener('click', () => selectBot('farm'));
   elements.imageBtn.addEventListener('click', () => selectBot('image'));
   elements.guardBtn.addEventListener('click', () => selectBot('guard'));
+  elements.slaveBtn.addEventListener('click', () => selectBot('slave'));
   
   // Variable para mantener referencia a la ventana de logs
   let logWindow = null;

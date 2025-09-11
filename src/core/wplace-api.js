@@ -105,6 +105,53 @@ export async function purchaseProduct(productId = 70, amount = 1) {
 // Post píxel para farm (replicado del ejemplo con manejo de 403)
 export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   try {
+    // Normalizar formatos de entrada (coords puede llegar como [{x,y}] | [[x,y]] | [x,y,...])
+    const normalizeCoords = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      const flat = [];
+      // Caso 1: array plano de números
+      if (arr.length > 0 && typeof arr[0] === 'number') {
+        for (let i = 0; i < arr.length; i += 2) {
+          const x = Math.trunc(arr[i]);
+          const y = Math.trunc(arr[i + 1]);
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            flat.push(((x % 1000) + 1000) % 1000, ((y % 1000) + 1000) % 1000);
+          }
+        }
+        return flat;
+      }
+      // Caso 2: array de objetos {x,y}
+      if (typeof arr[0] === 'object' && arr[0] && ('x' in arr[0] || 'y' in arr[0])) {
+        for (const p of arr) {
+          const x = Math.trunc(p?.x);
+          const y = Math.trunc(p?.y);
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            flat.push(((x % 1000) + 1000) % 1000, ((y % 1000) + 1000) % 1000);
+          }
+        }
+        return flat;
+      }
+      // Caso 3: array de arrays [x,y]
+      if (Array.isArray(arr[0])) {
+        for (const p of arr) {
+          const x = Math.trunc(p?.[0]);
+          const y = Math.trunc(p?.[1]);
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            flat.push(((x % 1000) + 1000) % 1000, ((y % 1000) + 1000) % 1000);
+          }
+        }
+        return flat;
+      }
+      return flat;
+    };
+    const normalizeColors = (cols) => Array.isArray(cols) ? cols.map(c => Math.trunc(Number(c)) || 0) : [];
+
+    const coordsNorm = normalizeCoords(coords);
+    const colorsNorm = normalizeColors(colors);
+    if (coordsNorm.length === 0 || colorsNorm.length === 0 || (coordsNorm.length / 2) !== colorsNorm.length) {
+      return { status: 400, json: { error: 'Invalid coords/colors format' }, success: false };
+    }
+    
     // Intento de cálculo dinámico de pawtect antes de esperar
   // Fingerprint proactivo si falta
   let fp = getFingerprint();
@@ -112,7 +159,8 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   let pawtect = getPawtectToken();
     if (!pawtect) {
       try {
-        const dyn = await computePawtect({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
+        // Usar datos normalizados para evitar desajustes con el cuerpo real
+        const dyn = await computePawtect({ colors: colorsNorm, coords: coordsNorm, t: turnstileToken, ...(fp ? { fp } : {}) });
         if (dyn) pawtect = dyn;
       } catch {}
     }
@@ -123,12 +171,12 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
       if (!fp) fp = getFingerprint();
       if (!pawtect) {
         try {
-          const dyn2 = await computePawtect({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
+          const dyn2 = await computePawtect({ colors: colorsNorm, coords: coordsNorm, t: turnstileToken, ...(fp ? { fp } : {}) });
           if (dyn2) pawtect = dyn2;
         } catch {}
       }
     }
-    const body = JSON.stringify({ colors, coords, t: turnstileToken, ...(fp ? { fp } : {}) });
+  const body = JSON.stringify({ colors: colorsNorm, coords: coordsNorm, t: turnstileToken, ...(fp ? { fp } : {}) });
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000); // Aumentar timeout a 20 segundos
@@ -156,15 +204,15 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
         fp = getFingerprint();
         if (!pawtect) {
           try {
-            const dyn3 = await computePawtect({ colors, coords, t: newToken, ...(fp ? { fp } : {}) });
+            const dyn3 = await computePawtect({ colors: colorsNorm, coords: coordsNorm, t: newToken, ...(fp ? { fp } : {}) });
             if (dyn3) pawtect = dyn3;
           } catch {}
         }
         
         // Retry the request with new token
         const retryBody = JSON.stringify({ 
-          colors: colors, 
-          coords: coords, 
+          colors: colorsNorm, 
+          coords: coordsNorm, 
           t: newToken,
           ...(fp ? { fp } : {})
         });
@@ -226,11 +274,11 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
   fp = getFingerprint();
   if (!pawtect) {
     try {
-      const dyn4 = await computePawtect({ colors, coords, t: newToken, ...(fp ? { fp } : {}) });
+      const dyn4 = await computePawtect({ colors: colorsNorm, coords: coordsNorm, t: newToken, ...(fp ? { fp } : {}) });
       if (dyn4) pawtect = dyn4;
     } catch {}
   }
-  const retryBody = JSON.stringify({ colors, coords, t: newToken, ...(fp ? { fp } : {}) });
+  const retryBody = JSON.stringify({ colors: colorsNorm, coords: coordsNorm, t: newToken, ...(fp ? { fp } : {}) });
         const retryController = new AbortController();
         const retryTimeoutId = setTimeout(() => retryController.abort(), 20000); // Aumentar timeout a 20 segundos
         const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
@@ -273,6 +321,50 @@ export async function postPixel(coords, colors, turnstileToken, tileX, tileY) {
 // Post píxel para Auto-Image (replicado del ejemplo con manejo de 403)
 export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstileToken) {
   try {
+    // Normalizar coords/colors al formato exacto que espera el backend
+    const normalizeCoords = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      const flat = [];
+      if (arr.length > 0 && typeof arr[0] === 'number') {
+        for (let i = 0; i < arr.length; i += 2) {
+          const x = Math.trunc(arr[i]);
+          const y = Math.trunc(arr[i + 1]);
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            flat.push(((x % 1000) + 1000) % 1000, ((y % 1000) + 1000) % 1000);
+          }
+        }
+        return flat;
+      }
+      if (typeof arr[0] === 'object' && arr[0] && ('x' in arr[0] || 'y' in arr[0])) {
+        for (const p of arr) {
+          const x = Math.trunc(p?.x);
+          const y = Math.trunc(p?.y);
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            flat.push(((x % 1000) + 1000) % 1000, ((y % 1000) + 1000) % 1000);
+          }
+        }
+        return flat;
+      }
+      if (Array.isArray(arr[0])) {
+        for (const p of arr) {
+          const x = Math.trunc(p?.[0]);
+          const y = Math.trunc(p?.[1]);
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            flat.push(((x % 1000) + 1000) % 1000, ((y % 1000) + 1000) % 1000);
+          }
+        }
+        return flat;
+      }
+      return flat;
+    };
+    const normalizeColors = (cols) => Array.isArray(cols) ? cols.map(c => Math.trunc(Number(c)) || 0) : [];
+
+    const coordsNorm = normalizeCoords(coords);
+    const colorsNorm = normalizeColors(colors);
+    if (coordsNorm.length === 0 || colorsNorm.length === 0 || (coordsNorm.length / 2) !== colorsNorm.length) {
+      log(`[API] Invalid coords/colors for tile ${tileX},${tileY} → coordsPairs=${coordsNorm.length/2} colors=${colorsNorm.length}`);
+      return { status: 400, json: { error: 'Invalid coords/colors format' }, success: false, painted: 0 };
+    }
     // Ensure pawtect tokens are present (best-effort wait)
   // Fingerprint proactivo si falta
   let fp = getFingerprint();
@@ -287,8 +379,8 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
   if (!fp) { try { await waitForPawtect(1200); } catch {} fp = getFingerprint(); }
     // Prepare exact body format as used in example
   const body = JSON.stringify({ 
-      colors: colors, 
-      coords: coords, 
+      colors: colorsNorm, 
+      coords: coordsNorm, 
       t: turnstileToken,
       ...(fp ? { fp } : {})
     });
@@ -337,8 +429,8 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
         
         // Retry the request with new token
   const retryBody = JSON.stringify({ 
-          colors: colors, 
-          coords: coords, 
+          colors: colorsNorm, 
+          coords: coordsNorm, 
           t: newToken,
           ...(fp ? { fp } : {})
         });
@@ -389,7 +481,7 @@ export async function postPixelBatchImage(tileX, tileY, coords, colors, turnstil
   // re-check fp/pawtect for retry
   pawtect = getPawtectToken();
   fp = getFingerprint();
-  const retryBody = JSON.stringify({ colors, coords, t: newToken, ...(fp ? { fp } : {}) });
+  const retryBody = JSON.stringify({ colors: colorsNorm, coords: coordsNorm, t: newToken, ...(fp ? { fp } : {}) });
         log(`[API] Retrying after ${response.status} with fresh token: ${newToken.substring(0, 50)}...`);
         const retryResponse = await fetch(`${BASE}/s0/pixel/${tileX}/${tileY}`, {
           method: 'POST',
