@@ -19,6 +19,18 @@ async function executeLocalBot(botType) {
   log(`🎯 Ejecutando bot local: ${botType}`);
   
   try {
+    // Normalizar/limpiar flags "stale" antes de verificar duplicados (especialmente para Slave)
+    try {
+      if (window.__wplaceBot?.slaveRunning) {
+        const hasPanel = !!document.getElementById('wpl-slave-panel');
+        const hasInstance = !!window.__wplaceSlave;
+        if (!hasPanel && !hasInstance) {
+          // Flag quedó colgado de una ejecución previa: limpiar
+          window.__wplaceBot.slaveRunning = false;
+        }
+      }
+    } catch {}
+
     // Verificar que no haya otros bots ejecutándose
     if (window.__wplaceBot?.farmRunning || window.__wplaceBot?.imageRunning || window.__wplaceBot?.guardRunning || window.__wplaceBot?.slaveRunning) {
       throw new Error("Ya hay un bot ejecutándose. Ciérralo antes de lanzar otro.");

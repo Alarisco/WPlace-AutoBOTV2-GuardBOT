@@ -1027,6 +1027,25 @@ export async function runSlave() {
     
     log('✅ Slave inicializado correctamente');
     
+    // Cleanup al cerrar la página (alineado con otros bots)
+    window.addEventListener('beforeunload', () => {
+      try { slave.disconnect(); } catch {}
+      if (window.__wplaceBot) {
+        window.__wplaceBot.slaveRunning = false;
+      }
+      // Limpiar métricas si quedaron activas
+      try {
+        if (window.__wplaceMetrics?.slavePingInterval) {
+          clearInterval(window.__wplaceMetrics.slavePingInterval);
+          window.__wplaceMetrics.slavePingInterval = null;
+        }
+        if (window.__wplaceMetrics?.slaveSessionActive) {
+          sessionEnd({ botVariant: 'auto-slave' });
+          window.__wplaceMetrics.slaveSessionActive = false;
+        }
+      } catch {}
+    }, { once: true });
+    
     
   } catch (error) {
     log('❌ Error inicializando Slave:', error);
