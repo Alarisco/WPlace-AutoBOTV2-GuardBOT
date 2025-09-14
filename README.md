@@ -6,6 +6,13 @@
 
 <h1 align="center">WPLACE-AUTOBOT</h1>
 
+<!-- Botón Buy Me a Coffee -->
+<p align="center">
+  <a href="https://buymeacoffee.com/alariscoi" target="_blank" rel="noopener">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50" />
+  </a>
+</p>
+
 <!-- Badge SOLO en su propio párrafo -->
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/kjbodcmljdmjmcjdhoghcclejpmgfeoj?utm_source=item-share-cb" target="_blank" rel="noopener noreferrer">
