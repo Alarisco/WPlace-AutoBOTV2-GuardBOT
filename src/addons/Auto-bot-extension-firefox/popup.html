@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            width: 320px;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+
+        .content {
+            text-align: center;
+        }
+
+        .execute-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .execute-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .execute-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            font-size: 12px;
+            text-align: center;
+            margin-top: 12px;
+            opacity: 0.8;
+        }
+
+        .instructions {
+            font-size: 11px;
+            text-align: center;
+            opacity: 0.7;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="logo">🤖</div>
+    <h1 class="title">WPlace AutoBot</h1>
+    <p class="subtitle">Launcher for wplace.live</p>
+</div>
+
+<div class="content">
+    <button id="executeBtn" class="execute-btn">
+        🚀 Execute AutoBot
+    </button>
+
+    <div id="status" class="status">
+        Ready to execute
+    </div>
+
+    <div class="instructions">
+        Visit wplace.live and click execute, or use the integrated button on the page
+    </div>
+</div>
+
+<!-- ✅ MOVER EL SCRIPT AL FINAL DEL BODY -->
+<script src="popup.js"></script>
+</body>
+</html>
