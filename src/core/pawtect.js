@@ -543,48 +543,82 @@ class PawtectManager {
           decode: (b) => decodeURIComponent(escape(String.fromCharCode(...b)))
         };
     
+    // Helper to decode various output shapes from WASM
+    const decodeOut = (out) => {
+      if (!out) return null;
+      if (typeof out === 'string') return out;
+      if (Array.isArray(out) && out.length >= 2) {
+        const [op, ol] = out;
+        const view = new Uint8Array(wasm.memory.buffer, op, ol);
+        const tok = dec.decode(view);
+        try { wasm.__wbindgen_free ? (wasm.__wbindgen_free.length >= 2 ? wasm.__wbindgen_free(op, ol) : wasm.__wbindgen_free(op)) : null; } catch {}
+        return tok;
+      }
+      if (typeof out === 'object' && typeof out.ptr === 'number' && typeof out.len === 'number') {
+        const view = new Uint8Array(wasm.memory.buffer, out.ptr, out.len);
+        const tok = dec.decode(view);
+        try { wasm.__wbindgen_free ? (wasm.__wbindgen_free.length >= 2 ? wasm.__wbindgen_free(out.ptr, out.len) : wasm.__wbindgen_free(out.ptr)) : null; } catch {}
+        return tok;
+      }
+      return null;
+    };
+
+    // Prefer direct string ABI if supported
+    try {
+      const outDirect = wasm.get_pawtected_endpoint_payload(bodyStr);
+      const tokenDirect = decodeOut(outDirect);
+      if (tokenDirect && typeof tokenDirect === 'string' && tokenDirect.length > 0) {
+        return tokenDirect;
+      }
+    } catch (e) {
+      // Fall back to pointer ABI below
+    }
+
+    // Fallback: pointer/length ABI with defensive bounds checking
     const bytes = enc.encode(bodyStr);
     let ptr = null;
-    
     try {
-      // Allocate memory
-      ptr = wasm.__wbindgen_malloc(bytes.length, 1);
-      if (!ptr) {
+      // Allocate memory (try 1-arg first)
+      if (typeof wasm.__wbindgen_malloc === 'function') {
+        try {
+          ptr = wasm.__wbindgen_malloc(bytes.length);
+        } catch {
+          // Some builds require (size, align)
+          ptr = wasm.__wbindgen_malloc(bytes.length, 1);
+        }
+      }
+      if (!ptr || typeof ptr !== 'number' || ptr <= 0) {
         throw new Error('Failed to allocate WASM memory');
       }
-      
-      new Uint8Array(wasm.memory.buffer, ptr, bytes.length).set(bytes);
-      
-      // Call WASM function
-      const out = wasm.get_pawtected_endpoint_payload(ptr, bytes.length);
-      
-      // Process output
-      let token = null;
-      
-      if (Array.isArray(out)) {
-        const [op, ol] = out;
-        token = dec.decode(new Uint8Array(wasm.memory.buffer, op, ol));
-        try {
-          wasm.__wbindgen_free(op, ol, 1);
-        } catch {}
-      } else if (typeof out === 'string') {
-        token = out;
-      } else if (out && typeof out.ptr === 'number' && typeof out.len === 'number') {
-        token = dec.decode(new Uint8Array(wasm.memory.buffer, out.ptr, out.len));
-        try {
-          wasm.__wbindgen_free(out.ptr, out.len, 1);
-        } catch {}
+
+      // Ensure buffer is large enough (rare, but be safe)
+      const end = ptr + bytes.length;
+      if (end > wasm.memory.buffer.byteLength && typeof wasm.memory.grow === 'function') {
+        const pageSize = 65536;
+        const needed = end - wasm.memory.buffer.byteLength;
+        const pages = Math.ceil(needed / pageSize);
+        if (pages > 0) {
+          try { wasm.memory.grow(pages); } catch {}
+        }
       }
-      
+
+      new Uint8Array(wasm.memory.buffer, ptr, bytes.length).set(bytes);
+
+      const out = wasm.get_pawtected_endpoint_payload(ptr, bytes.length);
+      const token = decodeOut(out);
       return token;
-      
     } catch (error) {
       throw new Error(`WASM computation failed: ${error.message}`);
     } finally {
-      // Clean up allocated memory
-      if (ptr !== null) {
+      if (ptr) {
         try {
-          wasm.__wbindgen_free(ptr, bytes.length, 1);
+          if (typeof wasm.__wbindgen_free === 'function') {
+            if (wasm.__wbindgen_free.length >= 2) {
+              wasm.__wbindgen_free(ptr, bytes.length);
+            } else {
+              wasm.__wbindgen_free(ptr);
+            }
+          }
         } catch {}
       }
     }

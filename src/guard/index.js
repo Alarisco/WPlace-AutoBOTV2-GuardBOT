@@ -56,6 +56,11 @@ export async function runGuard() {
         if (typeof cfg.randomWaitTime === 'boolean') guardState.randomWaitTime = cfg.randomWaitTime;
         if (Number.isFinite(cfg.randomWaitMin)) guardState.randomWaitMin = cfg.randomWaitMin;
         if (Number.isFinite(cfg.randomWaitMax)) guardState.randomWaitMax = cfg.randomWaitMax;
+        
+        // Cargar nuevas opciones de transparencia
+        if (typeof cfg.protectTransparentPixels === 'boolean') guardState.protectTransparentPixels = cfg.protectTransparentPixels;
+        if (typeof cfg.protectPerimeter === 'boolean') guardState.protectPerimeter = cfg.protectPerimeter;
+        if (Number.isFinite(cfg.perimeterWidth) && cfg.perimeterWidth >= 1 && cfg.perimeterWidth <= 10) guardState.perimeterWidth = cfg.perimeterWidth;
       }
     }
   } catch (e) {

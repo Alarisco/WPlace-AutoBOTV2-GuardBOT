@@ -466,7 +466,8 @@ export async function analyzeAreaPixels(area, options = {}) {
                 const b = data[pixelIndex + 2];
                 const a = data[pixelIndex + 3];
                 
-                if (a > 0) { // Píxel visible
+                if (a > 0) { 
+                  // Píxel visible - encontrar color más cercano
                   const closestColor = findClosestColor(r, g, b, guardState.availableColors);
                   if (closestColor) {
                     pixelMap.set(`${globalX},${globalY}`, {
@@ -480,6 +481,18 @@ export async function analyzeAreaPixels(area, options = {}) {
                       tileY
                     });
                   }
+                } else {
+                  // Píxel transparente (a = 0) - guardarlo como color ID 0
+                  pixelMap.set(`${globalX},${globalY}`, {
+                    r: 0, g: 0, b: 0, // RGB para transparente
+                    colorId: 0, // ID 0 = transparente
+                    globalX,
+                    globalY,
+                    localX,
+                    localY,
+                    tileX,
+                    tileY
+                  });
                 }
               }
             }
@@ -641,6 +654,109 @@ export async function analyzeAreaForErasing(area) {
   return pixelsToErase;
 }
 
+/**
+ * Analiza píxeles transparentes que han sido pintados (transparente → sólido)
+ * @param {Object} protectionArea - Área a analizar
+ * @returns {Map} - Mapa de píxeles transparentes que fueron pintados
+ */
+async function analyzeTransparentPixelsDamage(protectionArea) {
+  const damagedTransparentPixels = new Map();
+  
+  if (!guardState.protectTransparentPixels) {
+    return damagedTransparentPixels;
+  }
+
+  // Obtener píxeles actuales del área
+  const currentPixels = await analyzeAreaPixels(protectionArea);
+  
+  // Buscar píxeles originalmente transparentes que ahora son sólidos
+  for (const [key, originalPixel] of guardState.originalPixels) {
+    if (originalPixel.colorId === 0) { // Píxel original era transparente
+      const currentPixel = currentPixels.get(key);
+      
+      if (currentPixel && currentPixel.colorId !== 0) {
+        // Píxel transparente fue pintado → marcarlo para reparación
+        damagedTransparentPixels.set(key, {
+          original: originalPixel,
+          current: currentPixel,
+          targetColorId: 0, // Objetivo: volver a transparente
+          type: 'transparent_damaged'
+        });
+      }
+    }
+  }
+
+  log(`🫥 Análisis de píxeles transparentes: ${damagedTransparentPixels.size} píxeles transparentes dañados encontrados`);
+  return damagedTransparentPixels;
+}
+
+/**
+ * Crea un área de perímetro transparente alrededor del área protegida
+ * @param {Object} protectionArea - Área protegida base
+ * @returns {Object} - Área expandida con perímetro
+ */
+function createPerimeterArea(protectionArea) {
+  if (!guardState.protectPerimeter || guardState.perimeterWidth <= 0) {
+    return null;
+  }
+
+  const width = guardState.perimeterWidth;
+  
+  return {
+    x1: protectionArea.x1 - width,
+    y1: protectionArea.y1 - width,
+    x2: protectionArea.x2 + width,
+    y2: protectionArea.y2 + width,
+    tileX: protectionArea.tileX,
+    tileY: protectionArea.tileY
+  };
+}
+
+/**
+ * Analiza píxeles en el perímetro que no deberían estar (deben ser transparentes)
+ * @param {Object} protectionArea - Área protegida base
+ * @returns {Map} - Píxeles en el perímetro que deben convertirse a transparente
+ */
+async function analyzePerimeterIntrusions(protectionArea) {
+  const perimeterIntrusions = new Map();
+  
+  if (!guardState.protectPerimeter) {
+    return perimeterIntrusions;
+  }
+
+  const perimeterArea = createPerimeterArea(protectionArea);
+  if (!perimeterArea) {
+    return perimeterIntrusions;
+  }
+
+  // Obtener todos los píxeles del área expandida (incluyendo perímetro)
+  const allPixels = await analyzeAreaPixels(perimeterArea);
+  
+  // Identificar píxeles que están en el perímetro (no en el área protegida original)
+  for (const [key, pixel] of allPixels) {
+    const [x, y] = key.split(',').map(Number);
+    
+    // Verificar si está en el perímetro (fuera del área protegida original)
+    const isInPerimeter = (
+      x < protectionArea.x1 || x > protectionArea.x2 ||
+      y < protectionArea.y1 || y > protectionArea.y2
+    );
+    
+    if (isInPerimeter && pixel.colorId !== 0) {
+      // Píxel en perímetro que no es transparente → marcarlo para borrado
+      perimeterIntrusions.set(key, {
+        original: null, // No hay original en el perímetro
+        current: pixel,
+        targetColorId: 0, // Objetivo: transparente
+        type: 'perimeter_intrusion'
+      });
+    }
+  }
+
+  log(`🛡️ Análisis de perímetro: ${perimeterIntrusions.size} intrusiones en perímetro encontradas`);
+  return perimeterIntrusions;
+}
+
 // Actualizar estadísticas de análisis en la UI principal
 function updateAnalysisStatsInUI(originalPixels, currentPixels) {
   if (!guardState.ui || !guardState.ui.updateAnalysisStats) {
@@ -783,6 +899,11 @@ export async function checkForChanges() {
       // Comparación normal: píxeles originales vs actuales
       for (const [key, originalPixel] of guardState.originalPixels) {
         const currentPixel = currentPixels.get(key);
+        // Si el usuario desactiva la protección de píxeles transparentes,
+        // no debemos considerar cambios para píxeles que originalmente eran transparentes
+        if (!guardState.protectTransparentPixels && originalPixel?.colorId === 0) {
+          continue;
+        }
         
         if (!currentPixel) {
           // Píxel fue borrado
@@ -812,6 +933,45 @@ export async function checkForChanges() {
               type: 'changed',
               original: originalPixel,
               current: currentPixel
+            });
+            changedCount++;
+          }
+        }
+      }
+    }
+
+    // NUEVA LÓGICA: Verificar píxeles transparentes dañados y perímetro
+    if ((guardState.protectTransparentPixels || guardState.protectPerimeter)) {
+      // Analizar píxeles transparentes que fueron pintados
+      if (guardState.protectTransparentPixels) {
+        const transparentDamage = await analyzeTransparentPixelsDamage(guardState.protectionArea);
+        
+        for (const [key, damage] of transparentDamage) {
+          if (!changes.has(key)) { // No sobrescribir cambios ya detectados
+            changes.set(key, {
+              timestamp: Date.now(),
+              type: 'transparent_repair',
+              original: damage.original,
+              current: damage.current,
+              targetColorId: 0 // Reparar a transparente
+            });
+            changedCount++;
+          }
+        }
+      }
+
+      // Analizar intrusiones en el perímetro
+      // Solo limpiar perímetro si la opción está activa
+      if (guardState.protectPerimeter) {
+        const perimeterIntrusions = await analyzePerimeterIntrusions(guardState.protectionArea);
+        for (const [key, intrusion] of perimeterIntrusions) {
+          if (!changes.has(key)) { // No sobrescribir cambios ya detectados
+            changes.set(key, {
+              timestamp: Date.now(),
+              type: 'perimeter_clear',
+              original: intrusion.original,
+              current: intrusion.current,
+              targetColorId: 0 // Limpiar perímetro a transparente
             });
             changedCount++;
           }
@@ -1087,6 +1247,14 @@ export async function repairChanges(changes) {
         // Para borrado, usar las coordenadas del píxel original pero pintar transparente
         targetPixel = change.original;
         targetColorId = 0; // Transparente para borrar
+      } else if (change.type === 'transparent_repair') {
+        // Para reparar píxeles transparentes, usar coordenadas del píxel original y pintar transparente
+        targetPixel = change.original;
+        targetColorId = 0; // Restaurar a transparente
+      } else if (change.type === 'perimeter_clear') {
+        // Para limpiar perímetro, usar coordenadas del píxel actual y pintar transparente
+        targetPixel = change.current;
+        targetColorId = 0; // Limpiar a transparente
       } else {
         // Para cambios normales, restaurar al color original
         targetPixel = change.original;
