@@ -329,11 +329,20 @@ export function detectAvailableColors() {
   const colorElements = document.querySelectorAll('[id^="color-"]');
   const colors = [];
 
+  // Siempre incluir el color transparente (ID 0) para consistencia con JSON cargados
+  colors.push({
+    id: 0,
+    r: 0,
+    g: 0,
+    b: 0,
+    element: null // No tiene elemento DOM
+  });
+
   for (const element of colorElements) {
     if (element.querySelector("svg")) continue;
     
     const colorId = parseInt(element.id.replace("color-", ""));
-    if (colorId === 0) continue; // Evitar solo el color transparente (ID 0)
+    if (colorId === 0) continue; // Ya añadido arriba
     
     const bgColor = element.style.backgroundColor;
     if (bgColor) {
@@ -350,7 +359,7 @@ export function detectAvailableColors() {
     }
   }
 
-  log(`✅ ${colors.length} colores detectados`);
+  log(`✅ ${colors.length} colores detectados (incluyendo transparente)`);
   return colors;
 }
 
@@ -1262,17 +1271,23 @@ export async function repairChanges(changes) {
       }
       
       // Log de diagnóstico para verificar coordenadas
-      log(`🔧 Reparando píxel en (${targetPixel.globalX}, ${targetPixel.globalY}) tile(${targetPixel.tileX}, ${targetPixel.tileY}) local(${targetPixel.localX}, ${targetPixel.localY})`);
+      const tX = Number.isFinite(targetPixel?.tileX) ? targetPixel.tileX : Math.floor(targetPixel.globalX / GUARD_DEFAULTS.TILE_SIZE);
+      const tY = Number.isFinite(targetPixel?.tileY) ? targetPixel.tileY : Math.floor(targetPixel.globalY / GUARD_DEFAULTS.TILE_SIZE);
+      const lXraw = Number.isFinite(targetPixel?.localX) ? targetPixel.localX : (targetPixel.globalX - (tX * GUARD_DEFAULTS.TILE_SIZE));
+      const lYraw = Number.isFinite(targetPixel?.localY) ? targetPixel.localY : (targetPixel.globalY - (tY * GUARD_DEFAULTS.TILE_SIZE));
+      const lX = ((Number(lXraw) % 1000) + 1000) % 1000;
+      const lY = ((Number(lYraw) % 1000) + 1000) % 1000;
+      log(`🔧 Reparando píxel en (${targetPixel.globalX}, ${targetPixel.globalY}) tile(${tX}, ${tY}) local(${lX}, ${lY})`);
       
-      const tileKey = `${targetPixel.tileX},${targetPixel.tileY}`;
+      const tileKey = `${tX},${tY}`;
       
       if (!changesByTile.has(tileKey)) {
         changesByTile.set(tileKey, []);
       }
       
       changesByTile.get(tileKey).push({
-        localX: targetPixel.localX,
-        localY: targetPixel.localY,
+        localX: lX,
+        localY: lY,
         colorId: targetColorId,
         globalX: targetPixel.globalX,
         globalY: targetPixel.globalY,

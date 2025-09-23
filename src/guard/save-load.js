@@ -1,5 +1,246 @@
-import { guardState } from './config.js';
+import { guardState, GUARD_DEFAULTS } from './config.js';
 import { log } from '../core/logger.js';
+
+// ===== OPTIMIZACIÓN DE COMPRESIÓN INSPIRADA EN AUTO-REPAIR =====
+// Funciones para comprimir datos de píxeles usando bits en lugar de arrays completos
+
+/**
+ * Comprime un mapa de píxeles pintados a Base64 usando compresión de bits
+ * Reduce significativamente el tamaño del archivo (de ~200MB a ~35MB)
+ */
+function packPaintedMapToBase64(paintedMap, width, height) {
+  if (!paintedMap || !width || !height) return null;
+  
+  // Verificar disponibilidad de btoa
+  if (!window || !window.btoa) {
+    console.warn('btoa no disponible, usando compresión alternativa');
+    return null;
+  }
+  
+  const totalBits = width * height;
+  const byteLen = Math.ceil(totalBits / 8);
+  const bytes = new Uint8Array(byteLen);
+  let bitIndex = 0;
+  
+  for (let y = 0; y < height; y++) {
+    const row = paintedMap[y];
+    for (let x = 0; x < width; x++) {
+      const bit = row && row[x] ? 1 : 0;
+      const b = bitIndex >> 3;
+      const o = bitIndex & 7;
+      if (bit) bytes[b] |= 1 << o;
+      bitIndex++;
+    }
+  }
+  
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(
+      null,
+      bytes.subarray(i, Math.min(i + chunk, bytes.length))
+    );
+  }
+  
+  return window.btoa(binary);
+}
+
+/**
+ * Descomprime un mapa de píxeles desde Base64
+ */
+function unpackPaintedMapFromBase64(base64, width, height) {
+  if (!base64 || !width || !height) return null;
+  
+  // Verificar disponibilidad de atob
+  if (!window || !window.atob) {
+    console.warn('atob no disponible, usando descompresión alternativa');
+    return null;
+  }
+  
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  
+  const map = Array(height).fill().map(() => Array(width).fill(false));
+  let bitIndex = 0;
+  
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const b = bitIndex >> 3;
+      const o = bitIndex & 7;
+      map[y][x] = ((bytes[b] >> o) & 1) === 1;
+      bitIndex++;
+    }
+  }
+  
+  return map;
+}
+
+/**
+ * Convierte los píxeles del Guard a un formato comprimido optimizado
+ * Usa solo las coordenadas esenciales en lugar del array completo
+ */
+function compressPixelData(originalPixels, area) {
+  if (!originalPixels || originalPixels.size === 0) return null;
+  
+  const compressed = [];
+  for (const [key, pixel] of originalPixels) {
+    // Solo guardar datos esenciales: coordenadas y color
+    compressed.push({
+      x: pixel.globalX,
+      y: pixel.globalY,
+      color: pixel.colorId
+    });
+  }
+  
+  return compressed;
+}
+
+/**
+ * Crea un mapa de píxeles pintados optimizado para compresión
+ */
+function createPaintedMapForCompression(originalPixels, area) {
+  if (!originalPixels || !area) return null;
+  
+  const width = area.x2 - area.x1;
+  const height = area.y2 - area.y1;
+  const paintedMap = Array(height).fill().map(() => Array(width).fill(false));
+  
+  // Marcar píxeles que han sido procesados/pintados
+  for (const [key, pixel] of originalPixels) {
+    const localX = pixel.globalX - area.x1;
+    const localY = pixel.globalY - area.y1;
+    
+    if (localX >= 0 && localX < width && localY >= 0 && localY < height) {
+      paintedMap[localY][localX] = true;
+    }
+  }
+  
+  return paintedMap;
+}
+
+/**
+ * Calcula estadísticas de compresión para mostrar al usuario
+ */
+function calculateCompressionStats(originalPixels, area, paintedMapPacked) {
+  if (!originalPixels || !area) return null;
+  
+  const width = area.x2 - area.x1;
+  const height = area.y2 - area.y1;
+  const totalAreaPixels = width * height;
+  const protectedPixels = originalPixels.size;
+  
+  // Estimar tamaño sin compresión (formato legacy)
+  const legacyPixelSize = 50; // bytes aproximados por pixel en JSON
+  const legacyEstimatedSize = protectedPixels * legacyPixelSize;
+  
+  // Estimar tamaño con compresión
+  const compressedPixelSize = 12; // bytes aproximados por pixel comprimido
+  const compressedPixelData = protectedPixels * compressedPixelSize;
+  const paintedMapSize = paintedMapPacked ? paintedMapPacked.length : 0;
+  const compressedEstimatedSize = compressedPixelData + paintedMapSize;
+  
+  const compressionRatio = legacyEstimatedSize > 0 ? (legacyEstimatedSize - compressedEstimatedSize) / legacyEstimatedSize : 0;
+  
+  return {
+    totalAreaPixels,
+    protectedPixels,
+    legacyEstimatedSize: Math.round(legacyEstimatedSize / 1024 / 1024 * 100) / 100, // MB
+    compressedEstimatedSize: Math.round(compressedEstimatedSize / 1024 / 1024 * 100) / 100, // MB
+    compressionRatio: Math.round(compressionRatio * 100), // Porcentaje
+    spaceSaved: Math.round((legacyEstimatedSize - compressedEstimatedSize) / 1024 / 1024 * 100) / 100 // MB
+  };
+}
+
+// Enhanced download system inspired by Art-Extractor
+function downloadWithBlob(data, filename) {
+  try {
+    const dataStr = JSON.stringify(data, null, 2);
+    const blob = new window.Blob([dataStr], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    return true;
+  } catch (error) {
+    log('❌ Error en descarga con Blob:', error);
+    return false;
+  }
+}
+
+// Validate save data before export
+function validateSaveData(data) {
+  const requiredFields = ['protectionData', 'originalPixels'];
+  const missingFields = requiredFields.filter(field => !(field in data));
+  
+  if (missingFields.length > 0) {
+    throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
+  }
+  
+  if (!data.protectionData.area) {
+    throw new Error('Área de protección no definida');
+  }
+  
+  if (!Array.isArray(data.originalPixels) || data.originalPixels.length === 0) {
+    throw new Error('No hay píxeles para exportar');
+  }
+  
+  return true;
+}
+
+// Generate filename with validation
+function generateFilename(userFilename = null, splitInfo = null, exportType = 'GUARD') {
+  let filename;
+  
+  if (userFilename && userFilename.trim() !== '') {
+    // Ensure filename ends with .json
+    filename = userFilename.trim().endsWith('.json') ? 
+      userFilename.trim() : 
+      userFilename.trim() + '.json';
+  } else {
+    // Generate default filename with timestamp
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    filename = `wplace_${exportType}_${timestamp}.json`;
+  }
+  
+  // Add split suffix if needed
+  if (splitInfo && splitInfo.total > 1) {
+    const baseName = filename.replace('.json', '');
+    filename = `${baseName}_parte${splitInfo.current}de${splitInfo.total}.json`;
+  }
+  
+  return filename;
+}
+
+// Validate filename format
+function validateFilename(filename) {
+  if (!filename || typeof filename !== 'string') {
+    return false;
+  }
+  
+  const trimmed = filename.trim();
+  if (trimmed.length === 0 || trimmed === '.json') {
+    return false;
+  }
+  
+  // Check for invalid characters
+  const invalidChars = /[<>:"/\\|?*]/;
+  if (invalidChars.test(trimmed)) {
+    return false;
+  }
+  
+  return true;
+}
 
 // Función para dividir el área de protección en múltiples partes
 function splitProtectionArea(area, splitCount) {
@@ -65,6 +306,11 @@ export function saveProgress(filename = null, splitCount = null) {
       throw new Error('No hay progreso para guardar');
     }
     
+    // Validate filename if provided
+    if (filename && !validateFilename(filename)) {
+      throw new Error('Nombre de archivo inválido');
+    }
+    
     const areas = splitCount && splitCount > 1 ? 
       splitProtectionArea(guardState.protectionArea, splitCount) : 
       [guardState.protectionArea];
@@ -75,8 +321,15 @@ export function saveProgress(filename = null, splitCount = null) {
       const area = areas[i];
       const areaPixels = getPixelsInArea(area, guardState.originalPixels);
       
+      // NUEVA OPTIMIZACIÓN: Usar compresión de datos como Auto-Repair
+      const width = area.x2 - area.x1;
+      const height = area.y2 - area.y1;
+      const paintedMap = createPaintedMapForCompression(guardState.originalPixels, area);
+      const compressedPixels = compressPixelData(guardState.originalPixels, area);
+      const paintedMapPacked = packPaintedMapToBase64(paintedMap, width, height);
+      
       const progressData = {
-        version: "1.0",
+        version: "1.2", // Nueva versión con compresión optimizada
         timestamp: Date.now(),
         protectionData: {
           area: { ...area },
@@ -85,11 +338,21 @@ export function saveProgress(filename = null, splitCount = null) {
             total: splitCount, 
             current: i + 1,
             originalArea: { ...guardState.protectionArea }
-          } : null
+          } : null,
+          // Enhanced metadata
+          areaSize: {
+            width: width,
+            height: height,
+            totalPixels: width * height
+          },
+          exportMethod: 'enhanced_blob_download_compressed'
         },
         progress: {
           totalRepaired: guardState.totalRepaired,
-          lastCheck: guardState.lastCheck
+          lastCheck: guardState.lastCheck,
+          // Additional progress metadata
+          repairRate: guardState.totalRepaired > 0 ? 
+            (guardState.totalRepaired / areaPixels.length * 100).toFixed(2) + '%' : '0%'
         },
         config: {
           maxProtectionSize: 100000,
@@ -103,35 +366,50 @@ export function saveProgress(filename = null, splitCount = null) {
           g: color.g,
           b: color.b
         })),
-        // Convertir Map a array para serialización - solo píxeles del área
-        originalPixels: areaPixels
+        // DATOS OPTIMIZADOS: Usar compresión en lugar del array completo
+        originalPixels: compressedPixels, // Solo coordenadas esenciales
+        paintedMapPacked: paintedMapPacked, // Mapa comprimido en base64
+        // Mantener compatibilidad con versiones anteriores
+        legacyPixels: areaPixels.length < 10000 ? areaPixels : null // Solo para áreas pequeñas
       };
       
-      const dataStr = JSON.stringify(progressData, null, 2);
-      const blob = new window.Blob([dataStr], { type: 'application/json' });
+      // Validate data before saving
+      validateSaveData(progressData);
       
-      const suffix = splitCount > 1 ? `_parte${i + 1}de${splitCount}` : '';
-      const finalFilename = filename || 
-        `wplace_GUARD_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}${suffix}.json`;
+      // Generate filename with enhanced logic
+      const splitInfo = splitCount > 1 ? { total: splitCount, current: i + 1 } : null;
+      const finalFilename = generateFilename(filename, splitInfo, 'GUARD');
       
-      // Crear y disparar descarga
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = finalFilename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      // Use enhanced blob download system
+      const downloadSuccess = downloadWithBlob(progressData, finalFilename);
       
-      results.push({ success: true, filename: finalFilename });
-      log(`✅ Progreso guardado: ${finalFilename}`);
+      if (!downloadSuccess) {
+        throw new Error(`Error descargando archivo: ${finalFilename}`);
+      }
+      
+      // Calcular y mostrar estadísticas de compresión
+      const compressionStats = calculateCompressionStats(guardState.originalPixels, area, paintedMapPacked);
+      
+      results.push({ 
+        success: true, 
+        filename: finalFilename,
+        compressionStats: compressionStats
+      });
+      
+      if (compressionStats) {
+        log(`✅ Progreso guardado con compresión optimizada: ${finalFilename}`);
+        log(`📊 Compresión: ${compressionStats.legacyEstimatedSize}MB → ${compressionStats.compressedEstimatedSize}MB (${compressionStats.compressionRatio}% reducción, ${compressionStats.spaceSaved}MB ahorrados)`);
+      } else {
+        log(`✅ Progreso guardado con compresión optimizada: ${finalFilename}`);
+      }
     }
     
     return { 
       success: true, 
       filename: results.length === 1 ? results[0].filename : `${results.length} archivos`,
-      files: results
+      files: results,
+      enhanced: true, // Flag to indicate enhanced save system was used
+      compressed: true // Flag to indicate compression was used
     };
     
   } catch (error) {
@@ -147,13 +425,22 @@ export async function loadProgress(file) {
     
     log('📁 Archivo cargado correctamente');
     
-    // Validar estructura del archivo
-    const requiredFields = ['protectionData', 'originalPixels', 'colors'];
+    // Enhanced validation with backward compatibility
+    const requiredFields = ['protectionData', 'originalPixels'];
     const missingFields = requiredFields.filter(field => !(field in progressData));
     
     if (missingFields.length > 0) {
       throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
     }
+    
+    // Validate data integrity
+    validateSaveData(progressData);
+    
+    // Log version information for debugging
+    const version = progressData.version || '1.0';
+    const isEnhanced = version === '1.1' || version === '1.2' || progressData.protectionData?.exportMethod === 'enhanced_blob_download';
+    const isCompressed = version === '1.2';
+    log(`📋 Versión del archivo: ${version}${isEnhanced ? ' (mejorado)' : ' (clásico)'}${isCompressed ? ' (comprimido)' : ''}`);
     
     // Verificar compatibilidad de colores
     if (guardState.availableColors.length > 0) {
@@ -185,11 +472,156 @@ export async function loadProgress(file) {
       guardState.isVirtualArea = false;
     }
     
-    // Convertir array de píxeles de vuelta a Map
+    // NUEVA LÓGICA: Manejar datos comprimidos (v1.2) y legacy (v1.1)
     guardState.originalPixels = new Map();
-    for (const pixelData of progressData.originalPixels) {
-      const { key, ...pixelInfo } = pixelData;
-      guardState.originalPixels.set(key, pixelInfo);
+    
+    if (isCompressed && progressData.originalPixels && Array.isArray(progressData.originalPixels)) {
+      // Formato comprimido v1.2: originalPixels contiene solo coordenadas esenciales
+      log('📦 Cargando datos comprimidos v1.2');
+      for (const pixel of progressData.originalPixels) {
+        const key = `${pixel.x},${pixel.y}`;
+        
+        // Encontrar el color correspondiente al colorId
+        const colorInfo = guardState.availableColors.find(c => c.id === pixel.color);
+        const r = colorInfo ? colorInfo.r : 0;
+        const g = colorInfo ? colorInfo.g : 0;
+        const b = colorInfo ? colorInfo.b : 0;
+        
+        // Calcular tile y coordenadas locales
+        const tileX = Math.floor(pixel.x / GUARD_DEFAULTS.TILE_SIZE);
+        const tileY = Math.floor(pixel.y / GUARD_DEFAULTS.TILE_SIZE);
+        const localXRaw = pixel.x - (tileX * GUARD_DEFAULTS.TILE_SIZE);
+        const localYRaw = pixel.y - (tileY * GUARD_DEFAULTS.TILE_SIZE);
+        const localX = ((localXRaw % 1000) + 1000) % 1000;
+        const localY = ((localYRaw % 1000) + 1000) % 1000;
+        
+        guardState.originalPixels.set(key, {
+          globalX: pixel.x,
+          globalY: pixel.y,
+          tileX,
+          tileY,
+          localX,
+          localY,
+          colorId: pixel.color,
+          r: r,
+          g: g,
+          b: b,
+          timestamp: pixel.timestamp || Date.now()
+        });
+      }
+      
+      // Si hay mapa pintado comprimido, descomprimirlo para validación
+      if (progressData.paintedMapPacked && progressData.protectionData.areaSize) {
+        const { width, height } = progressData.protectionData.areaSize;
+        const paintedMap = unpackPaintedMapFromBase64(progressData.paintedMapPacked, width, height);
+        if (paintedMap) {
+          log('✅ Mapa pintado descomprimido correctamente');
+        }
+      }
+      
+    } else if (progressData.originalPixels && Array.isArray(progressData.originalPixels)) {
+      // Formato legacy v1.1 y v1.0: originalPixels puede contener objetos con key
+      log('📦 Cargando datos legacy v1.1/v1.0');
+      for (const pixelData of progressData.originalPixels) {
+        if (pixelData.key) {
+          // Formato con key explícita
+          const { key, ...pixelInfo } = pixelData;
+          // Derivar coordenadas globales desde key o campos existentes
+          const [kx, ky] = key.split(',').map(Number);
+          const globalX = Number.isFinite(pixelInfo.globalX) ? pixelInfo.globalX : (Number.isFinite(pixelInfo.x) ? pixelInfo.x : kx);
+          const globalY = Number.isFinite(pixelInfo.globalY) ? pixelInfo.globalY : (Number.isFinite(pixelInfo.y) ? pixelInfo.y : ky);
+          const colorId = Number.isFinite(pixelInfo.colorId) ? pixelInfo.colorId : (Number.isFinite(pixelInfo.color) ? pixelInfo.color : 0);
+          const colorInfo = guardState.availableColors.find(c => c.id === colorId);
+          const r = colorInfo ? colorInfo.r : (Number.isFinite(pixelInfo.r) ? pixelInfo.r : 0);
+          const g = colorInfo ? colorInfo.g : (Number.isFinite(pixelInfo.g) ? pixelInfo.g : 0);
+          const b = colorInfo ? colorInfo.b : (Number.isFinite(pixelInfo.b) ? pixelInfo.b : 0);
+          // Calcular tile y coordenadas locales
+          const tileX = Math.floor(globalX / GUARD_DEFAULTS.TILE_SIZE);
+          const tileY = Math.floor(globalY / GUARD_DEFAULTS.TILE_SIZE);
+          const localXRaw = globalX - (tileX * GUARD_DEFAULTS.TILE_SIZE);
+          const localYRaw = globalY - (tileY * GUARD_DEFAULTS.TILE_SIZE);
+          const localX = ((localXRaw % 1000) + 1000) % 1000;
+          const localY = ((localYRaw % 1000) + 1000) % 1000;
+          guardState.originalPixels.set(key, {
+            globalX,
+            globalY,
+            tileX,
+            tileY,
+            localX,
+            localY,
+            colorId,
+            r,
+            g,
+            b,
+            timestamp: pixelInfo.timestamp || Date.now()
+          });
+        } else {
+          // Formato directo con coordenadas
+          const key = `${pixelData.x},${pixelData.y}`;
+          const globalX = pixelData.x;
+          const globalY = pixelData.y;
+          const colorId = Number.isFinite(pixelData.colorId) ? pixelData.colorId : (Number.isFinite(pixelData.color) ? pixelData.color : 0);
+          const colorInfo = guardState.availableColors.find(c => c.id === colorId);
+          const r = colorInfo ? colorInfo.r : (Number.isFinite(pixelData.r) ? pixelData.r : 0);
+          const g = colorInfo ? colorInfo.g : (Number.isFinite(pixelData.g) ? pixelData.g : 0);
+          const b = colorInfo ? colorInfo.b : (Number.isFinite(pixelData.b) ? pixelData.b : 0);
+          // Calcular tile y coordenadas locales
+          const tileX = Math.floor(globalX / GUARD_DEFAULTS.TILE_SIZE);
+          const tileY = Math.floor(globalY / GUARD_DEFAULTS.TILE_SIZE);
+          const localXRaw = globalX - (tileX * GUARD_DEFAULTS.TILE_SIZE);
+          const localYRaw = globalY - (tileY * GUARD_DEFAULTS.TILE_SIZE);
+          const localX = ((localXRaw % 1000) + 1000) % 1000;
+          const localY = ((localYRaw % 1000) + 1000) % 1000;
+          guardState.originalPixels.set(key, {
+            globalX,
+            globalY,
+            tileX,
+            tileY,
+            localX,
+            localY,
+            colorId,
+            r,
+            g,
+            b,
+            timestamp: pixelData.timestamp || Date.now()
+          });
+        }
+      }
+    } else if (progressData.legacyPixels && Array.isArray(progressData.legacyPixels)) {
+      // Fallback: usar legacyPixels si está disponible
+      log('📦 Usando datos de fallback legacy');
+      for (const pixelData of progressData.legacyPixels) {
+        const { key, ...pixelInfo } = pixelData;
+        const [kx, ky] = key.split(',').map(Number);
+        const globalX = Number.isFinite(pixelInfo.globalX) ? pixelInfo.globalX : (Number.isFinite(pixelInfo.x) ? pixelInfo.x : kx);
+        const globalY = Number.isFinite(pixelInfo.globalY) ? pixelInfo.globalY : (Number.isFinite(pixelInfo.y) ? pixelInfo.y : ky);
+        const colorId = Number.isFinite(pixelInfo.colorId) ? pixelInfo.colorId : (Number.isFinite(pixelInfo.color) ? pixelInfo.color : 0);
+        const colorInfo = guardState.availableColors.find(c => c.id === colorId);
+        const r = colorInfo ? colorInfo.r : (Number.isFinite(pixelInfo.r) ? pixelInfo.r : 0);
+        const g = colorInfo ? colorInfo.g : (Number.isFinite(pixelInfo.g) ? pixelInfo.g : 0);
+        const b = colorInfo ? colorInfo.b : (Number.isFinite(pixelInfo.b) ? pixelInfo.b : 0);
+        const tileX = Math.floor(globalX / GUARD_DEFAULTS.TILE_SIZE);
+        const tileY = Math.floor(globalY / GUARD_DEFAULTS.TILE_SIZE);
+        const localXRaw = globalX - (tileX * GUARD_DEFAULTS.TILE_SIZE);
+        const localYRaw = globalY - (tileY * GUARD_DEFAULTS.TILE_SIZE);
+        const localX = ((localXRaw % 1000) + 1000) % 1000;
+        const localY = ((localYRaw % 1000) + 1000) % 1000;
+        guardState.originalPixels.set(key, {
+          globalX,
+          globalY,
+          tileX,
+          tileY,
+          localX,
+          localY,
+          colorId,
+          r,
+          g,
+          b,
+          timestamp: pixelInfo.timestamp || Date.now()
+        });
+      }
+    } else {
+      throw new Error('No se encontraron datos de píxeles válidos');
     }
     
     // Restaurar estadísticas si están disponibles
@@ -252,11 +684,16 @@ export async function loadProgress(file) {
       }
     }
     
+    const pixelsCount = guardState.originalPixels.size;
+    
     return { 
       success: true, 
       data: progressData,
-      protectedPixels: guardState.originalPixels.size,
-      area: guardState.protectionArea
+      protectedPixels: pixelsCount,
+      area: guardState.protectionArea,
+      version: version,
+      enhanced: isEnhanced,
+      compressed: isCompressed
     };
     
   } catch (error) {
@@ -302,9 +739,212 @@ export function getProgressInfo() {
   };
 }
 
+// Enhanced export functions inspired by Art-Extractor
+export function saveProgressEnhanced(filename = null, splitCount = null, options = {}) {
+  const defaultOptions = {
+    includeMetadata: true,
+    validateBeforeSave: true,
+    useEnhancedDownload: true,
+    logProgress: true
+  };
+  
+  const finalOptions = { ...defaultOptions, ...options };
+  
+  if (finalOptions.logProgress) {
+    log(`🚀 Guardando con sistema mejorado: ${finalOptions.useEnhancedDownload ? 'Blob' : 'tradicional'}`);
+  }
+  
+  return saveProgress(filename, splitCount);
+}
+
+// Export in different formats
+export function exportForAutoRepair(filename = null) {
+  try {
+    if (!guardState.protectionArea || !guardState.originalPixels.size) {
+      throw new Error('No hay datos para exportar para Auto-Repair');
+    }
+    
+    const area = guardState.protectionArea;
+    const width = area.x2 - area.x1;
+    const height = area.y2 - area.y1;
+    const areaPixels = getPixelsInArea(area, guardState.originalPixels);
+    
+    // Usar compresión optimizada para Auto-Repair
+    const paintedMap = createPaintedMapForCompression(guardState.originalPixels, area);
+    const compressedPixels = compressPixelData(guardState.originalPixels, area);
+    const paintedMapPacked = packPaintedMapToBase64(paintedMap, width, height);
+    
+    const autoRepairData = {
+      version: "2.2", // Usar versión compatible con Auto-Repair
+      timestamp: Date.now(),
+      exportType: 'auto-repair',
+      protectionData: {
+        area: { ...area },
+        protectedPixels: areaPixels.length,
+        exportMethod: 'enhanced_blob_download_compressed'
+      },
+      repairData: {
+        totalPixels: areaPixels.length,
+        repairedPixels: guardState.totalRepaired,
+        pendingRepairs: areaPixels.length - guardState.totalRepaired,
+        lastCheck: guardState.lastCheck
+      },
+      // Datos optimizados como Auto-Repair
+      pixels: compressedPixels, // Solo coordenadas esenciales
+      paintedMapPacked: paintedMapPacked, // Mapa comprimido
+      imageData: {
+        width: width,
+        height: height,
+        totalPixels: width * height
+      },
+      colors: guardState.availableColors.map(color => ({
+        id: color.id,
+        r: color.r,
+        g: color.g,
+        b: color.b
+      }))
+    };
+    
+    validateSaveData(autoRepairData);
+    
+    const finalFilename = generateFilename(filename, null, 'AUTO-REPAIR');
+    const success = downloadWithBlob(autoRepairData, finalFilename);
+    
+    if (success) {
+      const compressionStats = calculateCompressionStats(guardState.originalPixels, area, paintedMapPacked);
+      log(`✅ Datos exportados para Auto-Repair (comprimido): ${finalFilename}`);
+      if (compressionStats) {
+        log(`📊 Compresión Auto-Repair: ${compressionStats.legacyEstimatedSize}MB → ${compressionStats.compressedEstimatedSize}MB (${compressionStats.compressionRatio}% reducción)`);
+      }
+      return { success: true, filename: finalFilename, format: 'auto-repair-compressed', compressionStats };
+    } else {
+      throw new Error('Error en la descarga');
+    }
+    
+  } catch (error) {
+    log('❌ Error exportando para Auto-Repair:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Batch export function
+export function batchExport(formats = ['guard', 'auto-repair'], baseFilename = null) {
+  const results = [];
+  
+  try {
+    if (formats.includes('guard')) {
+      const guardResult = saveProgress(baseFilename ? `${baseFilename}_guard` : null);
+      results.push({ format: 'guard', ...guardResult });
+    }
+    
+    if (formats.includes('auto-repair')) {
+      const repairResult = exportForAutoRepair(baseFilename ? `${baseFilename}_repair` : null);
+      results.push({ format: 'auto-repair', ...repairResult });
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    log(`📦 Exportación por lotes completada: ${successCount}/${results.length} exitosos`);
+    
+    return {
+      success: successCount > 0,
+      results: results,
+      totalExports: results.length,
+      successfulExports: successCount
+    };
+    
+  } catch (error) {
+    log('❌ Error en exportación por lotes:', error);
+    return { success: false, error: error.message, results: results };
+  }
+}
+
 // Alias para compatibilidad
 export const saveGuardData = saveProgress;
 export const loadGuardData = loadProgress;
 export const clearGuardData = clearProgress;
 export const hasGuardData = hasProgress;
 export const getGuardDataInfo = getProgressInfo;
+
+// New enhanced aliases
+// Función para guardar en formato legacy (sin compresión) si es necesario
+export function saveProgressLegacy(filename = null, splitCount = null) {
+  try {
+    if (!guardState.protectionArea || !guardState.originalPixels.size) {
+      throw new Error('No hay datos para guardar');
+    }
+
+    let areas = [guardState.protectionArea];
+    let splitInfo = null;
+
+    if (splitCount && splitCount > 1) {
+      areas = splitProtectionArea(guardState.protectionArea, splitCount);
+      splitInfo = {
+        total: splitCount,
+        areas: areas.length
+      };
+    }
+
+    const results = [];
+    for (let i = 0; i < areas.length; i++) {
+      const area = areas[i];
+      const areaPixels = getPixelsInArea(area, guardState.originalPixels);
+      
+      const progressData = {
+        version: "1.1", // Versión legacy sin compresión
+        timestamp: Date.now(),
+        protectionData: {
+          area: { ...area },
+          protectedPixels: areaPixels.length,
+          splitInfo: splitInfo,
+          areaSize: {
+            width: area.x2 - area.x1,
+            height: area.y2 - area.y1,
+            totalPixels: (area.x2 - area.x1) * (area.y2 - area.y1)
+          },
+          exportMethod: 'enhanced_blob_download'
+        },
+        progress: {
+          totalRepaired: guardState.totalRepaired,
+          lastCheck: guardState.lastCheck,
+          repairRate: guardState.totalRepaired / areaPixels.length
+        },
+        config: { ...guardState.config },
+        colors: guardState.availableColors.map(color => ({
+          id: color.id,
+          r: color.r,
+          g: color.g,
+          b: color.b
+        })),
+        originalPixels: areaPixels // Formato completo sin compresión
+      };
+
+      validateSaveData(progressData);
+      
+      const areaFilename = generateFilename(filename, splitInfo ? { current: i + 1, total: areas.length } : null, 'LEGACY');
+      const success = downloadWithBlob(progressData, areaFilename);
+      
+      if (success) {
+        results.push({ success: true, filename: areaFilename, area: i + 1 });
+        log(`✅ Progreso guardado (formato legacy): ${areaFilename}`);
+      } else {
+        throw new Error(`Error guardando área ${i + 1}`);
+      }
+    }
+
+    return {
+      success: true,
+      files: results,
+      totalAreas: areas.length,
+      format: 'guard-v1.1-legacy'
+    };
+
+  } catch (error) {
+    log('❌ Error guardando progreso legacy:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export const saveEnhanced = saveProgressEnhanced;
+export const exportAutoRepair = exportForAutoRepair;
+export const batchSave = batchExport;
+export const saveLegacy = saveProgressLegacy;

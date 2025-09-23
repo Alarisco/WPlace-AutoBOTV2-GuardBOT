@@ -522,10 +522,10 @@ function comparePixels(originalPixels, currentPixels) {
       // Píxel faltante
       missing.set(key, originalPixel);
     } else if (compareColors(originalPixel, currentPixel)) {
-      // Píxel correcto
+      // Píxel correcto (colores dentro del umbral)
       correct.set(key, { original: originalPixel, current: currentPixel });
     } else {
-      // Píxel incorrecto
+      // Píxel incorrecto (colores fuera del umbral)
       incorrect.set(key, { original: originalPixel, current: currentPixel });
     }
   }
