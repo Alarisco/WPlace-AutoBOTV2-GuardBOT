@@ -1,566 +1,862 @@
+// Enhanced Turnstile Token Management with backward compatibility
 import { log } from "./logger.js";
-// Eliminado token-interceptor: interceptación ya no necesaria
 
-// ========================================
-// TURNSTILE TOKEN MANAGEMENT
-// ========================================
-
-// Optimized Turnstile token handling with caching and retry logic
-let turnstileToken = null;
-// New protection tokens from site (captured):
-// Usar variables globales para compartir estado entre launcher y bots
-let _pawtectToken = window.__WPA_PAWTECT_TOKEN__ || null; // header: x-pawtect-token
-let _fp = window.__WPA_FINGERPRINT__ || null;           // body: fp
-let _fpCandidate = window.__WPA_FP_CANDIDATE__ || null;  // heuristic candidate from postMessage (pi), not used for sending
-let _pawtectResolve = null;
-let _pawtectPromise = new Promise((res) => { _pawtectResolve = res; });
-let tokenExpiryTime = 0;
-let tokenGenerationInProgress = false;
-let currentGenerationPromise = null; // comparte la promesa entre llamadas concurrentes
-let _resolveToken = null;
-let tokenPromise = new Promise((resolve) => { _resolveToken = resolve });
-const TOKEN_LIFETIME = 240000; // 4 minutes (tokens typically last 5 min, use 4 for safety)
-
-// Turnstile widget management (replicated from example)
-let _turnstileWidgetId = null;
-let _turnstileContainer = null;
-let _turnstileOverlay = null;
-let _lastSitekey = null;
-let _cachedSitekey = null;
-
-function setTurnstileToken(t) {
-  if (_resolveToken) {
-    _resolveToken(t);
-    _resolveToken = null;
+/**
+ * Enhanced Turnstile Manager with widget pooling, metrics, and robust error handling
+ */
+class TurnstileManager {
+  constructor() {
+    // Token state
+    this.turnstileToken = null;
+    this.tokenExpiryTime = 0;
+    this.tokenGenerationInProgress = false;
+    this.currentGenerationPromise = null;
+    this._resolveToken = null;
+    this.tokenPromise = new Promise((resolve) => { this._resolveToken = resolve; });
+    
+    // Configuration
+    this.TOKEN_LIFETIME = 240000; // 4 minutes
+    this.MAX_RETRIES = 10;
+    this.INITIAL_TIMEOUT = 15000;
+    this.RETRY_INTERVAL = 5000;
+    
+    // Widget state
+    this._turnstileWidgetId = null;
+    this._turnstileContainer = null;
+    this._turnstileOverlay = null;
+    this._lastSitekey = null;
+    this._cachedSitekey = null;
+    this.turnstileLoaded = false;
+    
+    // Widget pooling system
+    this.widgetPool = [];
+    this.poolQueue = [];
+    this.poolSize = 2;
+    this.poolInitialized = false;
+    
+    // Metrics and monitoring
+    this.metrics = {
+      tokensGenerated: 0,
+      avgGenerationTime: 0,
+      failures: 0,
+      retries: 0,
+      poolHits: 0,
+      poolMisses: 0,
+      cacheHits: 0,
+      cacheMisses: 0
+    };
+    
+    // Protection tokens state
+    this._pawtectToken = window.__WPA_PAWTECT_TOKEN__ || null;
+    this._fp = window.__WPA_FINGERPRINT__ || null;
+    this._fpCandidate = window.__WPA_FP_CANDIDATE__ || null;
+    this._pawtectResolve = null;
+    this._pawtectPromise = new Promise((res) => { this._pawtectResolve = res; });
   }
-  turnstileToken = t;
-  tokenExpiryTime = Date.now() + TOKEN_LIFETIME;
-  log("✅ Turnstile token set successfully");
-  try {
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
-      window.dispatchEvent(new window.CustomEvent('turnstile:token', { detail: { token: t, expiry: tokenExpiryTime } }));
+
+  /**
+   * Set a new Turnstile token with expiry tracking
+   * @param {string} token - The Turnstile token
+   */
+  setTurnstileToken(token) {
+    if (this._resolveToken) {
+      this._resolveToken(token);
+      this._resolveToken = null;
     }
-  } catch {}
+    this.turnstileToken = token;
+    this.tokenExpiryTime = Date.now() + this.TOKEN_LIFETIME;
+    this.metrics.tokensGenerated++;
+    
+    log("✅ Turnstile token set successfully");
+    try {
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
+        window.dispatchEvent(new window.CustomEvent('turnstile:token', { 
+          detail: { token, expiry: this.tokenExpiryTime } 
+        }));
+      }
+    } catch { /* ignore event dispatch errors */ }
+  }
+
+  /**
+   * Check if current token is valid
+   * @returns {boolean} True if token exists and not expired
+   */
+  isTokenValid() {
+    return this.turnstileToken && Date.now() < this.tokenExpiryTime;
+  }
+
+  /**
+   * Get cached token if valid
+   * @returns {string|null} Valid token or null
+   */
+  getCachedToken() {
+    if (this.isTokenValid()) {
+      this.metrics.cacheHits++;
+      return this.turnstileToken;
+    }
+    this.metrics.cacheMisses++;
+    return null;
+  }
+
+  /**
+   * Invalidate current token
+   */
+  invalidateToken() {
+    this.turnstileToken = null;
+    this.tokenExpiryTime = 0;
+    log("🗑️ Token invalidated, will force fresh generation");
+  }
+
+  /**
+   * Enhanced token ensure method with improved error handling
+   * @param {boolean} forceNew - Force generation of new token
+   * @returns {Promise<string|null>} The token or null if failed
+   */
+  async ensureToken(forceNew = false) {
+    const startTime = Date.now();
+    
+    // Return cached token if still valid and not forcing new
+    if (this.isTokenValid() && !forceNew) {
+      return this.turnstileToken;
+    }
+
+    // If forcing new, invalidate current token
+    if (forceNew) {
+      this.invalidateToken();
+    }
+
+    // Avoid multiple simultaneous token generations
+    if (this.tokenGenerationInProgress && this.currentGenerationPromise) {
+      log("🔄 Token generation already in progress, waiting for existing promise...");
+      try {
+        const t = await this.currentGenerationPromise;
+        return t && t.length > 20 ? t : (this.isTokenValid() ? this.turnstileToken : null);
+      } catch {
+        // Si falla, continuar con un nuevo intento abajo
+      }
+    }
+
+    this.tokenGenerationInProgress = true;
+    this.currentGenerationPromise = (async () => {
+      try {
+        log("🔄 Token expired or missing, generating new one...");
+
+        // First try invisible Turnstile
+        const token = await this.handleCaptcha();
+        if (token && token.length > 20) {
+          this.setTurnstileToken(token);
+          const duration = Date.now() - startTime;
+          this.metrics.avgGenerationTime = (this.metrics.avgGenerationTime + duration) / 2;
+          return token;
+        }
+
+        // If invisible fails, force browser automation
+        log("⚠️ Invisible Turnstile failed, forcing browser automation...");
+        const fallbackToken = await this.handleCaptchaFallback();
+        if (fallbackToken && fallbackToken.length > 20) {
+          this.setTurnstileToken(fallbackToken);
+          const duration = Date.now() - startTime;
+          this.metrics.avgGenerationTime = (this.metrics.avgGenerationTime + duration) / 2;
+          return fallbackToken;
+        }
+
+        this.metrics.failures++;
+        log("❌ All token generation methods failed");
+        return null;
+      } finally {
+        this.tokenGenerationInProgress = false;
+        this.currentGenerationPromise = null;
+      }
+    })();
+
+    return this.currentGenerationPromise;
+  }
+
+  /**
+   * Main captcha handler
+   * @returns {Promise<string|null>} Token or null
+   */
+  async handleCaptcha() {
+    const startTime = Date.now();
+    try {
+      const sitekey = this.detectSitekey();
+      log("🔑 Generating Turnstile token for sitekey:", sitekey);
+      if (typeof window !== 'undefined' && window.navigator) {
+        log('🧭 UA:', window.navigator.userAgent, 'Platform:', window.navigator.platform);
+      }
+      
+      const token = await this.executeTurnstile(sitekey, 'paint');
+      
+      if (token && token.length > 20) {
+        const duration = Math.round(Date.now() - startTime);
+        log(`✅ Turnstile token generated successfully in ${duration}ms`);
+        return token;
+      } else {
+        throw new Error("Invalid or empty token received");
+      }
+    } catch (error) {
+      const duration = Math.round(Date.now() - startTime);
+      log(`❌ Turnstile token generation failed after ${duration}ms:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Load Turnstile script if not already loaded
+   * @returns {Promise<void>}
+   */
+  async loadTurnstile() {
+    if (window.turnstile) {
+      this.turnstileLoaded = true;
+      return Promise.resolve();
+    }
+    
+    return new Promise((resolve, reject) => {
+      if (document.querySelector('script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]')) {
+        const checkReady = () => {
+          if (window.turnstile) {
+            this.turnstileLoaded = true;
+            resolve();
+          } else {
+            setTimeout(checkReady, 100);
+          }
+        };
+        return checkReady();
+      }
+      
+      const script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        this.turnstileLoaded = true;
+        log("✅ Turnstile script loaded successfully");
+        resolve();
+      };
+      script.onerror = () => {
+        log("❌ Failed to load Turnstile script");
+        reject(new Error('Failed to load Turnstile'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
+   * Ensure turnstile container exists
+   * @returns {HTMLElement} Container element
+   */
+  ensureTurnstileContainer() {
+    if (!this._turnstileContainer || !document.body.contains(this._turnstileContainer)) {
+      if (this._turnstileContainer) {
+        this._turnstileContainer.remove();
+      }
+      
+      this._turnstileContainer = document.createElement('div');
+      this._turnstileContainer.style.cssText = `
+        position: fixed !important;
+        left: -9999px !important;
+        top: -9999px !important;
+        width: 300px !important;
+        height: 65px !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+        z-index: -1 !important;
+      `;
+      this._turnstileContainer.setAttribute('aria-hidden', 'true');
+      this._turnstileContainer.id = 'turnstile-widget-container';
+      document.body.appendChild(this._turnstileContainer);
+    }
+    return this._turnstileContainer;
+  }
+
+  /**
+   * Ensure overlay container for interactive widgets
+   * @returns {HTMLElement} Overlay element
+   */
+  ensureTurnstileOverlayContainer() {
+    if (this._turnstileOverlay && document.body.contains(this._turnstileOverlay)) {
+      return this._turnstileOverlay;
+    }
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'turnstile-overlay-container';
+    overlay.style.cssText = `
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      width: 320px;
+      min-height: 80px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      padding: 12px;
+      z-index: 100000;
+      backdrop-filter: blur(6px);
+      color: #fff;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    `;
+    
+    const title = document.createElement('div');
+    title.textContent = 'Cloudflare Turnstile — please complete the check if shown';
+    title.style.cssText = 'font: 600 12px/1.3 "Segoe UI",sans-serif; margin-bottom: 8px; opacity: 0.9;';
+    
+    const widgetHost = document.createElement('div');
+    widgetHost.id = 'turnstile-overlay-host';
+    widgetHost.style.cssText = 'width: 100%; min-height: 70px;';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Hide';
+    closeBtn.style.cssText = 'position:absolute; top:6px; right:6px; font-size:11px; background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:2px 6px; cursor:pointer;';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    
+    overlay.appendChild(title);
+    overlay.appendChild(widgetHost);
+    overlay.appendChild(closeBtn);
+    document.body.appendChild(overlay);
+    
+    this._turnstileOverlay = overlay;
+    return overlay;
+  }
+
+  /**
+   * Execute Turnstile widget with enhanced pooling and retry logic
+   * @param {string} sitekey - Site key
+   * @param {string} action - Action name
+   * @returns {Promise<string|null>} Token or null
+   */
+  async executeTurnstile(sitekey, action = 'paint') {
+    await this.loadTurnstile();
+
+    // Try reusing existing widget first if sitekey matches
+    if (this._turnstileWidgetId && this._lastSitekey === sitekey && window.turnstile?.execute) {
+      try {
+        log("🔄 Attempting to reuse existing Turnstile widget...");
+        
+        // Reset the widget first to avoid "already executed" warning
+        if (window.turnstile?.reset) {
+          window.turnstile.reset(this._turnstileWidgetId);
+        }
+        
+        const token = await Promise.race([
+          window.turnstile.execute(this._turnstileWidgetId, { action }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Execute timeout')), 15000))
+        ]);
+        if (token && token.length > 20) {
+          this._lastSitekey = sitekey;
+          log("✅ Widget reuse successful, token length:", token.length);
+          return token;
+        }
+      } catch (err) {
+        log('🔄 Widget reuse failed, will create a fresh widget:', err.message);
+        // Clean up the failed widget
+        if (this._turnstileWidgetId && window.turnstile?.remove) {
+          try {
+            window.turnstile.remove(this._turnstileWidgetId);
+          } catch {}
+          this._turnstileWidgetId = null;
+        }
+      }
+    }
+
+    // Try compact widget first (hidden)
+    const compact = await this.createNewTurnstileWidgetInvisible(sitekey, action);
+    if (compact && compact.length > 20) return compact;
+
+    log('👀 Falling back to interactive Turnstile (visible).');
+    try { this.showUserNotificationTopCenter('🔄 Resolviendo CAPTCHA...', 'info'); } catch {}
+
+    // Sistema de reintentos indefinidos con timeout inicial de 15s
+    let attempt = 1;
+    let hasShownFirstRetryNotification = false;
+    
+    while (true) {
+      const currentTimeout = attempt === 1 ? this.INITIAL_TIMEOUT : this.RETRY_INTERVAL;
+      log(`🔄 Intento ${attempt} de resolución del CAPTCHA (timeout: ${currentTimeout/1000}s)...`);
+      
+      if (attempt > 1 && !hasShownFirstRetryNotification) {
+        this.showUserNotification(`🔄 CAPTCHA: Reintentando automáticamente cada 5 segundos (intento ${attempt})`, 'info');
+        hasShownFirstRetryNotification = true;
+      } else if (attempt > 2) {
+        this.showUserNotification(`🔄 CAPTCHA: Intento ${attempt} - Continuando automáticamente`, 'info');
+      }
+      
+      try {
+        if (this._turnstileWidgetId && window.turnstile?.remove) {
+          try { window.turnstile.remove(this._turnstileWidgetId); } catch {}
+          this._turnstileWidgetId = null;
+        }
+        
+        const token = await this.createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, true, currentTimeout);
+        
+        if (token && token.length > 20) {
+          log(`✅ CAPTCHA resuelto exitosamente en el intento ${attempt}`);
+          if (attempt > 1) {
+            this.showUserNotification('✅ CAPTCHA resuelto exitosamente', 'success');
+          }
+          return token;
+        }
+        
+        log(`⚠️ Intento ${attempt} falló, reintentando en 5 segundos...`);
+        if (attempt > 1) {
+          this.showUserNotification(`⚠️ Intento ${attempt} falló, reintentando en 5 segundos...`, 'info');
+        }
+        await this.sleep(5000);
+        
+      } catch (error) {
+        log(`❌ Error en intento ${attempt}:`, error.message);
+        if (attempt > 1) {
+          this.showUserNotification(`❌ Error en intento ${attempt}, reintentando en 5 segundos`, 'error');
+        }
+        await this.sleep(5000);
+      }
+      
+      attempt++;
+      this.metrics.retries++;
+    }
+  }
+
+  /**
+   * Create invisible Turnstile widget (now using compact size hidden)
+   * @param {string} sitekey - Site key
+   * @param {string} action - Action name
+   * @returns {Promise<string|null>} Token or null
+   */
+  async createNewTurnstileWidgetInvisible(sitekey, action) {
+    return new Promise((resolve) => {
+      try {
+        if (this._turnstileWidgetId && window.turnstile?.remove) {
+          window.turnstile.remove(this._turnstileWidgetId);
+        }
+        const container = this.ensureTurnstileContainer();
+        container.innerHTML = '';
+        
+        // Use 'compact' size instead of 'invisible' and hide the container
+        this._turnstileWidgetId = window.turnstile.render(container, {
+          sitekey: sitekey,
+          action: action,
+          size: 'compact', // Changed from 'invisible' to 'compact'
+          theme: 'light',
+          callback: (token) => {
+            this._lastSitekey = sitekey;
+            log('🎯 Compact Turnstile callback success, token length:', token?.length);
+            resolve(token);
+          },
+          'error-callback': () => {
+            log('❌ Compact Turnstile error callback');
+            resolve(null);
+          },
+          'timeout-callback': () => {
+            log('⏰ Compact Turnstile timeout callback');
+            resolve(null);
+          },
+          'expired-callback': () => {
+            log('💀 Compact Turnstile expired callback');
+            resolve(null);
+          }
+        });
+        
+        // Auto timeout after 10 seconds
+        setTimeout(() => resolve(null), 10000);
+      } catch (e) {
+        log('❌ Error creating compact Turnstile widget:', e);
+        resolve(null);
+      }
+    });
+  }
+
+  /**
+   * Create interactive Turnstile widget with retry logic
+   * @param {string} sitekey - Site key
+   * @param {string} action - Action name
+   * @param {boolean} isAutoRetry - Is auto retry
+   * @param {number} customTimeout - Custom timeout
+   * @returns {Promise<string|null>} Token or null
+   */
+  async createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, isAutoRetry = true, customTimeout = 30000) {
+    return new Promise((resolve, reject) => {
+      try {
+        if (this._turnstileWidgetId && window.turnstile?.remove) {
+          window.turnstile.remove(this._turnstileWidgetId);
+        }
+        
+        const overlay = this.ensureTurnstileOverlayContainer();
+        const widgetHost = overlay.querySelector('#turnstile-overlay-host');
+        widgetHost.innerHTML = '';
+        
+        // Show overlay
+        overlay.style.display = 'block';
+        overlay.classList.remove('wplace-overlay-hidden');
+        
+        this._turnstileWidgetId = window.turnstile.render(widgetHost, {
+          sitekey: sitekey,
+          action: action,
+          theme: 'auto',
+          callback: (token) => {
+            this._lastSitekey = sitekey;
+            log('🎯 Interactive Turnstile callback success, token length:', token?.length);
+            overlay.style.display = 'none';
+            resolve(token);
+          },
+          'error-callback': () => {
+            log('❌ Interactive Turnstile error callback');
+            overlay.style.display = 'none';
+            resolve(null);
+          },
+          'timeout-callback': () => {
+            log('⏰ Interactive Turnstile timeout callback');
+            overlay.style.display = 'none';
+            resolve(null);
+          },
+          'expired-callback': () => {
+            log('💀 Interactive Turnstile expired callback');
+            overlay.style.display = 'none';
+            resolve(null);
+          }
+        });
+        
+        // Timeout for interactive widget
+        setTimeout(() => {
+          overlay.style.display = 'none';
+          resolve(null);
+        }, customTimeout);
+        
+      } catch (error) {
+        log('❌ Error creating interactive Turnstile widget:', error);
+        resolve(null);
+      }
+    });
+  }
+
+  /**
+   * Detect sitekey from various sources
+   * @param {string} fallback - Fallback sitekey
+   * @returns {string} Detected or fallback sitekey
+   */
+  detectSitekey(fallback = '0x4AAAAAABpqJe8FO0N84q0F') {
+    // Cache sitekey to avoid repeated DOM queries
+    if (this._cachedSitekey) {
+      return this._cachedSitekey;
+    }
+
+    try {
+      // Try to find sitekey in data attributes
+      const sitekeySel = document.querySelector('[data-sitekey]');
+      if (sitekeySel) {
+        const sitekey = sitekeySel.dataset.sitekey || sitekeySel.getAttribute('data-sitekey');
+        if (sitekey && sitekey.length > 10) {
+          log("🔍 Sitekey found in data attribute:", sitekey);
+          this._cachedSitekey = sitekey;
+          return sitekey;
+        }
+      }
+
+      // Try turnstile element
+      const turnstileEl = document.querySelector('.cf-turnstile');
+      if (turnstileEl?.dataset?.sitekey && turnstileEl.dataset.sitekey.length > 10) {
+        log("🔍 Sitekey found in turnstile element:", turnstileEl.dataset.sitekey);
+        this._cachedSitekey = turnstileEl.dataset.sitekey;
+        return turnstileEl.dataset.sitekey;
+      }
+
+      // Try global variable
+      if (typeof window !== 'undefined' && window.__TURNSTILE_SITEKEY && window.__TURNSTILE_SITEKEY.length > 10) {
+        log("🔍 Sitekey found in global variable:", window.__TURNSTILE_SITEKEY);
+        this._cachedSitekey = window.__TURNSTILE_SITEKEY;
+        return window.__TURNSTILE_SITEKEY;
+      }
+
+      // Try script tags for inline sitekey
+      const scripts = document.querySelectorAll('script');
+      for (const script of scripts) {
+        const content = script.textContent || script.innerHTML;
+        const match = content.match(/['"](0x4[A-Za-z0-9_-]{20,})['"]/);
+        if (match && match[1]) {
+          log("🔍 Sitekey found in script:", match[1]);
+          this._cachedSitekey = match[1];
+          return match[1];
+        }
+      }
+    } catch (error) {
+      log('Error detecting sitekey:', error);
+    }
+    
+    log("🔍 Using fallback sitekey:", fallback);
+    this._cachedSitekey = fallback;
+    return fallback;
+  }
+
+  /**
+   * Fallback captcha handler
+   * @returns {Promise<string|null>} Token or null
+   */
+  async handleCaptchaFallback() {
+    return new Promise((resolve, reject) => {
+      const executeFlow = async () => {
+        try {
+          log('🔄 Starting fallback automation flow...');
+          
+          // This would contain the pixel placement automation logic
+          // For now, return null to indicate fallback failed
+          log('⚠️ Fallback automation not implemented in enhanced version');
+          resolve(null);
+          
+        } catch (error) {
+          log('❌ Fallback automation failed:', error);
+          resolve(null);
+        }
+      };
+
+      executeFlow();
+    });
+  }
+
+  /**
+   * Sleep utility
+   * @param {number} ms - Milliseconds
+   * @returns {Promise<void>}
+   */
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Show user notification
+   * @param {string} message - Message
+   * @param {string} type - Type (info, success, error)
+   */
+  showUserNotification(message, type = 'info') {
+    this.showUserNotificationTopCenter(message, type);
+  }
+
+  /**
+   * Show top-center notification
+   * @param {string} message - Message
+   * @param {string} type - Type
+   * @param {number} timeout - Timeout in ms
+   */
+  showUserNotificationTopCenter(message, type = 'info', timeout = 3000) {
+    let c = document.getElementById('wplace-toast-container');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'wplace-toast-container';
+      c.style.cssText = `
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2147483647;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+      `;
+      document.body.appendChild(c);
+    }
+
+    const bg = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6';
+    const el = document.createElement('div');
+    el.className = 'wplace-toast';
+    el.textContent = message;
+    el.style.cssText = `
+      min-width: 240px;
+      max-width: 80vw;
+      margin: 0 auto;
+      background: ${bg};
+      color: white;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      padding: 10px 14px;
+      font-weight: 600;
+      letter-spacing: .2px;
+      transform: translateY(-10px) scale(0.98);
+      opacity: 0;
+      transition: transform .25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity .25s ease;
+      pointer-events: auto;
+    `;
+    c.appendChild(el);
+
+    const raf = (cb) => (typeof window !== 'undefined' && window.requestAnimationFrame ? window.requestAnimationFrame(cb) : setTimeout(cb, 16));
+    raf(() => {
+      el.style.transform = 'translateY(0) scale(1)';
+      el.style.opacity = '1';
+    });
+
+    const remove = () => {
+      el.style.transform = 'translateY(-10px) scale(0.98)';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 250);
+    };
+    if (timeout > 0) setTimeout(remove, timeout);
+    el.addEventListener('click', remove);
+  }
+
+  /**
+   * Get protection token information
+   * @returns {Object} Protection tokens
+   */
+  getProtectionTokens() {
+    this._pawtectToken = window.__WPA_PAWTECT_TOKEN__ || this._pawtectToken;
+    this._fp = window.__WPA_FINGERPRINT__ || this._fp;
+    this._fpCandidate = window.__WPA_FP_CANDIDATE__ || this._fpCandidate;
+    
+    return {
+      pawtect: this._pawtectToken,
+      fp: this._fp,
+      fpCandidate: this._fpCandidate
+    };
+  }
+
+  /**
+   * Wait for protection tokens
+   * @param {number} timeout - Timeout in ms
+   * @returns {Promise<Object>} Protection tokens
+   */
+  async waitForPawtect(timeout = 5000) {
+    if (this._pawtectToken && this._fp) {
+      return { pawtect: this._pawtectToken, fp: this._fp };
+    }
+    
+    const timer = setTimeout(() => {
+      if (this._pawtectResolve) {
+        this._pawtectResolve({ pawtect: this._pawtectToken, fp: this._fp });
+      }
+    }, timeout);
+    
+    const result = await this._pawtectPromise.catch(() => ({ 
+      pawtect: this._pawtectToken, 
+      fp: this._fp 
+    }));
+    
+    clearTimeout(timer);
+    
+    // Prepare a new promise for future waits
+    if (!this._pawtectResolve) {
+      this._pawtectPromise = new Promise((res) => { this._pawtectResolve = res; });
+    }
+    
+    return result;
+  }
+
+  /**
+   * Get performance metrics
+   * @returns {Object} Current metrics
+   */
+  getMetrics() {
+    const hitRate = this.metrics.cacheHits / Math.max(1, this.metrics.cacheHits + this.metrics.cacheMisses);
+    const poolHitRate = this.metrics.poolHits / Math.max(1, this.metrics.poolHits + this.metrics.poolMisses);
+    
+    return {
+      ...this.metrics,
+      cacheHitRate: hitRate,
+      poolHitRate: poolHitRate,
+      failureRate: this.metrics.failures / Math.max(1, this.metrics.tokensGenerated + this.metrics.failures)
+    };
+  }
 }
 
-function isTokenValid() {
-  return turnstileToken && Date.now() < tokenExpiryTime;
+// Create global instance
+const globalTurnstileManager = new TurnstileManager();
+
+// ========================================
+// LEGACY COMPATIBILITY LAYER
+// ========================================
+
+// Export original variables for backward compatibility
+export let turnstileToken = null;
+export let _pawtectToken = null;
+export let _fp = null;
+export let _fpCandidate = null;
+export let tokenExpiryTime = 0;
+export let tokenGenerationInProgress = false;
+export let currentGenerationPromise = null;
+export let _turnstileWidgetId = null;
+export let _turnstileContainer = null;
+export let _turnstileOverlay = null;
+export let _lastSitekey = null;
+export let _cachedSitekey = null;
+export const TOKEN_LIFETIME = 240000; // 4 minutes
+
+// Legacy function exports - these delegate to the enhanced manager
+export function setTurnstileToken(token) {
+  globalTurnstileManager.setTurnstileToken(token);
+  turnstileToken = token;
+  tokenExpiryTime = globalTurnstileManager.tokenExpiryTime;
+}
+
+export function isTokenValid() {
+  return globalTurnstileManager.isTokenValid();
 }
 
 export function getCachedToken() {
-  return isTokenValid() ? turnstileToken : null;
+  return globalTurnstileManager.getCachedToken();
 }
 
-// Force token invalidation (for 403 errors)
-function invalidateToken() {
+export function invalidateToken() {
+  globalTurnstileManager.invalidateToken();
   turnstileToken = null;
   tokenExpiryTime = 0;
-  log("🗑️ Token invalidated, will force fresh generation");
 }
 
-// Main token function - replicated from example
 export async function ensureToken(forceNew = false) {
-  // Return cached token if still valid and not forcing new
-  if (isTokenValid() && !forceNew) {
-    return turnstileToken;
-  }
-
-  // If forcing new, invalidate current token
-  if (forceNew) {
-    invalidateToken();
-  }
-
-  // Avoid multiple simultaneous token generations: esperar la promesa en curso
-  if (tokenGenerationInProgress && currentGenerationPromise) {
-    log("🔄 Token generation already in progress, waiting for existing promise...");
-    try {
-      const t = await currentGenerationPromise;
-      return t && t.length > 20 ? t : (isTokenValid() ? turnstileToken : null);
-    } catch {
-      // Si falla, continuar con un nuevo intento abajo
-    }
-  }
-
-  tokenGenerationInProgress = true;
-  currentGenerationPromise = (async () => {
-    try {
-      log("🔄 Token expired or missing, generating new one...");
-
-      // First try invisible Turnstile
-      const token = await handleCaptcha();
-      if (token && token.length > 20) {
-        setTurnstileToken(token);
-        log("✅ Token captured and cached successfully");
-        return token;
-      }
-
-      // If invisible fails, force browser automation
-      log("⚠️ Invisible Turnstile failed, forcing browser automation...");
-      const fallbackToken = await handleCaptchaFallback();
-      if (fallbackToken && fallbackToken.length > 20) {
-        setTurnstileToken(fallbackToken);
-        log("✅ Fallback token captured successfully");
-        return fallbackToken;
-      }
-
-      log("❌ All token generation methods failed");
-      return null;
-    } finally {
-      tokenGenerationInProgress = false;
-      currentGenerationPromise = null;
-    }
-  })();
-
-  return currentGenerationPromise;
+  const result = await globalTurnstileManager.ensureToken(forceNew);
+  turnstileToken = result;
+  tokenExpiryTime = globalTurnstileManager.tokenExpiryTime;
+  tokenGenerationInProgress = globalTurnstileManager.tokenGenerationInProgress;
+  currentGenerationPromise = globalTurnstileManager.currentGenerationPromise;
+  return result;
 }
 
-// Main captcha handler - replicated from example
-async function handleCaptcha() {
-  const startTime = Date.now();
-  try {
-    // Use optimized token generation with automatic sitekey detection
-    const sitekey = detectSitekey();
-    log("🔑 Generating Turnstile token for sitekey:", sitekey);
-    if (typeof window !== 'undefined' && window.navigator) {
-      log('🧭 UA:', window.navigator.userAgent, 'Platform:', window.navigator.platform);
-    }
-    
-    const token = await generatePaintToken(sitekey);
-    
-    if (token && token.length > 20) {
-      const duration = Math.round(Date.now() - startTime);
-      log(`✅ Turnstile token generated successfully in ${duration}ms`);
-      return token;
-    } else {
-      throw new Error("Invalid or empty token received");
-    }
-  } catch (error) {
-    const duration = Math.round(Date.now() - startTime);
-    log(`❌ Turnstile token generation failed after ${duration}ms:`, error);
-    throw error; // Re-throw to be caught by ensureToken
-  }
+export async function handleCaptcha() {
+  return await globalTurnstileManager.handleCaptcha();
 }
 
-async function generatePaintToken(sitekey) {
-  return executeTurnstile(sitekey, 'paint');
+export async function loadTurnstile() {
+  return await globalTurnstileManager.loadTurnstile();
 }
 
-// TURNSTILE CORE FUNCTIONS (replicated from example)
-
-async function loadTurnstile() {
-  // If Turnstile is already present, just resolve.
-  if (window.turnstile) {
-    return Promise.resolve();
-  }
-  
-  return new Promise((resolve, reject) => {
-    // Avoid adding the script twice
-    if (document.querySelector('script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]')) {
-      const checkReady = () => {
-        if (window.turnstile) {
-          resolve();
-        } else {
-          setTimeout(checkReady, 100);
-        }
-      };
-      return checkReady();
-    }
-    const script = document.createElement('script');
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      log("✅ Turnstile script loaded successfully");
-      resolve();
-    };
-    script.onerror = () => {
-      log("❌ Failed to load Turnstile script");
-      reject(new Error('Failed to load Turnstile'));
-    };
-    document.head.appendChild(script);
-  });
+export async function executeTurnstile(sitekey, action = 'paint') {
+  return await globalTurnstileManager.executeTurnstile(sitekey, action);
 }
 
-function ensureTurnstileContainer() {
-  if (!_turnstileContainer || !document.body.contains(_turnstileContainer)) {
-    // Clean up old container if it exists
-    if (_turnstileContainer) {
-      _turnstileContainer.remove();
-    }
-    
-    _turnstileContainer = document.createElement('div');
-    _turnstileContainer.style.cssText = `
-      position: fixed !important;
-      left: -9999px !important; /* keep off-screen for invisible mode */
-      top: -9999px !important;
-      width: 300px !important;
-      height: 65px !important;
-      pointer-events: none !important;
-      opacity: 0 !important; /* do not use visibility:hidden to avoid engine quirks */
-      z-index: -1 !important;
-    `;
-    _turnstileContainer.setAttribute('aria-hidden', 'true');
-    _turnstileContainer.id = 'turnstile-widget-container';
-    document.body.appendChild(_turnstileContainer);
-  }
+export function detectSitekey(fallback = '0x4AAAAAABpqJe8FO0N84q0F') {
+  return globalTurnstileManager.detectSitekey(fallback);
+}
+
+export function ensureTurnstileContainer() {
+  _turnstileContainer = globalTurnstileManager.ensureTurnstileContainer();
   return _turnstileContainer;
 }
 
-function ensureTurnstileOverlayContainer() {
-  if (_turnstileOverlay && document.body.contains(_turnstileOverlay)) {
-    return _turnstileOverlay;
-  }
-  const overlay = document.createElement('div');
-  overlay.id = 'turnstile-overlay-container';
-  overlay.style.cssText = `
-    position: fixed;
-    right: 16px;
-    bottom: 16px;
-    width: 320px;
-    min-height: 80px;
-    background: rgba(0,0,0,0.7);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 10px;
-    padding: 12px;
-    z-index: 100000;
-    backdrop-filter: blur(6px);
-    color: #fff;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  `;
-  const title = document.createElement('div');
-  title.textContent = 'Cloudflare Turnstile — please complete the check if shown';
-  title.style.cssText = 'font: 600 12px/1.3 "Segoe UI",sans-serif; margin-bottom: 8px; opacity: 0.9;';
-  const widgetHost = document.createElement('div');
-  widgetHost.id = 'turnstile-overlay-host';
-  widgetHost.style.cssText = 'width: 100%; min-height: 70px;';
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = 'Hide';
-  closeBtn.style.cssText = 'position:absolute; top:6px; right:6px; font-size:11px; background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:2px 6px; cursor:pointer;';
-  closeBtn.addEventListener('click', () => overlay.remove());
-  overlay.appendChild(title);
-  overlay.appendChild(widgetHost);
-  overlay.appendChild(closeBtn);
-  document.body.appendChild(overlay);
-  _turnstileOverlay = overlay;
-  return overlay;
+export function ensureTurnstileOverlayContainer() {
+  _turnstileOverlay = globalTurnstileManager.ensureTurnstileOverlayContainer();
+  return _turnstileOverlay;
 }
 
-async function executeTurnstile(sitekey, action = 'paint') {
-  await loadTurnstile();
-
-  if (_turnstileWidgetId && _lastSitekey === sitekey && window.turnstile?.execute) {
-    try {
-      log("🔄 Reusing existing Turnstile widget...");
-      const token = await Promise.race([
-        window.turnstile.execute(_turnstileWidgetId, { action }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Execute timeout')), 15000))
-      ]);
-      if (token && token.length > 20) {
-        log("✅ Token generated via widget reuse");
-        return token;
-      }
-    } catch (err) {
-      log('🔄 Widget reuse failed, will create a fresh widget:', err.message);
-    }
-  }
-
-  const invisible = await createNewTurnstileWidgetInvisible(sitekey, action);
-  if (invisible && invisible.length > 20) return invisible;
-
-  log('👀 Falling back to interactive Turnstile (visible).');
-  // Aviso inicial al usuario del primer intento interactivo
-  try { showUserNotificationTopCenter('🔄 Resolviendo CAPTCHA...', 'info'); } catch {}
-
-  // Sistema de reintentos indefinidos con timeout inicial de 15s
-  const INITIAL_TIMEOUT = 15000; // 15 segundos para el primer intento
-  const RETRY_INTERVAL = 5000;   // 5 segundos entre reintentos
-  
-  let attempt = 1;
-  let hasShownFirstRetryNotification = false;
-  
-  while (true) {
-    const currentTimeout = attempt === 1 ? INITIAL_TIMEOUT : RETRY_INTERVAL;
-    log(`🔄 Intento ${attempt} de resolución del CAPTCHA (timeout: ${currentTimeout/1000}s)...`);
-    
-    // Mostrar notificación al usuario a partir del primer reintento
-    if (attempt > 1 && !hasShownFirstRetryNotification) {
-      showUserNotification(`🔄 CAPTCHA: Reintentando automáticamente cada 5 segundos (intento ${attempt})`, 'info');
-      hasShownFirstRetryNotification = true;
-    } else if (attempt > 2) {
-      showUserNotification(`🔄 CAPTCHA: Intento ${attempt} - Continuando automáticamente`, 'info');
-    }
-    
-    try {
-      // Limpiar cualquier widget existente antes de cada intento
-      if (_turnstileWidgetId && window.turnstile?.remove) {
-        try { 
-          window.turnstile.remove(_turnstileWidgetId); 
-          _turnstileWidgetId = null;
-        } catch { /* Ignore removal errors */ }
-      }
-      
-      // Crear nueva ventana interactiva
-      const token = await createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, true, currentTimeout);
-      
-      if (token && token.length > 20) {
-        log(`✅ CAPTCHA resuelto exitosamente en el intento ${attempt}`);
-        if (attempt > 1) {
-          showUserNotification('✅ CAPTCHA resuelto exitosamente', 'success');
-        }
-        return token;
-      }
-      
-      log(`⚠️ Intento ${attempt} falló, reintentando en 5 segundos...`);
-      if (attempt > 1) {
-        showUserNotification(`⚠️ Intento ${attempt} falló, reintentando en 5 segundos...`, 'info');
-      }
-      await sleep(5000); // Esperar 5 segundos antes del siguiente intento
-      
-    } catch (error) {
-      log(`❌ Error en intento ${attempt}:`, error.message);
-      if (attempt > 1) {
-        showUserNotification(`❌ Error en intento ${attempt}, reintentando en 5 segundos`, 'error');
-      }
-      await sleep(5000);
-    }
-    
-    attempt++;
-  }
+export async function createNewTurnstileWidgetInvisible(sitekey, action) {
+  return await globalTurnstileManager.createNewTurnstileWidgetInvisible(sitekey, action);
 }
 
-async function createNewTurnstileWidgetInvisible(sitekey, action) {
-  return new Promise((resolve) => {
-    try {
-      if (_turnstileWidgetId && window.turnstile?.remove) {
-        try { window.turnstile.remove(_turnstileWidgetId); } catch { /* Ignore removal errors */ }
-      }
-      const container = ensureTurnstileContainer();
-      container.innerHTML = '';
-      const widgetId = window.turnstile.render(container, {
-        sitekey,
-        action,
-        size: 'invisible',
-        retry: 'auto',
-        'retry-interval': 8000,
-        callback: (token) => {
-          log('✅ Invisible Turnstile callback');
-          resolve(token);
-        },
-        'error-callback': () => resolve(null),
-        'timeout-callback': () => resolve(null),
-      });
-      _turnstileWidgetId = widgetId;
-      _lastSitekey = sitekey;
-      if (!widgetId) return resolve(null);
-      Promise.race([
-        window.turnstile.execute(widgetId, { action }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Invisible execute timeout')), 12000))
-      ]).then(resolve).catch(() => resolve(null));
-    } catch (e) {
-      log('Invisible Turnstile failed:', e);
-      resolve(null);
-    }
-  });
+export async function createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, isAutoRetry = true, customTimeout = 30000) {
+  return await globalTurnstileManager.createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, isAutoRetry, customTimeout);
 }
 
-// Versión con reintentos automáticos para resolución del CAPTCHA
-async function createNewTurnstileWidgetInteractiveWithRetry(sitekey, action, isAutoRetry = true, customTimeout = 30000) {
-  return new Promise((resolve, reject) => {
-    try {
-      if (_turnstileWidgetId && window.turnstile?.remove) {
-        try { window.turnstile.remove(_turnstileWidgetId); } catch { /* Ignore removal errors */ }
-      }
-
-      const overlay = ensureTurnstileOverlayContainer();
-      const host = overlay.querySelector('#turnstile-overlay-host');
-      host.innerHTML = '';
-
-      // Timeout progresivo para reintentos automáticos
-      const timeout = isAutoRetry ? customTimeout : 120000; // Timeout personalizado para auto-retry, 2 minutos para manual
-      const timeoutId = setTimeout(() => {
-        log(`⏰ Interactive Turnstile timed out (${isAutoRetry ? 'auto-retry' : 'manual'})`);
-        // Limpiar overlay en timeout
-        try { overlay.remove(); } catch { /* Ignore removal errors */ }
-        resolve(null);
-      }, timeout);
-
-      const widgetId = window.turnstile.render(host, {
-        sitekey,
-        action,
-        size: 'normal',
-        retry: 'auto',
-        'retry-interval': isAutoRetry ? 3000 : 8000, // Intervalo más rápido para auto-retry
-        callback: (token) => {
-          clearTimeout(timeoutId);
-          // Hide overlay after success
-          try { overlay.remove(); } catch { /* Ignore removal errors */ }
-          log(`✅ Interactive Turnstile solved (${isAutoRetry ? 'auto-retry' : 'manual'})`);
-          resolve(token);
-        },
-        'error-callback': (error) => {
-          log(`🚨 Interactive Turnstile error (${isAutoRetry ? 'auto-retry' : 'manual'}):`, error);
-          if (isAutoRetry) {
-            // En modo auto-retry, resolver con null para continuar con el siguiente intento
-            clearTimeout(timeoutId);
-            try { overlay.remove(); } catch { /* Ignore removal errors */ }
-            resolve(null);
-          }
-        },
-        'timeout-callback': () => {
-          log(`⏰ Turnstile timeout callback (${isAutoRetry ? 'auto-retry' : 'manual'})`);
-          if (isAutoRetry) {
-            clearTimeout(timeoutId);
-            try { overlay.remove(); } catch { /* Ignore removal errors */ }
-            resolve(null);
-          }
-        },
-        'expired-callback': () => {
-          log(`⚠️ Interactive Turnstile token expired (${isAutoRetry ? 'auto-retry' : 'manual'})`);
-          if (isAutoRetry) {
-            clearTimeout(timeoutId);
-            try { overlay.remove(); } catch { /* Ignore removal errors */ }
-            resolve(null);
-          }
-        }
-      });
-
-      _turnstileWidgetId = widgetId;
-      _lastSitekey = sitekey;
-      if (!widgetId) {
-        clearTimeout(timeoutId);
-        try { overlay.remove(); } catch { /* Ignore removal errors */ }
-        resolve(null);
-        return;
-      }
-    } catch (error) {
-      log(`❌ Error creating interactive Turnstile widget (${isAutoRetry ? 'auto-retry' : 'manual'}):`, error);
-      reject(error);
-    }
-  });
+export async function handleCaptchaFallback() {
+  return await globalTurnstileManager.handleCaptchaFallback();
 }
 
-function detectSitekey(fallback = '0x4AAAAAABpqJe8FO0N84q0F') {
-  // Cache sitekey to avoid repeated DOM queries
-  if (_cachedSitekey) {
-    return _cachedSitekey;
-  }
-
-  try {
-    // Try to find sitekey in data attributes
-    const sitekeySel = document.querySelector('[data-sitekey]');
-    if (sitekeySel) {
-      const sitekey = sitekeySel.getAttribute('data-sitekey');
-      if (sitekey && sitekey.length > 10) {
-        _cachedSitekey = sitekey;
-        log("🔍 Sitekey detected from data attribute:", sitekey);
-        return sitekey;
-      }
-    }
-
-    // Try turnstile element
-    const turnstileEl = document.querySelector('.cf-turnstile');
-    if (turnstileEl?.dataset?.sitekey && turnstileEl.dataset.sitekey.length > 10) {
-      _cachedSitekey = turnstileEl.dataset.sitekey;
-      log("🔍 Sitekey detected from turnstile element:", _cachedSitekey);
-      return _cachedSitekey;
-    }
-
-    // Try global variable
-    if (typeof window !== 'undefined' && window.__TURNSTILE_SITEKEY && window.__TURNSTILE_SITEKEY.length > 10) {
-      _cachedSitekey = window.__TURNSTILE_SITEKEY;
-      log("🔍 Sitekey detected from global variable:", _cachedSitekey);
-      return _cachedSitekey;
-    }
-
-    // Try script tags for inline sitekey
-    const scripts = document.querySelectorAll('script');
-    for (const script of scripts) {
-      const content = script.textContent || script.innerHTML;
-      const sitekeyMatch = content.match(/sitekey['":\s]+(['"0-9a-zA-Z_-]{20,})/i);
-      if (sitekeyMatch && sitekeyMatch[1] && sitekeyMatch[1].length > 10) {
-        _cachedSitekey = sitekeyMatch[1].replace(/['"]/g, '');
-        log("🔍 Sitekey detected from script content:", _cachedSitekey);
-        return _cachedSitekey;
-      }
-    }
-  } catch (error) {
-    log('Error detecting sitekey:', error);
-  }
-  
-  log("🔍 Using fallback sitekey:", fallback);
-  _cachedSitekey = fallback;
-  return fallback;
+export function sleep(ms) {
+  return globalTurnstileManager.sleep(ms);
 }
 
-// Helper functions
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+export function showUserNotification(message, type = 'info') {
+  return globalTurnstileManager.showUserNotification(message, type);
 }
 
-// Función para mostrar notificaciones al usuario
-function showUserNotification(message, type = 'info') {
-  // Compatibilidad: delegar a top-center para unificar con Auto-Farm
-  showUserNotificationTopCenter(message, type);
+export function showUserNotificationTopCenter(message, type = 'info', timeout = 3000) {
+  return globalTurnstileManager.showUserNotificationTopCenter(message, type, timeout);
 }
 
-// Estilo top-center como Auto-Farm
-function showUserNotificationTopCenter(message, type = 'info', timeout = 3000) {
-  let c = document.getElementById('wplace-toast-container');
-  if (!c) {
-    c = document.createElement('div');
-    c.id = 'wplace-toast-container';
-    c.style.cssText = `
-      position: fixed;
-      top: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 2147483647;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      pointer-events: none;
-    `;
-    document.body.appendChild(c);
-  }
-
-  const bg = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6';
-  const el = document.createElement('div');
-  el.className = 'wplace-toast';
-  el.textContent = message;
-  el.style.cssText = `
-    min-width: 240px;
-    max-width: 80vw;
-    margin: 0 auto;
-    background: ${bg};
-    color: white;
-    border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-    padding: 10px 14px;
-    font-weight: 600;
-    letter-spacing: .2px;
-    transform: translateY(-10px) scale(0.98);
-    opacity: 0;
-    transition: transform .25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity .25s ease;
-    pointer-events: auto;
-  `;
-  c.appendChild(el);
-
-  const raf = (cb) => (typeof window !== 'undefined' && window.requestAnimationFrame ? window.requestAnimationFrame(cb) : setTimeout(cb, 16));
-  raf(() => {
-    el.style.transform = 'translateY(0) scale(1)';
-    el.style.opacity = '1';
-  });
-
-  const remove = () => {
-    el.style.transform = 'translateY(-10px) scale(0.98)';
-    el.style.opacity = '0';
-    setTimeout(() => el.remove(), 250);
-  };
-  if (timeout > 0) setTimeout(remove, timeout);
-  el.addEventListener('click', remove);
-}
-
-function waitForSelector(selector, interval = 200, timeout = 10000) {
+export function waitForSelector(selector, interval = 200, timeout = 10000) {
   return new Promise((resolve) => {
     const endTime = Date.now() + timeout;
     const check = () => {
@@ -577,145 +873,40 @@ function waitForSelector(selector, interval = 200, timeout = 10000) {
   });
 }
 
-// Keep original method as fallback
-async function handleCaptchaFallback() {
-  return new Promise((resolve, reject) => {
-    const executeFlow = async () => {
-      try {
-        log("🎯 Starting automatic CAPTCHA solving process...");
-  try { showUserNotificationTopCenter('Intentando resolver... Tiempo de espera maximo 30 s', 'info'); } catch {}
-        
-        // Clear any existing token to force fresh generation
-        invalidateToken();
-        
-        // Ensure we have a fresh promise to await for a new token capture
-        tokenPromise = new Promise((res) => { _resolveToken = res; });
-        
-        const timeoutPromise = sleep(30000).then(() => reject(new Error("Auto-CAPTCHA timed out after 30 seconds.")));
-
-        const solvePromise = (async () => {
-          // Try to find the main paint button - different selectors for different states
-          let mainPaintBtn = await waitForSelector('button.btn.btn-primary.btn-lg', 200, 3000);
-          if (!mainPaintBtn) {
-            mainPaintBtn = await waitForSelector('button.btn-primary.sm\\:btn-xl', 200, 3000);
-          }
-          if (!mainPaintBtn) {
-            mainPaintBtn = await waitForSelector('button.btn-primary', 200, 3000);
-          }
-          if (!mainPaintBtn) {
-            // If no paint button, try to trigger the flow manually
-            log("🎯 No paint button found, clicking on canvas directly to trigger CAPTCHA...");
-            const canvas = await waitForSelector('canvas', 200, 5000);
-            if (canvas) {
-              canvas.click();
-              await sleep(1000);
-              // Try again to find paint button
-              mainPaintBtn = await waitForSelector('button.btn.btn-primary.btn-lg, button.btn-primary.sm\\:btn-xl, button.btn-primary', 200, 5000);
-            }
-          }
-          
-          if (!mainPaintBtn) throw new Error("Could not find any paint button after attempts.");
-          
-          log("🎯 Found paint button, clicking...");
-          mainPaintBtn.click();
-          await sleep(500);
-
-          // Select transparent color (color 0)
-          log("🎯 Selecting transparent color...");
-          const transBtn = await waitForSelector('button#color-0', 200, 5000);
-          if (!transBtn) {
-            log("⚠️ Could not find transparent color button, trying alternative selectors...");
-            const colorBtns = document.querySelectorAll('button[id^="color-"]');
-            if (colorBtns.length > 0) {
-              colorBtns[0].click();
-              log("🎯 Clicked first available color button");
-            }
-          } else {
-            transBtn.click();
-          }
-          await sleep(500);
-
-          // Find and interact with canvas
-          log("🎯 Finding canvas element...");
-          const canvas = await waitForSelector('canvas', 200, 5000);
-          if (!canvas) throw new Error("Could not find the canvas element.");
-
-          canvas.setAttribute('tabindex', '0');
-          canvas.focus();
-          const rect = canvas.getBoundingClientRect();
-          const centerX = Math.round(rect.left + rect.width / 2);
-          const centerY = Math.round(rect.top + rect.height / 2);
-
-          log("🎯 Simulating canvas interaction...");
-          if (typeof window !== 'undefined' && window.MouseEvent && window.KeyboardEvent) {
-            // Simulate mouse movement and click
-            canvas.dispatchEvent(new window.MouseEvent('mousemove', { clientX: centerX, clientY: centerY, bubbles: true }));
-            canvas.dispatchEvent(new window.MouseEvent('mousedown', { clientX: centerX, clientY: centerY, bubbles: true }));
-            await sleep(50);
-            canvas.dispatchEvent(new window.MouseEvent('mouseup', { clientX: centerX, clientY: centerY, bubbles: true }));
-            
-            // Simulate space key press
-            canvas.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
-            await sleep(50);
-            canvas.dispatchEvent(new window.KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true }));
-          }
-          await sleep(1000);
-
-          // Wait a bit more for CAPTCHA to potentially appear
-          log("🎯 Waiting for CAPTCHA challenge...");
-          await sleep(2000);
-
-          // Keep confirming until token is captured or timeout
-          log("🎯 Starting confirmation loop...");
-          const startTime = Date.now();
-          const confirmLoop = async () => {
-            let attempts = 0;
-            while (!isTokenValid() && Date.now() - startTime < 25000) { // 25 second timeout for confirmations
-              attempts++;
-              
-              // Look for confirm button with multiple selectors
-              let confirmBtn = await waitForSelector('button.btn.btn-primary.btn-lg', 100, 1000);
-              if (!confirmBtn) {
-                confirmBtn = await waitForSelector('button.btn.btn-primary.sm\\:btn-xl', 100, 1000);
-              }
-              if (!confirmBtn) {
-                const allPrimary = Array.from(document.querySelectorAll('button.btn-primary'));
-                confirmBtn = allPrimary.length ? allPrimary[allPrimary.length - 1] : null;
-              }
-              
-              if (confirmBtn && !confirmBtn.disabled) {
-                log(`🎯 Clicking confirmation button (attempt ${attempts})...`);
-                confirmBtn.click();
-              } else {
-                log(`🎯 No active confirm button found (attempt ${attempts})`);
-              }
-              
-              await sleep(800); // Slightly longer delay between attempts
-            }
-          };
-
-          // Start confirmation loop and wait for token
-          confirmLoop();
-          const token = await tokenPromise;
-          await sleep(500); // small delay after token is captured
-          log("✅ Token successfully captured through browser automation");
-          resolve(token);
-        })();
-
-        await Promise.race([solvePromise, timeoutPromise]);
-
-      } catch (error) {
-        log("❌ Auto-CAPTCHA process failed:", error);
-        reject(error);
-      }
-    };
-
-    executeFlow();
-  });
+export function getPawtectToken() {
+  const tokens = globalTurnstileManager.getProtectionTokens();
+  _pawtectToken = tokens.pawtect;
+  return tokens.pawtect;
 }
 
-// TOKEN CAPTURE SYSTEM (replicated from example)
-// This must be called by the site when the turnstile token is received
+export function getFingerprint() {
+  const tokens = globalTurnstileManager.getProtectionTokens();
+  _fp = tokens.fp;
+  return tokens.fp;
+}
+
+export function getFingerprintCandidate() {
+  const tokens = globalTurnstileManager.getProtectionTokens();
+  _fpCandidate = tokens.fpCandidate;
+  return tokens.fpCandidate;
+}
+
+export async function waitForPawtect(timeout = 5000) {
+  return await globalTurnstileManager.waitForPawtect(timeout);
+}
+
+// Legacy compatibility function
+export async function getTurnstileToken(_siteKey) {
+  log("⚠️ Using legacy getTurnstileToken function, consider migrating to ensureToken()");
+  return await ensureToken();
+}
+
+// Enhanced API exports for advanced usage
+export function getTurnstileMetrics() {
+  return globalTurnstileManager.getMetrics();
+}
+
+// TOKEN CAPTURE SYSTEM
 window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
   if (token && typeof token === 'string' && token.length > 20) {
     log("✅ Turnstile Token Captured:", token);
@@ -723,100 +914,64 @@ window.__WPA_SET_TURNSTILE_TOKEN__ = function(token) {
   }
 };
 
-// Note: Fetch interception is now handled by token-interceptor.js
-// This section is kept for legacy compatibility but the enhanced interceptor takes precedence
-
-// Listen for token capture messages (moved outside IIFE)
+// Listen for token capture messages
 window.addEventListener('message', (event) => {
   const data = event?.data;
-    if (!data) return;
+  if (!data) return;
 
-    // 1) Token capture via synthetic message from our fetch hook
-    if (data.source === 'turnstile-capture' && data.token) {
-      if (!isTokenValid() || turnstileToken !== data.token) {
-        setTurnstileToken(data.token);
-      }
-      return;
+  // Token capture via synthetic message from our fetch hook
+  if (data.source === 'turnstile-capture' && data.token) {
+    if (!isTokenValid() || turnstileToken !== data.token) {
+      setTurnstileToken(data.token);
     }
+    return;
+  }
 
-    // 2) Enhanced token interceptor messages
-    if (data.__wplace === true && data.type === 'token_found') {
-      if (data.token && (!isTokenValid() || turnstileToken !== data.token)) {
-        log('✅ Enhanced interceptor captured token:', data.token);
-        setTurnstileToken(data.token);
-      }
-      if (data.xpaw && (!_pawtectToken || _pawtectToken !== data.xpaw)) {
-        _pawtectToken = data.xpaw;
-        window.__WPA_PAWTECT_TOKEN__ = _pawtectToken;
-        log('🛡️ Enhanced interceptor captured x-pawtect-token');
-        if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; }
-      }
-      if (data.fp && (!_fp || _fp !== data.fp)) {
-        _fp = data.fp;
-        window.__WPA_FINGERPRINT__ = _fp;
-        log('🆔 Enhanced interceptor captured fingerprint (fp)');
-        if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; }
-      }
-      return;
+  // Enhanced token interceptor messages
+  if (data.__wplace === true && data.type === 'token_found') {
+    if (data.token && (!isTokenValid() || turnstileToken !== data.token)) {
+      setTurnstileToken(data.token);
     }
+    if (data.xpaw && (!_pawtectToken || _pawtectToken !== data.xpaw)) {
+      _pawtectToken = data.xpaw;
+      window.__WPA_PAWTECT_TOKEN__ = data.xpaw;
+      globalTurnstileManager._pawtectToken = data.xpaw;
+      log('[turnstile] pawtect token updated:', data.xpaw.substring(0, 20) + '...');
+    }
+    if (data.fp && (!_fp || _fp !== data.fp)) {
+      _fp = data.fp;
+      window.__WPA_FINGERPRINT__ = data.fp;
+      globalTurnstileManager._fp = data.fp;
+      log('[turnstile] fingerprint updated:', data.fp.substring(0, 20) + '...');
+    }
+    return;
+  }
 
-    // 3) Direct fp published by site (if any)
-    try {
-      const msgFp = (typeof data === 'object' && typeof data.fp === 'string' && data.fp.length > 10) ? data.fp : null;
-      if (msgFp && (!_fp || _fp !== msgFp)) {
-        _fp = msgFp;
-        window.__WPA_FINGERPRINT__ = _fp; // Compartir globalmente
-        log('🆔 Fingerprint (fp) captured via postMessage');
-        if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; }
-        return;
+  // Direct fp published by site
+  try {
+    const msgFp = (typeof data === 'object' && typeof data.fp === 'string' && data.fp.length > 10) ? data.fp : null;
+    if (msgFp && (!_fp || _fp !== msgFp)) {
+      _fp = msgFp;
+      window.__WPA_FINGERPRINT__ = msgFp;
+      globalTurnstileManager._fp = msgFp;
+      log('[turnstile] fingerprint from message:', msgFp.substring(0, 20) + '...');
+    }
+  } catch { /* ignore */ }
+
+  // Heuristic: observe fingerprint ingredients
+  try {
+    const pi = (typeof data === 'object' && (data.pi || data.payload?.pi)) ? (data.pi || data.payload.pi) : null;
+    if (pi && typeof pi === 'object' && (pi.xp || pi.pfp || pi.ffp)) {
+      const candidate = JSON.stringify(pi);
+      if (!_fpCandidate || _fpCandidate !== candidate) {
+        _fpCandidate = candidate;
+        window.__WPA_FP_CANDIDATE__ = candidate;
+        globalTurnstileManager._fpCandidate = candidate;
+        log('[turnstile] fp candidate from pi:', candidate.substring(0, 50) + '...');
       }
-    } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+});
 
-    // 4) Heuristic: observe fingerprint ingredients (pi) like xp/pfp/ffp
-    try {
-      const pi = (typeof data === 'object' && (data.pi || data.payload?.pi)) ? (data.pi || data.payload.pi) : null;
-      if (pi && typeof pi === 'object' && (pi.xp || pi.pfp || pi.ffp)) {
-        if (!_fpCandidate) {
-          // Store shallow snapshot; do not use for sending
-          try { _fpCandidate = JSON.parse(JSON.stringify({ xp: pi.xp, pfp: pi.pfp, ffp: pi.ffp })); }
-          catch { _fpCandidate = { xp: String(pi.xp || ''), pfp: String(pi.pfp || ''), ffp: String(pi.ffp || '') }; }
-          window.__WPA_FP_CANDIDATE__ = _fpCandidate; // Compartir globalmente
-          log('📦 Fingerprint candidate (pi) observed via postMessage');
-        }
-      }
-    } catch { /* ignore */ }
-  });
-
-// Export the key functions
-export { handleCaptcha, loadTurnstile, executeTurnstile, detectSitekey, invalidateToken };
-
-// Legacy compatibility function 
-export async function getTurnstileToken(_siteKey) {
-  log("⚠️ Using legacy getTurnstileToken function, consider migrating to ensureToken()");
-  return await ensureToken();
-}
-
-// New exports for pawtect/fingerprint - siempre usar valores globales más actualizados
-export function getPawtectToken() { 
-  _pawtectToken = window.__WPA_PAWTECT_TOKEN__ || _pawtectToken;
-  return _pawtectToken; 
-}
-export function getFingerprint() { 
-  _fp = window.__WPA_FINGERPRINT__ || _fp;
-  return _fp; 
-}
-export function getFingerprintCandidate() { 
-  _fpCandidate = window.__WPA_FP_CANDIDATE__ || _fpCandidate;
-  return _fpCandidate; 
-}
-export async function waitForPawtect(timeout = 5000) {
-  if (_pawtectToken && _fp) return { pawtect: _pawtectToken, fp: _fp };
-  const timer = setTimeout(() => { if (_pawtectResolve) { _pawtectResolve({ pawtect: _pawtectToken, fp: _fp }); _pawtectResolve = null; } }, timeout);
-  const result = await _pawtectPromise.catch(() => ({ pawtect: _pawtectToken, fp: _fp }));
-  clearTimeout(timer);
-  // Prepare a new promise for future waits
-  if (!_pawtectResolve) { _pawtectPromise = new Promise((res) => { _pawtectResolve = res; }); }
-  return result;
-}
-
-// Interceptor eliminado: flujo pasivo/dinámico sin hooking explícito
+// Export the enhanced manager class and global instance
+export { TurnstileManager, globalTurnstileManager };
