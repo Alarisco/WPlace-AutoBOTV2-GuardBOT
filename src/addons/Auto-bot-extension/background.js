@@ -1,3 +1,4 @@
+/* global chrome */
 // background.js to handle script execution
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'executeScript') {

@@ -1,5 +1,4 @@
 // Gestor global de ventanas para traer al frente y manejar modales
-/* global MutationObserver, Node */
 let currentMaxZIndex = 100000;
 const windowElements = new Set();
 let modalObserversSetup = false;

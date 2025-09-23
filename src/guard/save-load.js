@@ -86,7 +86,7 @@ function compressPixelData(originalPixels, area) {
   if (!originalPixels || originalPixels.size === 0) return null;
   
   const compressed = [];
-  for (const [key, pixel] of originalPixels) {
+  for (const [_key, pixel] of originalPixels) {
     // Solo guardar datos esenciales: coordenadas y color
     compressed.push({
       x: pixel.globalX,
@@ -109,7 +109,7 @@ function createPaintedMapForCompression(originalPixels, area) {
   const paintedMap = Array(height).fill().map(() => Array(width).fill(false));
   
   // Marcar píxeles que han sido procesados/pintados
-  for (const [key, pixel] of originalPixels) {
+  for (const [_key, pixel] of originalPixels) {
     const localX = pixel.globalX - area.x1;
     const localY = pixel.globalY - area.y1;
     

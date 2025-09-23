@@ -1,9 +1,10 @@
+/* global chrome */
 // Verificar si estamos en wplace.live
 if (window.location.hostname === 'wplace.live') {
 
     // Variables de control del injector
-    let injectorReady = false;
-    let pendingExecution = null;
+    let _injectorReady = false;
+    let _pendingExecution = null;
     let autoBotButton = null;
     let buttonRemoved = false;
     let buttonHiddenByModal = false;

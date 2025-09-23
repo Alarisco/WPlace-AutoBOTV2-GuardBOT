@@ -1,3 +1,4 @@
+/* global browser, chrome */
 // background.js para Firefox - adaptado desde Chrome
 // Firefox usa browser.* APIs en lugar de chrome.*
 

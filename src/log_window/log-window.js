@@ -1,7 +1,6 @@
 import { log } from '../core/logger.js';
 import { registerWindow, unregisterWindow, bringWindowToFront } from '../core/window-manager.js';
 
-/* global Blob, URL */
 
 /**
  * Ventana de logs unificada para todos los bots
