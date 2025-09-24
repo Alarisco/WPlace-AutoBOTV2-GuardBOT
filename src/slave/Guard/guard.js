@@ -87,24 +87,64 @@ export async function handleGuardData(message, { setModeIfNeeded, sendPreview, s
     if (!message.guardData) return;
     const { guardState } = await import('../../guard/config.js');
     const data = message.guardData;
+    
+    // Detectar si los datos fueron procesados por el masterserver
+    const isProcessed = data.processed === true;
+    const originalFormat = data.originalFormat || 'unknown';
+    
+    if (isProcessed) {
+      log(`🛡️ Recibiendo guardData procesado (formato original: ${originalFormat})`);
+    }
+    
     const area = data.protectionData?.area || data.protectionArea || data.area;
     if (!area) { log('❌ guardData sin área de protección'); return; }
+    
     guardState.protectionArea = {
       x1: area.x1 ?? area.x ?? area.left ?? 0,
       y1: area.y1 ?? area.y ?? area.top ?? 0,
       x2: area.x2 ?? (area.x1 ?? area.x ?? 0) + (area.width ?? 0),
       y2: area.y2 ?? (area.y1 ?? area.y ?? 0) + (area.height ?? 0)
     };
+    
     const originalPixelsArr = data.originalPixels || data.protectionData?.originalPixels || [];
     guardState.originalPixels = new Map();
+    
     for (const p of originalPixelsArr) {
       const key = p.key || `${p.globalX ?? p.x},${p.globalY ?? p.y}`;
-      // Precalcular LAB para comparación futura si se activa 'lab'
-      const entry = { r: p.r, g: p.g, b: p.b, colorId: p.colorId || p.id || 0 };
-      entry.lab = rgbToLabArray(p.r, p.g, p.b);
+      
+      // Manejar píxeles transparentes correctamente (r, g, b pueden ser null)
+      let r = p.r, g = p.g, b = p.b;
+      const colorId = p.colorId || p.id || 0;
+      
+      // Si es transparente (colorId = 0) y tiene valores RGB null, mantenerlos como null
+      if (colorId === 0 && (r === null || g === null || b === null)) {
+        r = null;
+        g = null; 
+        b = null;
+      } else if (r === null || g === null || b === null) {
+        // Si no es transparente pero tiene valores null, usar 0 por defecto
+        r = r ?? 0;
+        g = g ?? 0;
+        b = b ?? 0;
+      }
+      
+      // Precalcular LAB para comparación futura si se activa 'lab' (solo si RGB no es null)
+      const entry = { r, g, b, colorId };
+      if (r !== null && g !== null && b !== null) {
+        entry.lab = rgbToLabArray(r, g, b);
+      } else {
+        entry.lab = null; // No calcular LAB para píxeles transparentes
+      }
+      
       guardState.originalPixels.set(key, entry);
     }
+    
     log(`🛡️ GuardData recibido (modular): area=(${guardState.protectionArea.x1},${guardState.protectionArea.y1})→(${guardState.protectionArea.x2},${guardState.protectionArea.y2}) px=${guardState.originalPixels.size}`);
+    
+    if (isProcessed) {
+      log(`📦 Datos procesados desde formato ${originalFormat} - ${guardState.originalPixels.size} píxeles expandidos`);
+    }
+    
     guardState.changes = new Set();
     guardState.lastCheck = Date.now();
     if (setModeIfNeeded) await setModeIfNeeded();
