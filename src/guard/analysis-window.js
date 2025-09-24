@@ -522,10 +522,10 @@ function comparePixels(originalPixels, currentPixels) {
       // Píxel faltante
       missing.set(key, originalPixel);
     } else if (compareColors(originalPixel, currentPixel)) {
-      // Píxel correcto
+      // Píxel correcto (colores dentro del umbral)
       correct.set(key, { original: originalPixel, current: currentPixel });
     } else {
-      // Píxel incorrecto
+      // Píxel incorrecto (colores fuera del umbral)
       incorrect.set(key, { original: originalPixel, current: currentPixel });
     }
   }
@@ -896,7 +896,6 @@ function startSessionRecording(analysis) {
     updateToggleState('autoRefresh', true);
     
     // Disparar el evento change para activar el autorefresh
-    // eslint-disable-next-line no-undef
     autoRefreshCheckbox.dispatchEvent(new Event('change'));
   }
   
@@ -963,12 +962,10 @@ function downloadSessionData() {
     }
   };
   
-  // eslint-disable-next-line no-undef
   const blob = new Blob([JSON.stringify(sessionSummary, null, 2)], {
     type: 'application/json'
   });
   
-  // eslint-disable-next-line no-undef
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -976,7 +973,6 @@ function downloadSessionData() {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // eslint-disable-next-line no-undef
   URL.revokeObjectURL(url);
   
   console.log('💾 Datos de sesión descargados');
@@ -1003,7 +999,6 @@ function captureSnapshot(canvas, controlPanel) {
     // Convertir a blob y descargar
     tempCanvas.toBlob((blob) => {
       const link = document.createElement('a');
-      // eslint-disable-next-line no-undef
       link.href = URL.createObjectURL(blob);
 
       // Crear nombre de archivo con timestamp y precisión

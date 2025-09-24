@@ -1,3 +1,4 @@
+/* global browser, chrome */
 // content.js para Firefox - adaptado desde Chrome
 // Firefox usa browser.* APIs en lugar de chrome.*
 
@@ -13,8 +14,8 @@ const runtime = typeof browser !== "undefined" ? browser.runtime : chrome.runtim
 if (window.location.hostname === 'wplace.live') {
 
     // Variables de control del injector
-    let injectorReady = false;
-    let pendingExecution = null;
+    let _injectorReady = false;
+    let _pendingExecution = null;
     let autoBotButton = null;
     let buttonRemoved = false;
     let buttonHiddenByModal = false;

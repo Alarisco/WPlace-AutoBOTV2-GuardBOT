@@ -114,7 +114,7 @@ export default function _createConfigWindow() {
       </div>
 
       <div style="background:#2d3748;padding:12px;border-radius:8px;border:1px solid #4a5568;">
-        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;"�🛡️ Patrones de Protección</h3>
+        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;"🛡️ Patrones de Protección</h3>
         <select id="protectionPatternSelect" style="width:100%;padding:8px;background:#374151;border:1px solid #6b7280;color:#e5e7eb;border-radius:6px;font-family:'Segoe UI Emoji',Arial,sans-serif;">
           <option value="random">🎲 Aleatorio</option>
           <option value="lineUp">⬆️ Lineal (Arriba)</option>
@@ -188,6 +188,23 @@ export default function _createConfigWindow() {
               <input type="number" id="randomWaitMaxInput" min="1" max="30" step="0.1" style="width:100%;padding:8px;background:#374151;border:1px solid #6b7280;color:#e5e7eb;border-radius:6px;">
             </div>
           </div>
+        </div>
+      </div>
+
+      <div style="background:#2d3748;padding:12px;border-radius:8px;border:1px solid #4a5568;">
+        <h3 style="margin:0 0 8px 0;font-size:14px;color:#e2e8f0;">🫥 Protección de Transparencias</h3>
+        <div style="margin-bottom:12px;">
+          ${createToggle('protectTransparentPixelsCheckbox', 'Proteger píxeles transparentes', true)}
+        </div>
+        <div style="margin-bottom:8px;">
+          ${createToggle('protectPerimeterCheckbox', 'Proteger perímetro', false)}
+        </div>
+        <div id="perimeterContainer" style="max-height:0;overflow:hidden;transition:max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);opacity:0;">
+          <label style="display:block;margin-bottom:6px;color:#e5e7eb;font-size:13px;">Ancho del perímetro (píxeles):</label>
+          <input type="number" id="perimeterWidthInput" min="1" max="10" style="width:100%;padding:8px;background:#374151;border:1px solid #6b7280;color:#e5e7eb;border-radius:6px;">
+          <small style="color:#9ca3af;font-size:12px;display:block;margin-top:4px;">
+            Crea una zona buffer transparente alrededor del área protegida
+          </small>
         </div>
       </div>
     </div>`;
@@ -438,6 +455,40 @@ function setupEventListeners(overlay){
     });
   }
 
+  // Nuevos controles de transparencia
+  const protectTransparentPixelsCheckbox = overlay.querySelector('#protectTransparentPixelsCheckbox');
+  const protectPerimeterCheckbox = overlay.querySelector('#protectPerimeterCheckbox');
+  const perimeterWidthInput = overlay.querySelector('#perimeterWidthInput');
+
+  if (protectTransparentPixelsCheckbox) {
+    protectTransparentPixelsCheckbox.addEventListener('change', (e)=>{ 
+      const checked = e.target.checked;
+      updateToggleState('protectTransparentPixelsCheckbox', checked);
+      guardState.protectTransparentPixels = !!checked; 
+      persistConfiguration(); 
+    });
+  }
+
+  if (protectPerimeterCheckbox) {
+    protectPerimeterCheckbox.addEventListener('change', (e)=>{ 
+      const checked = e.target.checked;
+      updateToggleState('protectPerimeterCheckbox', checked);
+      toggleContainerVisibility('perimeterContainer', checked);
+      guardState.protectPerimeter = !!checked; 
+      persistConfiguration(); 
+    });
+  }
+
+  if (perimeterWidthInput) {
+    perimeterWidthInput.addEventListener('change', ()=>{ 
+      const value = parseInt(perimeterWidthInput.value);
+      if (value >= 1 && value <= 10) {
+        guardState.perimeterWidth = value; 
+        persistConfiguration(); 
+      }
+    });
+  }
+
   const resetBtnEl = overlay.querySelector('#guardResetBtn');
   if (resetBtnEl) {
     resetBtnEl.addEventListener('click', ()=> resetConfiguration(overlay));
@@ -636,6 +687,26 @@ function loadConfiguration(overlay){
   randomWaitContainer.style.display = guardState.randomWaitTime ? 'block' : 'none';
   minInput.value = guardState.randomWaitMin;
   maxInput.value = guardState.randomWaitMax;
+
+  // Cargar configuración de transparencia
+  const protectTransparentPixelsCheckbox = overlay.querySelector('#protectTransparentPixelsCheckbox');
+  const protectPerimeterCheckbox = overlay.querySelector('#protectPerimeterCheckbox');
+  const perimeterWidthInput = overlay.querySelector('#perimeterWidthInput');
+
+  if (protectTransparentPixelsCheckbox) {
+    protectTransparentPixelsCheckbox.checked = guardState.protectTransparentPixels;
+    updateToggleState('protectTransparentPixelsCheckbox', guardState.protectTransparentPixels);
+  }
+
+  if (protectPerimeterCheckbox) {
+    protectPerimeterCheckbox.checked = guardState.protectPerimeter;
+    updateToggleState('protectPerimeterCheckbox', guardState.protectPerimeter);
+    toggleContainerVisibility('perimeterContainer', guardState.protectPerimeter);
+  }
+
+  if (perimeterWidthInput) {
+    perimeterWidthInput.value = guardState.perimeterWidth;
+  }
 }
 
 function persistConfiguration(){
@@ -653,7 +724,11 @@ function persistConfiguration(){
       pixelsPerBatch: guardState.pixelsPerBatch,
       randomWaitTime: guardState.randomWaitTime,
       randomWaitMin: guardState.randomWaitMin,
-      randomWaitMax: guardState.randomWaitMax
+      randomWaitMax: guardState.randomWaitMax,
+      // Nuevas opciones de transparencia
+      protectTransparentPixels: guardState.protectTransparentPixels,
+      protectPerimeter: guardState.protectPerimeter,
+      perimeterWidth: guardState.perimeterWidth
     };
     localStorage.setItem('wplace-guard-config', JSON.stringify(toSave));
     log('💾 Configuración actualizada');
@@ -677,6 +752,10 @@ function resetConfiguration(overlay){
   guardState.randomWaitTime = false;
   guardState.randomWaitMin = 1.0;
   guardState.randomWaitMax = 5.0;
+  // Resetear opciones de transparencia
+  guardState.protectTransparentPixels = true;
+  guardState.protectPerimeter = false;
+  guardState.perimeterWidth = 1;
   loadConfiguration(overlay);
   persistConfiguration();
   log('🔄 Configuración restablecida');

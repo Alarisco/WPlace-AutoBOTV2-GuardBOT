@@ -1,3 +1,4 @@
+/* global chrome */
 document.addEventListener('DOMContentLoaded', function() {
     const executeBtn = document.getElementById('executeBtn');
     const status = document.getElementById('status');

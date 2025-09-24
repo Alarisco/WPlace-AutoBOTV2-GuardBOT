@@ -65,6 +65,11 @@ export const guardState = {
   randomWaitMax: 15, // segundos
   watchMode: false, // Modo vigía: solo observa, no repara
   
+  // Nuevas opciones de transparencia
+  protectTransparentPixels: true, // Proteger píxeles que deben ser transparentes
+  protectPerimeter: false, // Crear perímetro transparente alrededor
+  perimeterWidth: 1, // Ancho del perímetro en píxeles (1-10)
+  
   config: {
     colorComparisonMethod: 'lab', // 'rgb' o 'lab' - LAB por defecto para reposicionamiento
     colorThreshold: 10 // Umbral de diferencia de color

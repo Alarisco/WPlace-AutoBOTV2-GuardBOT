@@ -293,7 +293,7 @@ export function createGuardUI(texts) {
         if (guardState.operationMode === 'erase') {
           elements.startBtn.innerHTML = '🗑️ Iniciar Borrado';
         } else {
-          elements.startBtn.innerHTML = '▶️ Iniciar Protección';
+          elements.startBtn.innerHTML = '▶️ Iniciar';
         }
       }
     },
