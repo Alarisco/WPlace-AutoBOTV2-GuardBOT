@@ -285,6 +285,19 @@ export function calculateDeltaE(lab1, lab2) {
 
 // Función para comparar colores usando diferentes métodos
 function compareColors(color1, color2, method = 'rgb', threshold = 10) {
+  // Manejar casos especiales con píxeles transparentes
+  if (color1.colorId === 0 || color2.colorId === 0) {
+    // Si uno es transparente y el otro no, son diferentes
+    return color1.colorId !== color2.colorId;
+  }
+  
+  // Verificar que ambos colores tengan valores RGB válidos
+  if (color1.r === null || color1.g === null || color1.b === null ||
+      color2.r === null || color2.g === null || color2.b === null) {
+    // Si alguno tiene valores RGB null, comparar solo por colorId
+    return color1.colorId !== color2.colorId;
+  }
+  
   if (method === 'lab') {
     const lab1 = rgbToLab(color1.r, color1.g, color1.b);
     const lab2 = rgbToLab(color2.r, color2.g, color2.b);
@@ -330,11 +343,12 @@ export function detectAvailableColors() {
   const colors = [];
 
   // Siempre incluir el color transparente (ID 0) para consistencia con JSON cargados
+  // IMPORTANTE: No usar RGB (0,0,0) para transparente ya que se confunde con negro
   colors.push({
     id: 0,
-    r: 0,
-    g: 0,
-    b: 0,
+    r: null,
+    g: null,
+    b: null,
     element: null // No tiene elemento DOM
   });
 
@@ -369,11 +383,16 @@ export function findClosestColor(r, g, b, availableColors) {
   // para alinearse con el algoritmo del módulo de imagen y evitar falsos positivos
   if (!availableColors || availableColors.length === 0) return null;
 
+  // Filtrar el color transparente (ID 0) ya que no tiene valores RGB válidos
+  const validColors = availableColors.filter(color => color.id !== 0 && color.r !== null);
+  
+  if (validColors.length === 0) return null;
+
   const targetLab = rgbToLab(r, g, b);
   let minDeltaE = Infinity;
   let closestColor = null;
 
-  for (const color of availableColors) {
+  for (const color of validColors) {
     const lab = rgbToLab(color.r, color.g, color.b);
     const deltaE = calculateDeltaE(targetLab, lab);
     if (deltaE < minDeltaE) {
@@ -493,7 +512,7 @@ export async function analyzeAreaPixels(area, options = {}) {
                 } else {
                   // Píxel transparente (a = 0) - guardarlo como color ID 0
                   pixelMap.set(`${globalX},${globalY}`, {
-                    r: 0, g: 0, b: 0, // RGB para transparente
+                    r: null, g: null, b: null, // RGB null para transparente
                     colorId: 0, // ID 0 = transparente
                     globalX,
                     globalY,
