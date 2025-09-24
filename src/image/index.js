@@ -97,24 +97,24 @@ export async function runImage() {
 
     // Función para auto-inicio del bot
     async function tryAutoInit() {
-      log('🤖 Intentando auto-inicio...');
+      log(t('image.attemptingAutoStart'));
       
       // Verificar si la paleta ya está abierta
       if (isPaletteOpen()) {
-        log('🎨 Paleta de colores ya está abierta');
+        log(t('image.paletteAlreadyOpen'));
         return true;
       }
       
-      log('🔍 Paleta no encontrada, iniciando auto-click del botón Paint...');
+      log(t('image.paletteNotFound'));
       
       // Usar la nueva función de auto-click que hace doble clic automáticamente
       const success = await autoClickPaintButton(3, true);
       
       if (success) {
-        log('✅ Auto-click exitoso, paleta abierta');
+        log(t('image.autoClickSuccess'));
         return true;
       } else {
-        log('❌ Auto-click falló, requerirá inicio manual');
+        log(t('image.autoClickFailed'));
         return false;
       }
     }
@@ -426,7 +426,7 @@ export async function runImage() {
                         setTimeout(async () => {
                           try {
                             log('🛡️ Mostrando diálogo de Auto-Guard...');
-                            const userWantsGuard = await showGuardDialog(imageState);
+                            const userWantsGuard = await showGuardDialog(imageState, texts);
                             if (userWantsGuard) {
                               log('✅ Usuario aceptó generar JSON para Auto-Guard');
                               // Generar datos compatibles con Auto-Guard

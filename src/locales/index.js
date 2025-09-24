@@ -29,7 +29,7 @@ const translations = {
 };
 
 // Estado del idioma actual
-let currentLanguage = 'en';
+let currentLanguage = 'es';
 let currentTranslations = translations[currentLanguage];
 
 /**
@@ -37,7 +37,7 @@ let currentTranslations = translations[currentLanguage];
  * @returns {string} Código del idioma detectado
  */
 export function detectBrowserLanguage() {
-  const browserLang = window.navigator.language || window.navigator.userLanguage || 'en';
+  const browserLang = window.navigator.language || window.navigator.userLanguage || 'es';
 
   // Extraer solo el código del idioma (ej: 'es-ES' -> 'es')
   const langCode = browserLang.split('-')[0].toLowerCase();
@@ -47,8 +47,8 @@ export function detectBrowserLanguage() {
     return langCode;
   }
 
-  // Fallback a inglés por defecto
-  return 'en';
+  // Fallback a español por defecto
+  return 'es';
 }
 
 /**
@@ -70,17 +70,47 @@ export function saveLanguage(langCode) {
 }
 
 /**
+ * Obtiene el idioma global del sistema de bots
+ * @returns {string|null} Idioma global establecido o null
+ */
+function getGlobalLanguage() {
+  try {
+    return window.__wplaceBot?.globalLanguage || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Establece el idioma global del sistema de bots
+ * @param {string} langCode - Código del idioma
+ */
+function setGlobalLanguage(langCode) {
+  try {
+    if (!window.__wplaceBot) {
+      window.__wplaceBot = {};
+    }
+    window.__wplaceBot.globalLanguage = langCode;
+  } catch {
+    // Silenciar errores
+  }
+}
+
+/**
  * Inicializa el sistema de idiomas
  * @returns {string} Código del idioma inicializado
  */
 export function initializeLanguage() {
-  // Prioridad: guardado > navegador > español
+  // Prioridad: global > guardado > navegador > español
+  const globalLang = getGlobalLanguage();
   const savedLang = getSavedLanguage();
   const browserLang = detectBrowserLanguage();
 
-  let selectedLang = 'en'; // fallback por defecto
+  let selectedLang = 'es'; // fallback por defecto a español
 
-  if (savedLang && translations[savedLang]) {
+  if (globalLang && translations[globalLang]) {
+    selectedLang = globalLang;
+  } else if (savedLang && translations[savedLang]) {
     selectedLang = savedLang;
   } else if (browserLang && translations[browserLang]) {
     selectedLang = browserLang;
@@ -103,6 +133,7 @@ export function setLanguage(langCode) {
   currentLanguage = langCode;
   currentTranslations = translations[langCode];
   saveLanguage(langCode);
+  setGlobalLanguage(langCode); // Actualizar idioma global
 
   // Emitir evento personalizado para que los módulos puedan reaccionar
   if (typeof window !== 'undefined' && window.CustomEvent) {

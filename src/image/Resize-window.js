@@ -6,7 +6,7 @@ import { registerWindow, unregisterWindow, bringWindowToFront } from '../core/wi
 /**
  * Crea y gestiona el diálogo de redimensionamiento de imagen
  */
-export function createResizeWindow() {
+export function createResizeWindow(texts = {}) {
   let resizeElements = null;
 
   // Crear elementos del diálogo de redimensionamiento
@@ -39,7 +39,7 @@ export function createResizeWindow() {
     resizeWindow.innerHTML = `
       <div style="padding: 12px 15px; background: #2d3748; color: #60a5fa; font-size: 16px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; cursor: move; flex-shrink: 0;" class="resize-header">
         <div style="display: flex; align-items: center; gap: 8px;">
-          🔧 <span>Redimensionar Imagen</span>
+          🔧 <span>${texts.resizeTitle}</span>
         </div>
         <div style="display: flex; gap: 5px;">
           <button id="minimizeResizeBtn" style="background: none; border: none; color: #eee; cursor: pointer; opacity: 0.7; padding: 5px; transition: opacity 0.2s ease;">➖</button>
@@ -57,27 +57,27 @@ export function createResizeWindow() {
           <div style="display: flex; align-items: center; gap: 10px;">
             <label style="color: #ffffff; font-size: 14px; display: flex; align-items: center; gap: 8px; margin: 0;">
               <input type="checkbox" class="toggle-original">
-              Original
+              ${texts.resizeOriginal}
             </label>
             <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
-              <label style="color: #ffffff; font-size: 14px; white-space: nowrap;">Tolerancia LAB</label>
+              <label style="color: #ffffff; font-size: 14px; white-space: nowrap;">${texts.resizeToleranceLab}</label>
               <input type="range" class="lab-tolerance" min="0" max="100" step="1" value="100">
               <span class="lab-tolerance-value" style="color:#aaa; font-size:12px;">100</span>
             </div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 5px;">
-            <label style="color: #ffffff; font-size: 14px;">Ancho: <span class="width-value"></span>px</label>
+            <label style="color: #ffffff; font-size: 14px;">${texts.resizeWidth}: <span class="width-value"></span>px</label>
             <input type="range" class="resize-slider width-slider" min="50" max="2000" step="1" style="width: 100%;">
           </div>
           
           <div style="display: flex; flex-direction: column; gap: 5px;">
-            <label style="color: #ffffff; font-size: 14px;">Alto: <span class="height-value"></span>px</label>
+            <label style="color: #ffffff; font-size: 14px;">${texts.resizeHeight}: <span class="height-value"></span>px</label>
             <input type="range" class="resize-slider height-slider" min="50" max="2000" step="1" style="width: 100%;">
           </div>
           
           <label style="color: #ffffff; font-size: 14px; display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" class="maintain-aspect" checked>
-            Mantener proporción
+            ${texts.resizeKeepAspect}
           </label>
         </div>
         
@@ -107,8 +107,8 @@ export function createResizeWindow() {
         </div>
         
         <div class="resize-buttons" style="display: flex; gap: 10px; margin-top: 20px;">
-          <button class="btn btn-primary confirm-resize" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">✅ Aplicar</button>
-          <button class="btn btn-secondary cancel-resize" style="flex: 1; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">❌ Cancelar</button>
+          <button class="btn btn-primary confirm-resize" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">✅ ${texts.resizeApply}</button>
+          <button class="btn btn-secondary cancel-resize" style="flex: 1; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">❌ ${texts.resizeCancel}</button>
         </div>
       </div>
       

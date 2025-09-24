@@ -48,7 +48,7 @@ export function createFarmUI(config, onStart, onStop) {
   const panel = document.createElement('div');
   panel.className = 'panel';
   panel.innerHTML = `
-    <div class="header"><span>🧑‍🌾 WPlace Farm</span><button id="minBtn" class="min-btn" title="${t('image.minimize','Minimizar')}">–</button></div>
+    <div class="header"><span>${t('farm.title','🧑‍🌾 WPlace Farm')}</span><button id="minBtn" class="min-btn" title="${t('image.minimize','Minimizar')}">–</button></div>
     <div class="body">
       <div class="row">
         <button class="btn primary" id="startBtn">${t('farm.start','Iniciar')}</button>
@@ -103,7 +103,7 @@ export function createFarmUI(config, onStart, onStop) {
       <div class="row">
   <button class="btn ghost" id="capture-btn">${t('farm.capture','Capturar zona')}</button>
   <button class="btn ghost" id="once-btn">${t('farm.once','Una vez')}</button>
-        <button class="btn ghost" id="select-position-btn" style="display:none">Select</button>
+        <button class="btn ghost" id="select-position-btn" style="display:none">${t('farm.selectPosition','Select')}</button>
       </div>
   <div class="row" id="posInfoRow" style="display:none"></div>
 
@@ -571,13 +571,20 @@ export function createFarmUI(config, onStart, onStop) {
 
   function updateTexts() {
     // Actualización mínima de textos
+    const headerSpan = panel.querySelector('.header span');
+    if (headerSpan) headerSpan.textContent = t('farm.title','🧑‍🌾 WPlace Farm');
+    
     panel.querySelector('#startBtn').textContent = t('farm.start','Iniciar');
     panel.querySelector('#stopBtn').textContent = t('farm.stop','Detener');
     panel.querySelector('#capture-btn').textContent = t('farm.capture','Capturar zona');
     panel.querySelector('#once-btn').textContent = t('farm.once','Una vez');
-  const lb = panel.querySelector('#logsBtn'); if (lb) lb.textContent = t('farm.logWindow','Logs');
-  // Visual del toggle se actualiza por applyVisual al cambiar
-  if (els.selectedColorLabel) els.selectedColorLabel.textContent = `${t('farm.color.selected','Color seleccionado')}: ${getColorName(config.COLOR_FIXED ?? 1)}`;
+    
+    const selectBtn = panel.querySelector('#select-position-btn');
+    if (selectBtn) selectBtn.textContent = t('farm.selectPosition','Select');
+    
+    const lb = panel.querySelector('#logsBtn'); if (lb) lb.textContent = t('farm.logWindow','Logs');
+    // Visual del toggle se actualiza por applyVisual al cambiar
+    if (els.selectedColorLabel) els.selectedColorLabel.textContent = `${t('farm.color.selected','Color seleccionado')}: ${getColorName(config.COLOR_FIXED ?? 1)}`;
   }
 
   const api = { setStatus, updateStats, updateButtonStates, flashEffect, getElement, destroy, updateConfig, updateTexts, notify };

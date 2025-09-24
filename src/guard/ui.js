@@ -1,6 +1,7 @@
 import { hasProgress } from './save-load.js';
 import { createConfigWindow } from './config-window.js';
 import { registerWindow, unregisterWindow } from '../core/window-manager.js';
+import { t } from '../locales/index.js';
 
 export function createGuardUI(texts) {
   // Crear contenedor principal
@@ -61,7 +62,7 @@ export function createGuardUI(texts) {
             🎯 ${texts.selectArea}
           </button>
           <button id="loadAreaBtn" style="flex: 1; padding: 10px; background: #f59e0b; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
-            📁 Cargar Archivo
+            📁 ${t('guard.loadFile','Cargar Archivo')}
           </button>
         </div>
         
@@ -77,7 +78,7 @@ export function createGuardUI(texts) {
         <!-- Fila 2: Reposicionar / Guardar -->
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
           <button id="repositionBtn" style="flex: 1; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all 0.3s ease; opacity: 0.5;" disabled>
-            📍 Reposicionar
+            📍 ${t('guard.reposition','Reposicionar')}
           </button>
           <button id="saveBtn" style="flex: 1; padding: 8px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all 0.3s ease; opacity: 0.5;" disabled>
             💾 ${texts.save || 'Guardar'}
@@ -91,7 +92,7 @@ export function createGuardUI(texts) {
               <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
               <line x1="16.65" y1="16.65" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
             </svg>
-            Analizar Área
+            ${t('guard.analyzeArea','Analizar Área')}
           </button>
           <button id="logWindowBtn" style="flex: 1; padding: 8px; background: #6b7280; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;">
             <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-right: 6px; flex-shrink: 0;" fill="none">
@@ -100,17 +101,17 @@ export function createGuardUI(texts) {
               <line x1="8" y1="11" x2="16" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
               <line x1="8" y1="15" x2="13" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
             </svg>
-            ${texts.logWindow || 'Logs'}
+            ${t('guard.logs', texts.logWindow || 'Logs')}
           </button>
         </div>
 
         <!-- Fila 4: Vigía / Configuración -->
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
           <button id="watchBtn" style="flex: 1; padding: 8px; background: #f59e0b; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all 0.3s ease; opacity: 0.5;" disabled>
-            👁️ Vigía
+            👁️ ${t('guard.watcher','Vigía')}
           </button>
           <button id="configBtn" style="flex: 1; padding: 8px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
-            ⚙️ Configuración
+            ⚙️ ${t('guard.configuration','Configuración')}
           </button>
         </div>
 
@@ -132,7 +133,7 @@ export function createGuardUI(texts) {
           <span>🛠️ ${texts.repairedPixels}: </span><span id="repairedCount">0</span>
         </div>
         <div id="countdownSection" style="font-size: 13px; margin-bottom: 5px; display: none;">
-          <span>⏰ Próximo lote en: </span><span id="countdownTimer">--</span>
+          <span>⏰ ${t('guard.nextBatchIn','Próximo lote en: ')}</span><span id="countdownTimer">--</span>
         </div>
         
         <!-- Estadísticas de Análisis -->
@@ -291,7 +292,7 @@ export function createGuardUI(texts) {
       if (guardState && guardState.operationMode) {
         // Actualizar el texto del botón start según el modo
         if (guardState.operationMode === 'erase') {
-          elements.startBtn.innerHTML = '🗑️ Iniciar Borrado';
+          elements.startBtn.innerHTML = `🗑️ ${t('guard.startErase','Iniciar Borrado')}`;
         } else {
           elements.startBtn.innerHTML = '▶️ Iniciar';
         }
@@ -336,7 +337,7 @@ export function createGuardUI(texts) {
 
     updateWatchButton: (isWatching) => {
       if (isWatching) {
-        elements.watchBtn.innerHTML = '⏹️ Detener Vigía';
+        elements.watchBtn.innerHTML = `⏹️ ${t('guard.stopWatcher','Detener Vigía')}`;
         elements.watchBtn.style.background = '#ef4444'; // Rojo para detener
       } else {
         elements.watchBtn.innerHTML = '👁️ Vigía';
@@ -516,6 +517,32 @@ export function createGuardUI(texts) {
     const { createAnalysisWindow } = await import('./analysis-window.js');
     createAnalysisWindow();
   });
+
+  // Función para actualizar textos cuando cambie el idioma
+  ui.updateTexts = () => {
+    // Actualizar textos de botones principales
+    const loadFileBtn = container.querySelector('#loadAreaBtn');
+    if (loadFileBtn) loadFileBtn.innerHTML = `📁 ${t('guard.loadFile','Cargar Archivo')}`;
+    
+    const repositionBtn = container.querySelector('#repositionBtn');
+    if (repositionBtn) repositionBtn.innerHTML = `📍 ${t('guard.reposition','Reposicionar')}`;
+    
+    const analyzeBtn = container.querySelector('.analyze-btn');
+    if (analyzeBtn) analyzeBtn.innerHTML = `${t('guard.analyzeArea','Analizar Área')}`;
+    
+    const logWindowBtn = container.querySelector('#logWindowBtn');
+    if (logWindowBtn) logWindowBtn.innerHTML = `${t('guard.logs','Logs')}`;
+    
+    const watchBtn = container.querySelector('#watchBtn');
+    if (watchBtn) watchBtn.innerHTML = `👁️ ${t('guard.watcher','Vigía')}`;
+    
+    const configBtn = container.querySelector('#configBtn');
+    if (configBtn) configBtn.innerHTML = `⚙️ ${t('guard.configuration','Configuración')}`;
+    
+    // Actualizar texto del countdown
+    const countdownSection = container.querySelector('#countdownSection span');
+    if (countdownSection) countdownSection.innerHTML = `⏰ ${t('guard.nextBatchIn','Próximo lote en: ')}`;
+  };
 
   // Inicializar estado de todos los botones
   ui.updateButtonsState();

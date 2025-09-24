@@ -151,7 +151,7 @@ export function createLauncherUI({
       </div>
       <div class="row">
         <button class="btn ghost guard-btn">${texts.autoGuard}</button>
-        <button class="btn ghost slave-btn">🔗 Slave</button>
+        <button class="btn ghost slave-btn">${texts.autoSlave}</button>
       </div>
       <div class="row">
         <button class="btn ghost log-window-btn">${texts.logWindow}</button>
@@ -233,7 +233,7 @@ export function createLauncherUI({
     elements.choice.textContent = botType === 'farm' ? t('launcher.autoFarm') : 
                                   botType === 'image' ? t('launcher.autoImage') : 
                                   botType === 'guard' ? t('launcher.autoGuard') :
-                                  botType === 'slave' ? '🔗 Slave' : botType;
+                                  botType === 'slave' ? t('launcher.autoSlave') : botType;
     elements.launchBtn.disabled = false;
     
     // Actualizar estilos de botones
@@ -396,6 +396,10 @@ export function createLauncherUI({
       elements.guardBtn.textContent = newTexts.autoGuard;
     }
     
+    if (elements.slaveBtn) {
+      elements.slaveBtn.textContent = newTexts.autoSlave;
+    }
+    
     if (elements.launchBtn) {
       elements.launchBtn.textContent = newTexts.launch;
     }
@@ -477,7 +481,8 @@ export function createLauncherUI({
     if (selectedBot && elements.choice) {
       elements.choice.textContent = selectedBot === 'farm' ? newTexts.autoFarm : 
                                     selectedBot === 'image' ? newTexts.autoImage : 
-                                    newTexts.autoGuard;
+                                    selectedBot === 'guard' ? newTexts.autoGuard :
+                                    selectedBot === 'slave' ? newTexts.autoSlave : selectedBot;
     }
     
     // Actualizar textos de referencia local

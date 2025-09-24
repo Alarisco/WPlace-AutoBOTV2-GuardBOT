@@ -1,5 +1,6 @@
 import { log } from "../core/logger.js";
 import { registerWindow, unregisterWindow } from '../core/window-manager.js';
+import { t } from "../locales/index.js";
 
 /**
  * Crea y gestiona el diálogo de confirmación para Auto-Guard
@@ -119,10 +120,24 @@ export function createSafeGuardWindow() {
   /**
    * Muestra el diálogo específico para Auto-Guard
    * @param {Object} imageState - Estado de la imagen con datos necesarios
+   * @param {Object} texts - Textos localizados
    * @returns {Promise<boolean>} - true si el usuario acepta, false si cancela
    */
-  function showGuardDialog(imageState) {
+  function showGuardDialog(imageState, texts = {}) {
     return new Promise((resolve) => {
+      // Usar textos localizados con valores por defecto
+      const localTexts = {
+        guardDialogQuestion: texts.guardDialogQuestion || '¿Deseas generar un archivo JSON compatible con Auto-Guard.js?',
+        guardDialogContent: texts.guardDialogContent || 'Este archivo contendrá',
+        guardDialogArea: texts.guardDialogArea || 'Área de protección',
+        guardDialogPixels: texts.guardDialogPixels || 'píxeles',
+        guardDialogPosition: texts.guardDialogPosition || 'Posición',
+        guardDialogPixelsToProtect: texts.guardDialogPixelsToProtect || 'píxeles para proteger',
+        guardDialogSaveInfo: texts.guardDialogSaveInfo || 'El archivo se guardará automáticamente y podrás importarlo en Auto-Guard.js',
+        guardDialogTitle: texts.guardDialogTitle || 'Generar JSON para Auto-Guard',
+        guardDialogConfirm: texts.guardDialogConfirm || 'Sí, generar JSON',
+        guardDialogCancel: texts.guardDialogCancel || 'No, continuar sin generar'
+      };
       const remainingPixelsCount = imageState.remainingPixels ? imageState.remainingPixels.length : 0;
       const processor = imageState.imageData && imageState.imageData.processor ? imageState.imageData.processor : null;
       // Calcular total de píxeles si no hay remainingPixels
@@ -152,23 +167,23 @@ export function createSafeGuardWindow() {
       const tileX = typeof imageState.tileX === 'number' ? imageState.tileX : 0;
       const tileY = typeof imageState.tileY === 'number' ? imageState.tileY : 0;
       
-      const message = `¿Deseas generar un archivo JSON compatible con Auto-Guard.js?
+      const message = `${localTexts.guardDialogQuestion}
 
-Este archivo contendrá:
-• Área de protección: ${imageWidth}x${imageHeight} píxeles
-• Posición: Tile (${tileX}, ${tileY})
-• ${totalPixelsCount || 0} píxeles para proteger
+${localTexts.guardDialogContent}:
+• ${localTexts.guardDialogArea}: ${imageWidth}x${imageHeight} ${localTexts.guardDialogPixels}
+• ${localTexts.guardDialogPosition}: Tile (${tileX}, ${tileY})
+• ${totalPixelsCount || 0} ${localTexts.guardDialogPixelsToProtect}
 
-El archivo se guardará automáticamente y podrás importarlo en Auto-Guard.js.`;
-      
-      showConfirmDialog(
-        message,
-        '🛡️ Generar JSON para Auto-Guard',
-        {
-          confirm: 'Sí, generar JSON',
-          cancel: 'No, continuar sin generar'
-        }
-      ).then(result => {
+${localTexts.guardDialogSaveInfo}.`;
+        
+        showConfirmDialog(
+          message,
+          `🛡️ ${localTexts.guardDialogTitle}`,
+          {
+            confirm: localTexts.guardDialogConfirm,
+            cancel: localTexts.guardDialogCancel
+          }
+        ).then(result => {
         resolve(result === 'confirm');
       }).catch(() => {
         resolve(false);
@@ -191,8 +206,8 @@ El archivo se guardará automáticamente y podrás importarlo en Auto-Guard.js.`
         const hasPixels = Array.isArray(guardData?.originalPixels);
         const hasColors = Array.isArray(guardData?.colors);
         if (!hasProtection || !hasAreaFields || !hasPixels || !hasColors) {
-          log('❌ Estructura inválida para JSON del Guard. Abortando guardado.');
-          try { showNotification('Estructura inválida del JSON del Guard. Vuelve a intentarlo tras seleccionar la posición.', 'error'); } catch {}
+          log(t('image.guardJsonInvalidStructure'));
+          try { showNotification(t('image.guardJsonInvalidMessage'), 'error'); } catch {}
           return resolve({ success: false, error: 'Invalid Guard JSON structure' });
         }
         
@@ -212,10 +227,10 @@ El archivo se guardará automáticamente y podrás importarlo en Auto-Guard.js.`
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
         
-        log(`✅ JSON del Guard guardado: ${filename}`);
+        log(t('image.guardJsonSaveSuccess', { filename }));
         resolve({ success: true, filename });
       } catch (error) {
-        log(`❌ Error guardando JSON del Guard: ${error.message}`);
+        log(t('image.guardJsonSaveError', { error: error.message }));
         resolve({ success: false, error: error.message });
       }
     });
@@ -286,9 +301,9 @@ export function showConfirmDialog(message, title, buttons = {}) {
   return safeGuardWindow.showConfirmDialog(message, title, buttons);
 }
 
-export function showGuardDialog(imageState) {
+export function showGuardDialog(imageState, texts = {}) {
   const safeGuardWindow = createSafeGuardWindow();
-  return safeGuardWindow.showGuardDialog(imageState);
+  return safeGuardWindow.showGuardDialog(imageState, texts);
 }
 
 export function saveGuardJSON(guardData) {

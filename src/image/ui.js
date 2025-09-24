@@ -612,27 +612,27 @@ export async function createImageUI({ texts, ...handlers }) {
         </div>
 
         <div class="config-item">
-          <label>📐 Patrón de pintado:</label>
+          <label>${texts.paintPattern}:</label>
           <select class="config-input paint-pattern">
-            <option value="linear_start">➡️ Lineal (Inicio)</option>
-            <option value="linear_end">⬅️ Lineal (Final)</option>
-            <option value="random">🎲 Aleatorio</option>
-            <option value="center_out">💥 Centro hacia afuera</option>
-            <option value="corners_first">🏁 Esquinas primero</option>
-            <option value="spiral">🌀 Espiral</option>
-            <option value="snake">🐍 Serpiente (Zigzag)</option>
-            <option value="diagonal_sweep">📐 Barrido diagonal</option>
-            <option value="borders">🖼️ Bordes primero</option>
-            <option value="center">🎯 Centro primero</option>
-            <option value="quadrants">🔲 Cuadrantes</option>
-            <option value="biased_random">🎯 Aleatorio sesgado (bordes)</option>
-            <option value="clusters">🎪 Clusters</option>
-            <option value="proximity">🤝 Proximidad</option>
-            <option value="sweep">🧹 Barrido por secciones</option>
-            <option value="priority">⭐ Prioridad (mixto)</option>
-            <option value="anchor_points">⚓ Puntos de anclaje</option>
-            <option value="spiral_cw">🔄 Espiral (horaria)</option>
-            <option value="spiral_ccw">🔃 Espiral (antihoraria)</option>
+            <option value="linear_start">➡️ ${texts.patternLinearStart}</option>
+            <option value="linear_end">⬅️ ${texts.patternLinearEnd}</option>
+            <option value="random">🎲 ${texts.patternRandom}</option>
+            <option value="center_out">💥 ${texts.patternCenterOut}</option>
+            <option value="corners_first">🏁 ${texts.patternCornersFirst}</option>
+            <option value="spiral">🌀 ${texts.patternSpiral}</option>
+            <option value="snake">🐍 ${texts.patternSnake}</option>
+            <option value="diagonal_sweep">📐 ${texts.patternDiagonalSweep}</option>
+            <option value="borders">🖼️ ${texts.patternBorders}</option>
+            <option value="center">🎯 ${texts.patternCenter}</option>
+            <option value="quadrants">🔲 ${texts.patternQuadrants}</option>
+            <option value="biased_random">🎯 ${texts.patternBiasedRandom}</option>
+            <option value="clusters">🎪 ${texts.patternClusters}</option>
+            <option value="proximity">🤝 ${texts.patternProximity}</option>
+            <option value="sweep">🧹 ${texts.patternSweep}</option>
+            <option value="priority">⭐ ${texts.patternPriority}</option>
+            <option value="anchor_points">⚓ ${texts.patternAnchorPoints}</option>
+            <option value="spiral_cw">🔄 ${texts.patternSpiralCw}</option>
+            <option value="spiral_ccw">🔃 ${texts.patternSpiralCccw}</option>
           </select>
         </div>
       </div>
@@ -692,7 +692,7 @@ export async function createImageUI({ texts, ...handlers }) {
         <div class="button-row utility-controls" style="display: none;">
           <button class="btn btn-secondary save-progress-btn btn-half">
             💾
-            <span>Guardar progreso</span>
+            <span>${texts.saveProgressBtn}</span>
           </button>
           <button class="btn btn-secondary log-window-btn btn-half">
             📋
@@ -703,7 +703,7 @@ export async function createImageUI({ texts, ...handlers }) {
         <!-- Guard JSON siempre disponible cuando hay datos -->
         <button class="btn btn-secondary guard-json-btn btn-full guard-controls" style="display: none;">
           🛡️
-          <span>Guard JSON</span>
+          <span>${texts.guardJsonBtn}</span>
         </button>
         
         <!-- Botón de inicialización oculto por defecto -->
@@ -1316,6 +1316,44 @@ export async function createImageUI({ texts, ...handlers }) {
   const resizeWindow = createResizeWindow();
   resizeWindow.initialize(root);
   
+  // Función para actualizar textos dinámicamente
+  function updateTexts(newTexts) {
+    texts = newTexts;
+    
+    // Actualizar textos en elementos existentes
+    const saveProgressBtn = container.querySelector('.save-progress-btn span');
+    if (saveProgressBtn) saveProgressBtn.textContent = texts.saveProgressBtn;
+    
+    const guardJsonBtn = container.querySelector('.guard-json-btn span');
+    if (guardJsonBtn) guardJsonBtn.textContent = texts.guardJsonBtn;
+    
+    // Actualizar etiquetas de configuración
+    const paintPatternLabel = container.querySelector('.config-item label');
+    if (paintPatternLabel && paintPatternLabel.textContent.includes('Patrón')) {
+      paintPatternLabel.textContent = texts.paintPattern + ':';
+    }
+    
+    // Actualizar opciones del select de patrones
+    const patternSelect = container.querySelector('.paint-pattern');
+    if (patternSelect) {
+      const options = patternSelect.querySelectorAll('option');
+      const patternKeys = [
+        'patternLinearStart', 'patternLinearEnd', 'patternRandom', 'patternCenterOut',
+        'patternCornersFirst', 'patternSpiral', 'patternSnake', 'patternDiagonalSweep',
+        'patternBorders', 'patternCenter', 'patternQuadrants', 'patternBiasedRandom',
+        'patternClusters', 'patternProximity', 'patternSweep', 'patternPriority',
+        'patternAnchorPoints', 'patternSpiralCw', 'patternSpiralCccw'
+      ];
+      
+      options.forEach((option, index) => {
+        if (patternKeys[index] && texts[patternKeys[index]]) {
+          const emoji = option.textContent.split(' ')[0];
+          option.textContent = `${emoji} ${texts[patternKeys[index]]}`;
+        }
+      });
+    }
+  }
+
   log('✅ Interfaz de Auto-Image creada');
   
   // Inicializar en estado inicial (todo oculto)
@@ -1344,6 +1382,7 @@ export async function createImageUI({ texts, ...handlers }) {
     },
     setPaintingState,
     updateUIFromState,
+    updateTexts,
     destroy,
     // Exponer generador de JSON para Auto-Guard si fue provisto por los handlers
     generateGuardJSON: handlers.generateGuardJSON,

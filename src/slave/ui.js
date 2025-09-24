@@ -1,6 +1,7 @@
 import { log } from "../core/logger.js";
 import { createShadowRoot, makeDraggable } from "../core/ui-utils.js";
 import { SLAVE_CONFIG, getSlaveTexts } from "./config.js";
+import { t } from "../locales/index.js";
 
 export function createSlaveUI({ 
   onConnect, 
@@ -476,7 +477,7 @@ export function createSlaveUI({
   elements.connectBtn.addEventListener('click', async () => {
     let masterUrl = elements.masterUrlInput.value.trim();
     if (!masterUrl) {
-      showError('Por favor ingresa una URL válida');
+      showError(t('slave.invalidUrl'));
       return;
     }
     // Normalizar la URL y prevenir Mixed Content
@@ -489,7 +490,7 @@ export function createSlaveUI({
       if (isHttpsPage && isInsecureWs && !isLocal) {
         // Auto-upgrade a wss y avisar
         const upgraded = masterUrl.replace(/^ws:\/\//i, 'wss://');
-        showError('Página HTTPS: cambiando a wss:// para evitar contenido mixto.');
+        showError(t('slave.httpsUpgrade'));
         elements.masterUrlInput.value = upgraded;
         masterUrl = upgraded;
       }
@@ -501,7 +502,7 @@ export function createSlaveUI({
   try { localStorage.setItem(LS_LAST_URL, masterUrl); } catch {}
       await onConnect(masterUrl);
     } catch (error) {
-      showError(`Error de conexión: ${error.message}`);
+      showError(`${t('slave.connectionError')}: ${error.message}`);
       elements.connectBtn.disabled = false;
     }
   });
@@ -595,7 +596,7 @@ export function createSlaveUI({
         elements.masterUrlInput.disabled = false;
         
         if (connectionStatus === 'error') {
-          showError('Error de conexión. Verifica la URL y que el servidor esté ejecutándose.');
+          showError(t('slave.connectionError'));
         }
       }
       
@@ -609,8 +610,39 @@ export function createSlaveUI({
     },
     
     updateTexts: () => {
-  const _newTexts = getSlaveTexts();
-      // Actualizar textos dinámicamente si es necesario
+      const newTexts = getSlaveTexts();
+      if (!newTexts) return;
+      
+      // Actualizar textos de la interfaz
+      elements.titleElement.textContent = newTexts.title;
+      elements.masterServerLabel.textContent = newTexts.masterServer;
+      elements.connectBtn.textContent = newTexts.connect;
+      elements.disconnectBtn.textContent = newTexts.disconnect;
+      elements.statusLabel.textContent = newTexts.status;
+      elements.slaveIdLabel.textContent = newTexts.slaveId;
+      elements.modeLabel.textContent = newTexts.mode;
+      elements.runningLabel.textContent = newTexts.running;
+      elements.closeBtn.textContent = newTexts.close;
+      
+      // Actualizar textos de estado según el estado actual
+      const statusTexts = {
+        connected: newTexts.connected,
+        connecting: newTexts.connecting,
+        disconnected: newTexts.disconnected,
+        error: newTexts.error
+      };
+      
+      const currentStatus = elements.statusIndicator.className.split(' ')[1];
+      if (statusTexts[currentStatus]) {
+        elements.statusText.textContent = statusTexts[currentStatus];
+      }
+      
+      // Actualizar texto de estado de ejecución
+      const isCurrentlyRunning = elements.runningStatus.textContent === texts.running;
+      elements.runningStatus.textContent = isCurrentlyRunning ? newTexts.running : newTexts.idle;
+      
+      // Actualizar referencia de textos para futuras actualizaciones
+      Object.assign(texts, newTexts);
     },
     
     cleanup: () => {

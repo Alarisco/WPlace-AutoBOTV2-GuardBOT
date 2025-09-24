@@ -328,7 +328,7 @@ function setupEventListeners(overlay){
       // Actualizar el texto del botón start según el modo en la UI principal
       if (guardState.ui && guardState.ui.elements) {
         if (newMode === 'erase') {
-          guardState.ui.elements.startBtn.innerHTML = '🗑️ Iniciar Borrado';
+          guardState.ui.elements.startBtn.innerHTML = `🗑️ ${t('guard.startErase','Iniciar Borrado')}`;
         } else {
           guardState.ui.elements.startBtn.innerHTML = '▶️ Iniciar Protección';
         }

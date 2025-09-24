@@ -1,5 +1,6 @@
 import { log } from "../core/logger.js";
 import { imageState, IMAGE_DEFAULTS as _IMAGE_DEFAULTS } from "./config.js";
+import { t } from "../locales/index.js";
 
 /**
  * Obtener datos completos de píxeles para guardar
@@ -38,7 +39,7 @@ function getFullPixelData() {
 export function saveProgress(filename = null) {
   try {
     if (!imageState.imageData || imageState.paintedPixels === 0) {
-      throw new Error('No hay progreso para guardar');
+      throw new Error(t('image.noProgressToSave'));
     }
     
     // Obtener datos de píxeles de forma segura
@@ -126,11 +127,11 @@ export function saveProgress(filename = null) {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
     
-    log(`✅ Progreso guardado: ${finalFilename}`);
+    log(t('image.progressSaveSuccess', { filename: finalFilename }));
     return { success: true, filename: finalFilename };
     
   } catch (error) {
-    log('❌ Error guardando progreso:', error);
+    log(t('image.progressSaveError', { error: error.message }));
     return { success: false, error: error.message };
   }
 }
