@@ -1,5 +1,6 @@
 import { es } from './es.js';
 import { en } from './en.js';
+import { de } from './de.js';
 import { fr } from './fr.js';
 import { ru } from './ru.js';
 import { zhHans } from './zh-Hans.js';
@@ -9,6 +10,7 @@ import { zhHant } from './zh-Hant.js';
 export const AVAILABLE_LANGUAGES = {
   es: { name: 'Español', flag: '🇪🇸', code: 'es' },
   en: { name: 'English', flag: '🇺🇸', code: 'en' },
+  de: { name: 'Deutsch', flag: '🇩🇪', code: 'de' },
   fr: { name: 'Français', flag: '🇫🇷', code: 'fr' },
   ru: { name: 'Русский', flag: '🇷🇺', code: 'ru' },
   zhHans: { name: '简体中文', flag: '🇨🇳', code: 'zh-Hans' },
@@ -19,6 +21,7 @@ export const AVAILABLE_LANGUAGES = {
 const translations = {
   es,
   en,
+  de,
   fr,
   ru,
   zhHans,
@@ -26,7 +29,7 @@ const translations = {
 };
 
 // Estado del idioma actual
-let currentLanguage = 'es';
+let currentLanguage = 'en';
 let currentTranslations = translations[currentLanguage];
 
 /**
@@ -34,7 +37,7 @@ let currentTranslations = translations[currentLanguage];
  * @returns {string} Código del idioma detectado
  */
 export function detectBrowserLanguage() {
-  const browserLang = window.navigator.language || window.navigator.userLanguage || 'es';
+  const browserLang = window.navigator.language || window.navigator.userLanguage || 'en';
 
   // Extraer solo el código del idioma (ej: 'es-ES' -> 'es')
   const langCode = browserLang.split('-')[0].toLowerCase();
@@ -44,8 +47,8 @@ export function detectBrowserLanguage() {
     return langCode;
   }
 
-  // Fallback a español por defecto
-  return 'es';
+  // Fallback a inglés por defecto
+  return 'en';
 }
 
 /**
@@ -75,7 +78,7 @@ export function initializeLanguage() {
   const savedLang = getSavedLanguage();
   const browserLang = detectBrowserLanguage();
 
-  let selectedLang = 'es'; // fallback por defecto
+  let selectedLang = 'en'; // fallback por defecto
 
   if (savedLang && translations[savedLang]) {
     selectedLang = savedLang;
