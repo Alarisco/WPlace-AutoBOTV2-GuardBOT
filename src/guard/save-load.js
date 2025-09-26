@@ -11,28 +11,32 @@ import { log } from '../core/logger.js';
 function packPaintedMapToBase64(paintedMap, width, height) {
   if (!paintedMap || !width || !height) return null;
   
-  // Verificar disponibilidad de btoa
   if (!window || !window.btoa) {
     console.warn('btoa no disponible, usando compresión alternativa');
     return null;
   }
-  
-  const totalBits = width * height;
-  const byteLen = Math.ceil(totalBits / 8);
-  const bytes = new Uint8Array(byteLen);
-  let bitIndex = 0;
-  
-  for (let y = 0; y < height; y++) {
-    const row = paintedMap[y];
-    for (let x = 0; x < width; x++) {
-      const bit = row && row[x] ? 1 : 0;
-      const b = bitIndex >> 3;
-      const o = bitIndex & 7;
-      if (bit) bytes[b] |= 1 << o;
-      bitIndex++;
+
+  let bytes;
+  if (paintedMap instanceof Uint8Array) {
+    bytes = paintedMap;
+  } else {
+    // Compatibilidad: aceptar mapas 2D legado
+    const totalBits = width * height;
+    const byteLen = Math.ceil(totalBits / 8);
+    bytes = new Uint8Array(byteLen);
+    let bitIndex = 0;
+    for (let y = 0; y < height; y++) {
+      const row = paintedMap[y];
+      for (let x = 0; x < width; x++) {
+        const bit = row && row[x] ? 1 : 0;
+        const b = bitIndex >> 3;
+        const o = bitIndex & 7;
+        if (bit) bytes[b] |= 1 << o;
+        bitIndex++;
+      }
     }
   }
-  
+
   let binary = '';
   const chunk = 0x8000;
   for (let i = 0; i < bytes.length; i += chunk) {
@@ -62,20 +66,13 @@ function unpackPaintedMapFromBase64(base64, width, height) {
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  
-  const map = Array(height).fill().map(() => Array(width).fill(false));
-  let bitIndex = 0;
-  
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const b = bitIndex >> 3;
-      const o = bitIndex & 7;
-      map[y][x] = ((bytes[b] >> o) & 1) === 1;
-      bitIndex++;
-    }
+
+  const expectedLength = Math.ceil((width * height) / 8);
+  if (bytes.length !== expectedLength) {
+    console.warn(`paintedMapPacked longitud inesperada: ${bytes.length} (esperado ${expectedLength})`);
   }
-  
-  return map;
+
+  return bytes;
 }
 
 /**
@@ -86,8 +83,20 @@ function compressPixelData(originalPixels, area) {
   if (!originalPixels || originalPixels.size === 0) return null;
   
   const compressed = [];
+  const useArea = Boolean(area);
+  const bounds = useArea ? {
+    x1: area.x1,
+    y1: area.y1,
+    x2: area.x2,
+    y2: area.y2
+  } : null;
+
   for (const [_key, pixel] of originalPixels) {
-    // Solo guardar datos esenciales: coordenadas y color
+    if (useArea) {
+      if (pixel.globalX < bounds.x1 || pixel.globalX >= bounds.x2) continue;
+      if (pixel.globalY < bounds.y1 || pixel.globalY >= bounds.y2) continue;
+    }
+
     compressed.push({
       x: pixel.globalX,
       y: pixel.globalY,
@@ -106,7 +115,10 @@ function createPaintedMapForCompression(originalPixels, area) {
   
   const width = area.x2 - area.x1;
   const height = area.y2 - area.y1;
-  const paintedMap = Array(height).fill().map(() => Array(width).fill(false));
+  if (width <= 0 || height <= 0) return null;
+
+  const totalBits = width * height;
+  const bytes = new Uint8Array(Math.ceil(totalBits / 8));
   
   // Marcar píxeles que han sido procesados/pintados
   for (const [_key, pixel] of originalPixels) {
@@ -114,11 +126,14 @@ function createPaintedMapForCompression(originalPixels, area) {
     const localY = pixel.globalY - area.y1;
     
     if (localX >= 0 && localX < width && localY >= 0 && localY < height) {
-      paintedMap[localY][localX] = true;
+      const bitIndex = localY * width + localX;
+      const byteIndex = bitIndex >> 3;
+      const offset = bitIndex & 7;
+      bytes[byteIndex] |= 1 << offset;
     }
   }
   
-  return paintedMap;
+  return bytes;
 }
 
 /**
@@ -157,7 +172,7 @@ function calculateCompressionStats(originalPixels, area, paintedMapPacked) {
 // Enhanced download system inspired by Art-Extractor
 function downloadWithBlob(data, filename) {
   try {
-    const dataStr = JSON.stringify(data, null, 2);
+    const dataStr = JSON.stringify(data);
     const blob = new window.Blob([dataStr], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
     
@@ -443,8 +458,12 @@ export async function loadProgress(file) {
     log(`📋 Versión del archivo: ${version}${isEnhanced ? ' (mejorado)' : ' (clásico)'}${isCompressed ? ' (comprimido)' : ''}`);
     
     // Verificar compatibilidad de colores
-    if (guardState.availableColors.length > 0) {
-      const savedColorIds = progressData.colors.map(c => c.id);
+    const savedColorsArray = Array.isArray(progressData.colors)
+      ? progressData.colors
+      : [];
+
+    if (guardState.availableColors.length > 0 && savedColorsArray.length > 0) {
+      const savedColorIds = savedColorsArray.map(c => c.id);
       const currentColorIds = guardState.availableColors.map(c => c.id);
       const commonColors = savedColorIds.filter(id => currentColorIds.includes(id));
       
@@ -455,11 +474,14 @@ export async function loadProgress(file) {
     
     // Si no hay colores detectados aún, poblarlos desde el archivo
     if (!guardState.availableColors || guardState.availableColors.length === 0) {
-      guardState.availableColors = Array.isArray(progressData.colors)
-        ? progressData.colors.map(c => ({ id: c.id, r: c.r, g: c.g, b: c.b }))
-        : [];
+      guardState.availableColors = savedColorsArray.map(c => ({ id: c.id, r: c.r, g: c.g, b: c.b }));
       log(`🎨 Colores cargados desde archivo: ${guardState.availableColors.length}`);
     }
+
+    const colorLookup = new Map(
+      guardState.availableColors.map(color => [color.id, color])
+    );
+    const loadTimestamp = Date.now();
     
     // Restaurar estado
     if (progressData.protectionData) {
@@ -482,7 +504,7 @@ export async function loadProgress(file) {
         const key = `${pixel.x},${pixel.y}`;
         
         // Encontrar el color correspondiente al colorId
-        const colorInfo = guardState.availableColors.find(c => c.id === pixel.color);
+        const colorInfo = colorLookup.get(pixel.color);
         const r = colorInfo ? colorInfo.r : 0;
         const g = colorInfo ? colorInfo.g : 0;
         const b = colorInfo ? colorInfo.b : 0;
@@ -506,16 +528,16 @@ export async function loadProgress(file) {
           r: r,
           g: g,
           b: b,
-          timestamp: pixel.timestamp || Date.now()
+          timestamp: pixel.timestamp || loadTimestamp
         });
       }
       
       // Si hay mapa pintado comprimido, descomprimirlo para validación
       if (progressData.paintedMapPacked && progressData.protectionData.areaSize) {
         const { width, height } = progressData.protectionData.areaSize;
-        const paintedMap = unpackPaintedMapFromBase64(progressData.paintedMapPacked, width, height);
-        if (paintedMap) {
-          log('✅ Mapa pintado descomprimido correctamente');
+        const paintedMapBytes = unpackPaintedMapFromBase64(progressData.paintedMapPacked, width, height);
+        if (paintedMapBytes) {
+          log(`✅ Mapa pintado descomprimido (${paintedMapBytes.length} bytes)`);
         }
       }
       
@@ -531,7 +553,7 @@ export async function loadProgress(file) {
           const globalX = Number.isFinite(pixelInfo.globalX) ? pixelInfo.globalX : (Number.isFinite(pixelInfo.x) ? pixelInfo.x : kx);
           const globalY = Number.isFinite(pixelInfo.globalY) ? pixelInfo.globalY : (Number.isFinite(pixelInfo.y) ? pixelInfo.y : ky);
           const colorId = Number.isFinite(pixelInfo.colorId) ? pixelInfo.colorId : (Number.isFinite(pixelInfo.color) ? pixelInfo.color : 0);
-          const colorInfo = guardState.availableColors.find(c => c.id === colorId);
+          const colorInfo = colorLookup.get(colorId);
           const r = colorInfo ? colorInfo.r : (Number.isFinite(pixelInfo.r) ? pixelInfo.r : 0);
           const g = colorInfo ? colorInfo.g : (Number.isFinite(pixelInfo.g) ? pixelInfo.g : 0);
           const b = colorInfo ? colorInfo.b : (Number.isFinite(pixelInfo.b) ? pixelInfo.b : 0);
@@ -553,7 +575,7 @@ export async function loadProgress(file) {
             r,
             g,
             b,
-            timestamp: pixelInfo.timestamp || Date.now()
+            timestamp: pixelInfo.timestamp || loadTimestamp
           });
         } else {
           // Formato directo con coordenadas
@@ -561,7 +583,7 @@ export async function loadProgress(file) {
           const globalX = pixelData.x;
           const globalY = pixelData.y;
           const colorId = Number.isFinite(pixelData.colorId) ? pixelData.colorId : (Number.isFinite(pixelData.color) ? pixelData.color : 0);
-          const colorInfo = guardState.availableColors.find(c => c.id === colorId);
+          const colorInfo = colorLookup.get(colorId);
           const r = colorInfo ? colorInfo.r : (Number.isFinite(pixelData.r) ? pixelData.r : 0);
           const g = colorInfo ? colorInfo.g : (Number.isFinite(pixelData.g) ? pixelData.g : 0);
           const b = colorInfo ? colorInfo.b : (Number.isFinite(pixelData.b) ? pixelData.b : 0);
@@ -583,7 +605,7 @@ export async function loadProgress(file) {
             r,
             g,
             b,
-            timestamp: pixelData.timestamp || Date.now()
+            timestamp: pixelData.timestamp || loadTimestamp
           });
         }
       }
@@ -596,7 +618,7 @@ export async function loadProgress(file) {
         const globalX = Number.isFinite(pixelInfo.globalX) ? pixelInfo.globalX : (Number.isFinite(pixelInfo.x) ? pixelInfo.x : kx);
         const globalY = Number.isFinite(pixelInfo.globalY) ? pixelInfo.globalY : (Number.isFinite(pixelInfo.y) ? pixelInfo.y : ky);
         const colorId = Number.isFinite(pixelInfo.colorId) ? pixelInfo.colorId : (Number.isFinite(pixelInfo.color) ? pixelInfo.color : 0);
-        const colorInfo = guardState.availableColors.find(c => c.id === colorId);
+  const colorInfo = colorLookup.get(colorId);
         const r = colorInfo ? colorInfo.r : (Number.isFinite(pixelInfo.r) ? pixelInfo.r : 0);
         const g = colorInfo ? colorInfo.g : (Number.isFinite(pixelInfo.g) ? pixelInfo.g : 0);
         const b = colorInfo ? colorInfo.b : (Number.isFinite(pixelInfo.b) ? pixelInfo.b : 0);
@@ -617,7 +639,7 @@ export async function loadProgress(file) {
           r,
           g,
           b,
-          timestamp: pixelInfo.timestamp || Date.now()
+          timestamp: pixelInfo.timestamp || loadTimestamp
         });
       }
     } else {
