@@ -18,7 +18,7 @@ class TurnstileManager {
     this.TOKEN_LIFETIME = 240000; // 4 minutes
     this.MAX_RETRIES = 10;
     this.INITIAL_TIMEOUT = 15000;
-    this.RETRY_INTERVAL = 5000;
+    this.RETRY_INTERVAL = 15000;
     
     // Widget state
     this._turnstileWidgetId = null;
