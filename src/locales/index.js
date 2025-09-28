@@ -5,6 +5,7 @@ import { fr } from './fr.js';
 import { ru } from './ru.js';
 import { zhHans } from './zh-Hans.js';
 import { zhHant } from './zh-Hant.js';
+import { pt } from './pt.js';
 
 // Idiomas disponibles
 export const AVAILABLE_LANGUAGES = {
@@ -14,7 +15,8 @@ export const AVAILABLE_LANGUAGES = {
   fr: { name: 'Français', flag: '🇫🇷', code: 'fr' },
   ru: { name: 'Русский', flag: '🇷🇺', code: 'ru' },
   zhHans: { name: '简体中文', flag: '🇨🇳', code: 'zh-Hans' },
-  zhHant: { name: '繁體中文', flag: '🇨🇳', code: 'zh-Hant' }
+  zhHant: { name: '繁體中文', flag: '🇨🇳', code: 'zh-Hant' },
+  pt: { name: 'Português (Brasil)', flag: '🇧🇷', code: 'pt' }
 };
 
 // Todas las traducciones
@@ -25,7 +27,8 @@ const translations = {
   fr,
   ru,
   zhHans,
-  zhHant
+  zhHant,
+  pt
 };
 
 // Estado del idioma actual
@@ -39,7 +42,7 @@ let currentTranslations = translations[currentLanguage];
 export function detectBrowserLanguage() {
   const browserLang = window.navigator.language || window.navigator.userLanguage || 'es';
 
-  // Extraer solo el código del idioma (ej: 'es-ES' -> 'es')
+  // Extraer solo el código del idioma (ej: 'es-ES' -> 'es', 'pt-BR' -> 'pt')
   const langCode = browserLang.split('-')[0].toLowerCase();
 
   // Verificar si tenemos soporte para este idioma
