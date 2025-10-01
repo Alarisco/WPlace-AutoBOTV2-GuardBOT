@@ -194,6 +194,7 @@ export function createLauncherUI({
       </div>
       <div class="row">
         <button class="btn ghost log-window-btn">${texts.logWindow}</button>
+        <button class="btn ghost pixelstudio-btn">🎨 PixelStudio</button>
       </div>
       <div class="card">
         <div class="stat">
@@ -360,6 +361,15 @@ export function createLauncherUI({
       logWindow.toggle();
     }
   });
+  
+  // Botón PixelStudio
+  const pixelstudioBtn = panel.querySelector('.pixelstudio-btn');
+  if (pixelstudioBtn) {
+    pixelstudioBtn.addEventListener('click', () => {
+      window.open('https://pixelstudio.alarisco.xyz', '_blank');
+      log('🎨 Abriendo PixelStudio en una nueva pestaña');
+    });
+  }
   
   elements.launchBtn.addEventListener('click', () => {
     launchSelectedBot();
